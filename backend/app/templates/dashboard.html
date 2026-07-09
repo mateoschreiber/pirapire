@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block header %}Dashboard{% endblock %}
+{% block content %}
+<div class="notice">
+  <strong>Aviso:</strong> Pirapire es un sistema <b>analítico</b>. Calcula probabilidades,
+  cuotas justas y valor esperado. <b>No automatiza apuestas reales.</b>
+</div>
+
+<section class="cards">
+  <div class="card stat">
+    <span class="stat-label">Deportes</span>
+    <span class="stat-value" id="stat-sports">–</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Equipos</span>
+    <span class="stat-value" id="stat-teams">–</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Partidos</span>
+    <span class="stat-value" id="stat-matches">–</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Predicciones</span>
+    <span class="stat-value" id="stat-predictions">–</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Estado API</span>
+    <span class="stat-value"><span class="badge" id="stat-api">…</span></span>
+  </div>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Accesos rápidos</h2>
+  <div class="quick-actions">
+    <a class="btn btn-primary" href="/odds/ui">Analizador de Cuotas</a>
+    <a class="btn btn-secondary" href="/combo/ui">Simulador de Combinadas</a>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>Pirapire.initDashboard();</script>
+{% endblock %}

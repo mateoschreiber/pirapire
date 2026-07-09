@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Historial{% endblock %}
+{% block header %}Historial{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="card-title">Historial de predicciones</h2>
+  <div class="placeholder">
+    <p>Esta sección es un <b>placeholder</b> para el historial de predicciones.</p>
+    <p class="muted">
+      Se implementará cuando las predicciones se persistan desde la interfaz
+      (endpoint <code>/odds/analyze</code> con <code>persist=true</code> y un
+      listado <code>GET</code> asociado). Por ahora no hay fuentes externas conectadas.
+    </p>
+  </div>
+</section>
+{% endblock %}

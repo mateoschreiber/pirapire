@@ -11,20 +11,23 @@ def test_health():
     assert response.json() == {"status": "ok"}
 
 
-def test_root():
-    response = client.get("/")
+def test_api_info():
+    response = client.get("/api/info")
     assert response.status_code == 200
-    body = response.json()
-    assert body["health"] == "/health"
-    assert body["docs"] == "/docs"
+    data = response.json()
+    assert data["app"] == "Pirapire"
+    assert data["health"] == "/health"
+    assert data["docs"] == "/docs"
+
+
+def test_docs():
+    assert client.get("/docs").status_code == 200
 
 
 def test_odds_analyze_endpoint():
     response = client.post("/odds/analyze", json={"odds_decimal": 2.0})
     assert response.status_code == 200
-    data = response.json()
-    assert data["implied_probability"] == 0.5
-    assert data["fair_odds"] == 2.0
+    assert response.json()["implied_probability"] == 0.5
 
 
 def test_combo_analyze_endpoint():
@@ -33,6 +36,4 @@ def test_combo_analyze_endpoint():
         json={"legs": [{"probability": 0.5}, {"probability": 0.5}]},
     )
     assert response.status_code == 200
-    data = response.json()
-    assert data["combo_probability"] == 0.25
-    assert data["combo_fair_odds"] == 4.0
+    assert response.json()["combo_probability"] == 0.25

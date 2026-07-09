@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Equipos{% endblock %}
+{% block header %}Equipos{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="card-title">Crear equipo</h2>
+  <form id="team-form" class="form-inline">
+    <div class="form-field"><label for="team-sport-id">Sport ID</label><input id="team-sport-id" type="number" required></div>
+    <div class="form-field"><label for="team-name">Nombre</label><input id="team-name" required></div>
+    <div class="form-field"><label for="team-short-name">Nombre corto</label><input id="team-short-name"></div>
+    <button class="btn btn-primary" type="submit">Guardar</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Equipos registrados</h2>
+  <table id="teams-table" class="table"><thead><tr><th>ID</th><th>Sport ID</th><th>Nombre</th><th>Corto</th></tr></thead><tbody></tbody></table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>Pirapire.initTeams();</script>
+{% endblock %}

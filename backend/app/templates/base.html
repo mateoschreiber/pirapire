@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+</head>
+<body>
+  <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-name">{{ app_name }}</span>
+      </div>
+      <nav class="nav">
+        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Dashboard</a>
+        <a class="nav-link {% if active_page == 'sports' %}active{% endif %}" href="/sports/ui">Deportes</a>
+        <a class="nav-link {% if active_page == 'teams' %}active{% endif %}" href="/teams/ui">Equipos</a>
+        <a class="nav-link {% if active_page == 'matches' %}active{% endif %}" href="/matches/ui">Partidos</a>
+        <a class="nav-link {% if active_page == 'odds' %}active{% endif %}" href="/odds/ui">Analizador de Cuotas</a>
+        <a class="nav-link {% if active_page == 'combo' %}active{% endif %}" href="/combo/ui">Simulador de Combinadas</a>
+        <a class="nav-link {% if active_page == 'history' %}active{% endif %}" href="/history/ui">Historial</a>
+        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings/ui">Configuración</a>
+        <a class="nav-link nav-external" href="/docs" target="_blank" rel="noopener">Swagger &#8599;</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="badge badge-muted">env: {{ app_env }}</span>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <label for="nav-toggle" class="hamburger" aria-label="Abrir menú">&#9776;</label>
+        <h1 class="page-title">{% block header %}{{ app_name }}{% endblock %}</h1>
+        <button id="theme-toggle" class="btn btn-ghost" type="button" title="Cambiar tema">&#9680;</button>
+      </header>
+
+      <main class="content">
+        <div id="flash" class="flash" hidden></div>
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="footer">
+        {{ app_name }} · Sistema analítico. No automatiza apuestas reales.
+      </footer>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', path='/js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

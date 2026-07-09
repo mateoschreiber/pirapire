@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Partidos{% endblock %}
+{% block header %}Partidos{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="card-title">Crear partido</h2>
+  <form id="match-form" class="form-grid">
+    <div class="form-field"><label for="match-sport-id">Sport ID</label><input id="match-sport-id" type="number" required></div>
+    <div class="form-field"><label for="match-team-a">Equipo A ID</label><input id="match-team-a" type="number" required></div>
+    <div class="form-field"><label for="match-team-b">Equipo B ID</label><input id="match-team-b" type="number" required></div>
+    <div class="form-field"><label for="match-competition">Competición</label><input id="match-competition"></div>
+    <div class="form-field"><label for="match-start">Inicio</label><input id="match-start" type="datetime-local"></div>
+    <div class="form-field">
+      <label for="match-status">Estado</label>
+      <select id="match-status">
+        <option value="scheduled">scheduled</option>
+        <option value="live">live</option>
+        <option value="finished">finished</option>
+        <option value="cancelled">cancelled</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit">Guardar</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Partidos registrados</h2>
+  <table id="matches-table" class="table">
+    <thead><tr><th>ID</th><th>Sport</th><th>A</th><th>B</th><th>Competición</th><th>Inicio</th><th>Estado</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>Pirapire.initMatches();</script>
+{% endblock %}

@@ -2,10 +2,11 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import init_db
-from .routers import combo, health, matches, odds, sports, teams
+from .routers import combo, health, matches, odds, pages, sports, teams
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger("pirapire")
@@ -26,15 +27,18 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(pages.router)
 app.include_router(sports.router)
 app.include_router(teams.router)
 app.include_router(matches.router)
 app.include_router(odds.router)
 app.include_router(combo.router)
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/", tags=["root"])
-def root() -> dict:
+
+@app.get("/api/info", tags=["root"])
+def api_info() -> dict:
     return {
         "app": settings.app_name,
         "env": settings.app_env,

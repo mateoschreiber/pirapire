@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block header %}Configuración{% endblock %}
+{% block content %}
+<section class="card">
+  <h2 class="card-title">Configuración local</h2>
+  <p class="muted">Valores actuales de la aplicación (solo lectura por ahora).</p>
+  <table class="table table-kv">
+    <tbody>
+      <tr><th>Aplicación</th><td>{{ app_name }}</td></tr>
+      <tr><th>Entorno</th><td><span class="badge badge-muted">{{ app_env }}</span></td></tr>
+      <tr><th>Base de datos</th><td><code>{{ database_url }}</code></td></tr>
+      <tr><th>Documentación API</th><td><a href="/docs" target="_blank" rel="noopener">/docs</a></td></tr>
+      <tr><th>Healthcheck</th><td><a href="/health" target="_blank" rel="noopener">/health</a></td></tr>
+      <tr><th>Info JSON</th><td><a href="/api/info" target="_blank" rel="noopener">/api/info</a></td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
