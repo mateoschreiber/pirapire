@@ -1,6 +1,8 @@
 var Pirapire = (function () {
   "use strict";
 
+  var THEME_KEY = "pirapire.theme";
+
   function showMessage(text, kind) {
     var el = document.getElementById("flash");
     if (!el) return;
@@ -69,7 +71,7 @@ var Pirapire = (function () {
       .catch(function () { document.getElementById("stat-matches").textContent = "?"; });
     document.getElementById("stat-predictions").textContent = "n/d";
     apiGet("/health")
-      .then(function (d) {
+      .then(function () {
         var badge = document.getElementById("stat-api");
         badge.textContent = "ok";
         badge.className = "badge badge-ok";
@@ -224,19 +226,52 @@ var Pirapire = (function () {
     });
   }
 
-  /* --- Theme toggle --- */
-  function initTheme() {
-    var btn = document.getElementById("theme-toggle");
+  /* --- Tema claro/oscuro (persistente) --- */
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  }
+
+  function updateThemeButton(theme) {
+    var btn = document.getElementById("themeToggle");
     if (!btn) return;
-    var html = document.documentElement;
-    function sync() {
-      btn.textContent = html.getAttribute("data-theme") === "dark" ? "\u2600" : "\u263D";
+    var dark = theme === "dark";
+    // Icono: sol si estamos en oscuro (para pasar a claro), luna si estamos en claro.
+    btn.textContent = dark ? "\u2600" : "\u263D";
+    btn.setAttribute("aria-label", dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro");
+    btn.setAttribute("title", dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro");
+  }
+
+  function applyTheme(theme) {
+    var t = theme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+    updateThemeButton(t);
+  }
+
+  function saveTheme(theme) {
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* almacenamiento no disponible */ }
+  }
+
+  function toggleTheme() {
+    var next = currentTheme() === "dark" ? "light" : "dark";
+    applyTheme(next);
+    saveTheme(next);
+  }
+
+  function initTheme() {
+    // El tema ya fue aplicado por el script inline del <head>; aquí solo
+    // sincronizamos el botón y los listeners.
+    applyTheme(currentTheme());
+    var btn = document.getElementById("themeToggle");
+    if (btn && !btn.dataset.bound) {
+      btn.addEventListener("click", toggleTheme);
+      btn.dataset.bound = "1";
     }
-    btn.addEventListener("click", function () {
-      html.setAttribute("data-theme", html.getAttribute("data-theme") === "dark" ? "light" : "dark");
-      sync();
+    // Sincroniza el tema entre pestañas abiertas.
+    window.addEventListener("storage", function (ev) {
+      if (ev.key === THEME_KEY && (ev.newValue === "light" || ev.newValue === "dark")) {
+        applyTheme(ev.newValue);
+      }
     });
-    sync();
   }
 
   document.addEventListener("DOMContentLoaded", initTheme);
@@ -252,5 +287,8 @@ var Pirapire = (function () {
     initMatches: initMatches,
     initOdds: initOdds,
     initCombo: initCombo,
+    initTheme: initTheme,
+    applyTheme: applyTheme,
+    toggleTheme: toggleTheme,
   };
 })();

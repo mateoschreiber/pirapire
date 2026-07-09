@@ -4,6 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
+  <script>
+    // Aplica el tema guardado antes de pintar el layout para evitar flash.
+    (function () {
+      try {
+        var KEY = "pirapire.theme";
+        var saved = localStorage.getItem(KEY);
+        var theme = (saved === "light" || saved === "dark")
+          ? saved
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
 </head>
 <body>
@@ -34,7 +49,7 @@
       <header class="topbar">
         <label for="nav-toggle" class="hamburger" aria-label="Abrir menú">&#9776;</label>
         <h1 class="page-title">{% block header %}{{ app_name }}{% endblock %}</h1>
-        <button id="theme-toggle" class="btn btn-ghost" type="button" title="Cambiar tema">&#9680;</button>
+        <button id="themeToggle" class="btn btn-ghost" type="button" aria-label="Cambiar tema" title="Cambiar tema">&#9680;</button>
       </header>
 
       <main class="content">
