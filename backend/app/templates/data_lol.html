@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Datos LoL{% endblock %}
+{% block header %}Datos de League of Legends{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-actions">
+    <button class="btn btn-primary" onclick="Pirapire.syncSource('lol')">Actualizar LoL</button>
+    <button class="btn btn-secondary" onclick="Pirapire.initDataLol()">Refrescar</button>
+  </div>
+  <div id="sync-status" class="toolbar-status" hidden></div>
+</div>
+
+<section class="card">
+  <h2 class="card-title">Parches (patches)</h2>
+  <table id="patches-table" class="table">
+    <thead><tr><th>ID</th><th>Versión</th><th>Fuente</th><th>Obtenido</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Campeones</h2>
+  <table id="champions-table" class="table">
+    <thead><tr><th>ID</th><th>Nombre</th><th>Título</th><th>Versión</th><th>Fuente</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>Pirapire.initDataLol();</script>
+{% endblock %}

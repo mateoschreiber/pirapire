@@ -1,0 +1,19 @@
+{
+  "type": "champion",
+  "format": "standAlone",
+  "version": "14.1.1",
+  "data": {
+    "Aatrox": {
+      "id": "Aatrox",
+      "key": "266",
+      "name": "Aatrox",
+      "title": "la Espada Darkin"
+    },
+    "Ahri": {
+      "id": "Ahri",
+      "key": "103",
+      "name": "Ahri",
+      "title": "la Zorra de Nueve Colas"
+    }
+  }
+}

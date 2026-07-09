@@ -276,6 +276,206 @@ var Pirapire = (function () {
 
   document.addEventListener("DOMContentLoaded", initTheme);
 
+  /* --- Manual sync (Fase 2) --- */
+  var SYNC_ENDPOINTS = {
+    football: "/sources/sync/football",
+    lol: "/sources/sync/lol",
+    all: "/sources/sync/all",
+  };
+
+  function setSyncStatus(text) {
+    var box = document.getElementById("sync-status");
+    if (!box) return;
+    box.textContent = text;
+    box.removeAttribute("hidden");
+  }
+
+  function syncSource(kind) {
+    var url = SYNC_ENDPOINTS[kind];
+    if (!url) return;
+    var buttons = document.querySelectorAll(".toolbar-actions .btn");
+    buttons.forEach(function (b) { b.setAttribute("disabled", "disabled"); });
+    setSyncStatus("Ejecutando actualizacion (" + kind + ")...");
+    apiPost(url, {})
+      .then(function (res) {
+        setSyncStatus("Run #" + res.run_id + " iniciado (" + res.status + "). Consultando estado...");
+        // Una sola consulta de estado tras un breve margen. Sin polling permanente.
+        setTimeout(function () {
+          apiGet("/source-runs/" + res.run_id)
+            .then(function (run) {
+              setSyncStatus(
+                "Run #" + run.id + " -> " + run.status +
+                " | ins:" + run.inserted_records +
+                " upd:" + run.updated_records +
+                " skip:" + run.skipped_records +
+                " err:" + run.error_count
+              );
+              showMessage("Actualizacion " + kind + ": " + run.status, run.error_count ? "error" : "ok");
+            })
+            .catch(function (e) { setSyncStatus("No se pudo leer el estado: " + e.message); });
+        }, 3500);
+      })
+      .catch(function (e) {
+        setSyncStatus("Error al iniciar: " + e.message);
+        showMessage("Error al iniciar sync: " + e.message, "error");
+      })
+      .finally(function () {
+        buttons.forEach(function (b) { b.removeAttribute("disabled"); });
+      });
+  }
+
+  function recalcRanking() {
+    setSyncStatus("Recalculando ranking local (sin internet)...");
+    apiPost("/sources/seed", {})
+      .then(function (res) {
+        setSyncStatus("Ranking recalculado: " + res.sources_upserted + " fuentes, " + res.capabilities_upserted + " capacidades.");
+        showMessage("Ranking local recalculado", "ok");
+      })
+      .catch(function (e) {
+        setSyncStatus("Error: " + e.message);
+        showMessage("Error al recalcular: " + e.message, "error");
+      });
+  }
+
+  /* --- Source runs page --- */
+  function fmtDate(v) { return v ? String(v).replace("T", " ").slice(0, 19) : ""; }
+
+  var _allRuns = [];
+  var _runFilter = "all";
+
+  function runSourceLabel(run) {
+    if (run.source_slug) return run.source_slug;
+    if (run.sport === "all") return "sync_all";
+    return run.sport;
+  }
+
+  function renderRuns() {
+    var tbody = document.querySelector("#runs-table tbody");
+    if (!tbody) return;
+    var runs = _runFilter === "all" ? _allRuns : _allRuns.filter(function (r) { return r.status === _runFilter; });
+    tbody.innerHTML = "";
+    if (!runs.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="muted">Sin ejecuciones.</td></tr>';
+      return;
+    }
+    runs.forEach(function (run) {
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + run.id + "</td>" +
+        "<td>" + run.sport + "</td>" +
+        "<td>" + runSourceLabel(run) + "</td>" +
+        '<td><span class="badge ' + statusBadge(run.status) + '">' + run.status + "</span></td>" +
+        "<td>" + run.inserted_records + "</td>" +
+        "<td>" + run.updated_records + "</td>" +
+        "<td>" + run.skipped_records + "</td>" +
+        "<td>" + run.error_count + "</td>" +
+        "<td>" + fmtDate(run.started_at) + "</td>" +
+        "<td>" + fmtDate(run.finished_at) + "</td>";
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", function () { loadRunLogs(run.id); });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function loadSourceRuns() {
+    var tbody = document.querySelector("#runs-table tbody");
+    if (!tbody) return;
+    apiGet("/source-runs?limit=50").then(function (runs) {
+      _allRuns = runs;  // API returns them ordered by id desc
+      renderRuns();
+    }).catch(function (e) { showMessage("Error cargando ejecuciones: " + e.message, "error"); });
+  }
+
+  function statusBadge(status) {
+    if (status === "success") return "badge-low";
+    if (status === "partial" || status === "running") return "badge-medium";
+    if (status === "error") return "badge-high";
+    return "badge-muted";
+  }
+
+  function loadRunLogs(runId) {
+    var table = document.getElementById("logs-table");
+    var tbody = table ? table.querySelector("tbody") : null;
+    var hint = document.getElementById("logs-hint");
+    if (!tbody) return;
+    apiGet("/source-runs/" + runId + "/logs").then(function (logs) {
+      table.removeAttribute("hidden");
+      if (hint) hint.textContent = "Logs de la ejecucion #" + runId;
+      tbody.innerHTML = "";
+      if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="muted">Sin logs.</td></tr>';
+        return;
+      }
+      logs.forEach(function (log) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td><span class="badge ' + (log.level === "error" ? "badge-high" : (log.level === "warning" ? "badge-medium" : "badge-muted")) + '">' + log.level + "</span></td>" +
+          "<td>" + log.message + "</td>" +
+          "<td>" + fmtDate(log.created_at) + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function (e) { showMessage("Error cargando logs: " + e.message, "error"); });
+  }
+
+  function initSourceRuns() {
+    var filterBox = document.getElementById("run-filters");
+    if (filterBox && !filterBox.dataset.bound) {
+      filterBox.dataset.bound = "1";
+      filterBox.querySelectorAll(".filter-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          filterBox.querySelectorAll(".filter-btn").forEach(function (b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+          _runFilter = btn.getAttribute("data-filter");
+          renderRuns();
+        });
+      });
+    }
+    loadSourceRuns();
+  }
+
+  /* --- Data pages --- */
+  function initDataFootball() {
+    apiGet("/data/football/competitions").then(function (rows) {
+      renderTable("competitions-table", rows, ["id", "code", "name", "country", "source_name"]);
+    }).catch(function () {});
+    apiGet("/data/football/matches").then(function (rows) {
+      var tbody = document.querySelector("#matches-table tbody");
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="muted">Sin partidos.</td></tr>'; return; }
+      rows.forEach(function (m) {
+        var score = (m.home_score === null ? "-" : m.home_score) + " : " + (m.away_score === null ? "-" : m.away_score);
+        var ht = (m.ht_home_score === null || m.ht_home_score === undefined ? "-" : m.ht_home_score) + " : " + (m.ht_away_score === null || m.ht_away_score === undefined ? "-" : m.ht_away_score);
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + m.id + "</td>" +
+          "<td>" + fmtDate(m.start_time) + "</td>" +
+          "<td>" + (m.status || "") + "</td>" +
+          "<td>" + (m.home_team_id || "") + "</td>" +
+          "<td>" + (m.away_team_id || "") + "</td>" +
+          "<td>" + score + "</td>" +
+          "<td>" + ht + "</td>" +
+          "<td>" + (m.source_name || "") + "</td>" +
+          "<td>" + (m.fallback_used ? "si" : "no") + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function () {});
+    apiGet("/data/football/standings").then(function (rows) {
+      renderTable("standings-table", rows, ["position", "team_id", "played_games", "won", "draw", "lost", "points", "goals_for", "goals_against", "goal_difference"]);
+    }).catch(function () {});
+    apiGet("/data/football/teams").then(function (rows) {
+      renderTable("teams-table", rows, ["id", "name", "short_name", "tla", "source_name"]);
+    }).catch(function () {});
+  }
+
+  function initDataLol() {
+    apiGet("/data/lol/patches").then(function (rows) {
+      renderTable("patches-table", rows, ["id", "version", "source_name", "retrieved_at"]);
+    }).catch(function () {});
+    apiGet("/data/lol/champions").then(function (rows) {
+      renderTable("champions-table", rows, ["champion_id", "name", "title", "version", "source_name"]);
+    }).catch(function () {});
+  }
+
   return {
     showMessage: showMessage,
     apiGet: apiGet,
@@ -290,5 +490,11 @@ var Pirapire = (function () {
     initTheme: initTheme,
     applyTheme: applyTheme,
     toggleTheme: toggleTheme,
+    syncSource: syncSource,
+    recalcRanking: recalcRanking,
+    loadSourceRuns: loadSourceRuns,
+    initSourceRuns: initSourceRuns,
+    initDataFootball: initDataFootball,
+    initDataLol: initDataLol,
   };
 })();

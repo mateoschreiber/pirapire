@@ -75,6 +75,41 @@ bajo `/static`. La UI consume los endpoints API existentes via `fetch`.
 | POST   | `/odds/analyze` | Analizar una cuota simple                    |
 | POST   | `/combo/analyze`| Analizar una combinada                       |
 
+## Fase 2 — Conectores y sincronizacion manual
+
+**Conectores implementados:**
+
+| Fuente | Deporte | Rol | Auth |
+|--------|---------|-----|------|
+| football-data.org | Futbol | Primaria: fixtures, resultados, standings, equipos | `X-Auth-Token` desde `.env` |
+| OpenLigaDB | Futbol | Fallback: solo si la primaria no funciona o `OPENLIGADB_*` esta configurado | Sin auth |
+| Riot Data Dragon | LoL | Unica: parches y campeones (datos estaticos) | Sin auth |
+
+**Sincronizacion:** exclusivamente manual mediante botones en `GET /sources/ui`
+(`Actualizar Futbol` / `Actualizar LoL` / `Actualizar Todo`). No hay cron, scheduler ni polling.
+
+**Endpoints de sync:** `POST /sources/sync/football`, `POST /sources/sync/lol`,
+`POST /sources/sync/all`, `POST /sources/sync/{source_slug}`
+
+**Historial:** `GET /source-runs` y `GET /source-runs/ui`
+
+**Datos cargados:** `GET /data/football/*`, `GET /data/lol/*` y sus UIs.
+
+**Raw snapshots:** cada respuesta externa se guarda con `payload_hash`; se deduplican.
+
+## Fuentes de datos (registro)
+
+Capa de fuentes externas rankeadas por confiabilidad. En esta fase es **solo
+lectura**: registro de fuentes, ranking y resolucion de fuente primaria por
+`sport` + `data_type`. **No hay conectores de red ni sincronizacion automatica**;
+la actualizacion manual y los conectores llegan en fases siguientes.
+
+- `GET /sources` — fuentes registradas con estado (`enabled` / `disabled_missing_env` / `disabled_reference_only`).
+- `GET /sources/rankings` — ranking por deporte (`football`, `lol`).
+- `GET /sources/capabilities` — capacidades por `data_type` y fuente primaria.
+- `POST /sources/seed` — persiste el registro en las tablas `DataSource` / `SourceCapability`.
+- UI: `GET /sources/ui` (menu **Fuentes**).
+
 ## Integracion con el docker-compose existente
 
 Pirapire corre como el servicio `pirapire_app` dentro del `compose` presente en el

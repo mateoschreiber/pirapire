@@ -1,6 +1,10 @@
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
+from app.database import engine
 from app.main import app
+from app.models_football import FootballMatch
+from app.models_lol import LolChampion
 
 client = TestClient(app)
 
@@ -12,6 +16,10 @@ UI_PAGES = [
     "/odds/ui",
     "/combo/ui",
     "/history/ui",
+    "/sources/ui",
+    "/source-runs/ui",
+    "/data/football/ui",
+    "/data/lol/ui",
     "/settings/ui",
 ]
 
@@ -73,3 +81,41 @@ def test_all_ui_pages_have_theme_toggle():
     for path in UI_PAGES:
         html = client.get(path).text
         assert 'id="themeToggle"' in html, path
+
+
+def test_dashboard_shows_normalized_counts():
+    # Seed distinctive counts and confirm the dashboard renders them (no zeros).
+    with Session(engine) as session:
+        for i in range(3):
+            session.add(
+                FootballMatch(source_name="test", source_external_id=f"pg-{i}", source_rank=90)
+            )
+        for name in ("Zed", "Yasuo", "Lux", "Sona"):
+            session.add(
+                LolChampion(source_name="test", champion_id=f"pg-{name}", name=name, source_rank=100)
+            )
+        session.commit()
+
+    html = client.get("/").text
+    matches = [m for m in _extract_stats(html)]
+    # The champion and match stat cells should reflect at least the seeded rows.
+    assert 'id="stat-champions"' in html
+    assert 'id="stat-matches"' in html
+    champions_value = _stat_value(html, "stat-champions")
+    matches_value = _stat_value(html, "stat-matches")
+    assert champions_value >= 4
+    assert matches_value >= 3
+    assert matches  # sanity
+
+
+def _extract_stats(html: str):
+    import re
+
+    return re.findall(r'id="stat-[a-z]+">(\d+)<', html)
+
+
+def _stat_value(html: str, stat_id: str) -> int:
+    import re
+
+    match = re.search(r'id="' + stat_id + r'">(\d+)<', html)
+    return int(match.group(1)) if match else -1

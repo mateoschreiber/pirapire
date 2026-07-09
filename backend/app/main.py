@@ -6,7 +6,18 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import init_db
-from .routers import combo, health, matches, odds, pages, sports, teams
+from .routers import (
+    combo,
+    data,
+    health,
+    matches,
+    odds,
+    pages,
+    source_runs,
+    sources,
+    sports,
+    teams,
+)
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger("pirapire")
@@ -22,7 +33,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="Sistema analitico de cuotas deportivas. No automatiza apuestas reales.",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -33,6 +44,9 @@ app.include_router(teams.router)
 app.include_router(matches.router)
 app.include_router(odds.router)
 app.include_router(combo.router)
+app.include_router(sources.router)
+app.include_router(source_runs.router)
+app.include_router(data.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

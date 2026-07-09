@@ -10,7 +10,12 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 
 
 def init_db() -> None:
-    from . import models  # noqa: F401
+    from . import (  # noqa: F401
+        models,
+        models_football,
+        models_lol,
+        models_sources,
+    )
 
     SQLModel.metadata.create_all(engine)
 
