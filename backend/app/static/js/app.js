@@ -60,16 +60,8 @@ var Pirapire = (function () {
 
   /* --- Dashboard --- */
   function initDashboard() {
-    apiGet("/sports")
-      .then(function (d) { document.getElementById("stat-sports").textContent = d.length; })
-      .catch(function () { document.getElementById("stat-sports").textContent = "?"; });
-    apiGet("/teams")
-      .then(function (d) { document.getElementById("stat-teams").textContent = d.length; })
-      .catch(function () { document.getElementById("stat-teams").textContent = "?"; });
-    apiGet("/matches")
-      .then(function (d) { document.getElementById("stat-matches").textContent = d.length; })
-      .catch(function () { document.getElementById("stat-matches").textContent = "?"; });
-    document.getElementById("stat-predictions").textContent = "n/d";
+    /* Dashboard counts are server-rendered via Jinja2 (pages.py _dashboard_counts).
+       JS only verifies API health. Do NOT overwrite server counts. */
     apiGet("/health")
       .then(function () {
         var badge = document.getElementById("stat-api");
