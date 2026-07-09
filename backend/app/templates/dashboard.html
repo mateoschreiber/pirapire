@@ -89,4 +89,44 @@
     <a class="btn btn-outline" href="/history/ui">Historial de predicciones</a>
   </div>
 </section>
+
+<div class="toolbar">
+  <div class="toolbar-actions">
+    <button class="btn btn-primary" onclick="Pirapire.syncAposta()">Sincronizar Aposta.LA</button>
+    <select id="rec-mode" class="form-field" style="width:auto;max-width:180px">
+      <option value="probability">Priorizar probabilidad</option>
+      <option value="profit">Priorizar ganancia</option>
+      <option value="odds">Priorizar odds/cuota</option>
+      <option value="balanced">Balanceado</option>
+    </select>
+    <button class="btn btn-primary" onclick="Pirapire.runRecommendations()">Recalcular recomendaciones</button>
+  </div>
+  <div id="sync-status" class="toolbar-status" hidden></div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2 class="card-title">Mejores apuestas individuales <span class="muted">(<span id="rec-mode-label">-</span>)</span></h2>
+    <table id="rec-bets-table" class="table">
+      <thead><tr><th>Evento</th><th>Mercado</th><th>Sel.</th><th>Cuota</th><th>P.modelo</th><th>P.impl</th><th>EV</th><th>Riesgo</th><th>Cobertura</th><th></th></tr></thead>
+      <tbody><tr><td colspan="10" class="muted">Presiona Recalcular recomendaciones.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Mejores combinadas sugeridas</h2>
+    <table id="rec-combos-table" class="table">
+      <thead><tr><th>Nombre</th><th>Patas</th><th>Cuota</th><th>P.modelo</th><th>EV</th><th>Riesgo</th><th></th></tr></thead>
+      <tbody><tr><td colspan="7" class="muted">Aparecen tras recalcular combinadas.</td></tr></tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card" style="font-size:0.85rem; color:var(--text-muted)">
+  Zona horaria: <strong>{{ tz_name }}</strong> (UTC {{ tz_offset }}).
+  Última sync Aposta.LA: <span id="aposta-last-status">...</span>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>Pirapire.initDashboardRecs();</script>
 {% endblock %}

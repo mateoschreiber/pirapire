@@ -18,6 +18,7 @@ from ..models_markets import MarketCatalog
 from ..models_sources import SourceRun
 from ..services import source_registry as registry
 from ..services import source_resolver
+from ..utils import datetime_utils
 
 router = APIRouter(tags=["ui"], include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
@@ -29,6 +30,8 @@ def render(request: Request, template: str, active_page: str, **extra):
         "app_name": settings.app_name,
         "app_env": settings.app_env,
         "database_url": settings.database_url,
+        "tz_name": settings.app_timezone,
+        "tz_offset": datetime_utils.offset_str(),
     }
     context.update(extra)
     return templates.TemplateResponse(request, template, context)
@@ -163,3 +166,13 @@ def markets_page(request: Request):
 @router.get("/imports/ui", response_class=HTMLResponse)
 def imports_page(request: Request):
     return render(request, "imports.html", "imports")
+
+
+@router.get("/aposta/ui", response_class=HTMLResponse)
+def aposta_page(request: Request):
+    return render(request, "aposta.html", "aposta")
+
+
+@router.get("/recommendations/ui", response_class=HTMLResponse)
+def recommendations_page(request: Request):
+    return render(request, "recommendations.html", "recommendations")

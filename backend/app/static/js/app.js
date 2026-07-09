@@ -728,6 +728,149 @@ var Pirapire = (function () {
     loadHistory();
   }
 
+  /* --- Aposta.LA (Fase 4A placeholder) + Recommendations --- */
+  function coverageBadge(cov) {
+    if (cov === "model" || cov === "heuristic") return "badge-low";
+    if (cov === "odds_implied_only" || cov === "estimated_only") return "badge-medium";
+    return "badge-high";
+  }
+
+  function syncAposta() {
+    setSyncStatus("Sincronizando Aposta.LA...");
+    apiPost("/aposta/sync", {}).then(function (res) {
+      setSyncStatus("Aposta.LA: " + res.status + " — " + (res.message || ""));
+      showMessage("Aposta.LA sync: " + res.status, res.status === "manual_required" ? "error" : "ok");
+      var el = document.getElementById("aposta-last-status");
+      if (el) el.textContent = res.status;
+      if (typeof loadApostaRuns === "function" && document.getElementById("aposta-runs-table")) loadApostaRuns();
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function loadApostaRuns() {
+    var tbody = document.querySelector("#aposta-runs-table tbody");
+    if (!tbody) return;
+    apiGet("/aposta/sync-runs?limit=30").then(function (rows) {
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="muted">Sin ejecuciones.</td></tr>'; return; }
+      rows.forEach(function (r) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + r.id + "</td>" +
+          '<td><span class="badge ' + (r.status === "success" ? "badge-low" : (r.status === "manual_required" ? "badge-medium" : "badge-high")) + '">' + r.status + "</span></td>" +
+          "<td>" + fmtDate(r.started_at) + "</td>" +
+          "<td>" + fmtDate(r.finished_at) + "</td>" +
+          "<td>" + (r.message || "") + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  function initAposta() {
+    var el = document.getElementById("aposta-last-status");
+    apiGet("/aposta/status").then(function (s) {
+      if (el && s.last_run) el.textContent = s.last_run.status;
+    }).catch(function () {});
+    loadApostaRuns();
+  }
+
+  function currentMode() {
+    var sel = document.getElementById("rec-mode");
+    return sel ? sel.value : "probability";
+  }
+
+  function recFilters() {
+    var payload = { mode: currentMode() };
+    var get = function (id) { var e = document.getElementById(id); return e && e.value !== "" ? e.value : null; };
+    var sport = get("rec-sport"); if (sport) payload.sport = sport;
+    var mp = get("rec-minprob"); if (mp) payload.min_probability = parseFloat(mp);
+    var mo = get("rec-minodds"); if (mo) payload.min_odds = parseFloat(mo);
+    var xo = get("rec-maxodds"); if (xo) payload.max_odds = parseFloat(xo);
+    var ml = get("rec-maxlegs"); if (ml) payload.max_legs = parseInt(ml, 10);
+    return payload;
+  }
+
+  function runRecommendations() {
+    setSyncStatus("Calculando recomendaciones...");
+    apiPost("/recommendations/run", recFilters()).then(function (res) {
+      setSyncStatus("Run #" + res.run_id + " (" + res.mode + "): " + res.total_recommendations + " apuestas, " + res.total_combos + " combinadas.");
+      showMessage("Recomendaciones actualizadas (" + res.mode + ")", "ok");
+      var label = document.getElementById("rec-mode-label");
+      if (label) label.textContent = res.mode;
+      loadRecBets();
+      loadRecCombos();
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function loadRecBets() {
+    var tbody = document.querySelector("#rec-bets-table tbody");
+    if (!tbody) return;
+    apiGet("/recommendations/bets?mode=" + currentMode() + "&limit=20").then(function (rows) {
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="muted">Sin recomendaciones. Importa cuotas o recalcula.</td></tr>'; return; }
+      rows.forEach(function (b) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + (b.event_label || "") + "</td>" +
+          "<td>" + (b.market_code || b.market_text || "") + "</td>" +
+          "<td>" + (b.selection_text || "") + "</td>" +
+          "<td>" + num(b.odds_decimal) + "</td>" +
+          "<td>" + pct(b.model_probability) + "</td>" +
+          "<td>" + pct(b.implied_probability) + "</td>" +
+          "<td>" + num(b.expected_value) + "</td>" +
+          '<td><span class="badge ' + riskBadge(b.risk_label) + '">' + (b.risk_label || "") + "</span></td>" +
+          '<td><span class="badge ' + coverageBadge(b.coverage_status) + '">' + (b.coverage_status || "") + "</span></td>" +
+          '<td><button class="btn btn-outline filter-btn" onclick="Pirapire.saveRecToHistory(' + b.id + ')">Guardar</button></td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function loadRecCombos() {
+    var tbody = document.querySelector("#rec-combos-table tbody");
+    if (!tbody) return;
+    apiGet("/recommendations/combos?mode=" + currentMode() + "&limit=20").then(function (rows) {
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="muted">Sin combinadas.</td></tr>'; return; }
+      rows.forEach(function (item) {
+        var c = item.combo;
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + (c.name || "") + "</td>" +
+          "<td>" + c.legs_count + "</td>" +
+          "<td>" + num(c.offered_odds) + "</td>" +
+          "<td>" + pct(c.model_probability) + "</td>" +
+          "<td>" + num(c.expected_value) + "</td>" +
+          '<td><span class="badge ' + riskBadge(c.risk_label) + '">' + (c.risk_label || "") + "</span></td>" +
+          '<td><button class="btn btn-outline filter-btn" onclick="Pirapire.saveComboRecToHistory(' + c.id + ')">Guardar</button></td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function saveRecToHistory(id) {
+    apiPost("/recommendations/" + id + "/save-to-history", {})
+      .then(function () { showMessage("Apuesta guardada al historial", "ok"); })
+      .catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function saveComboRecToHistory(id) {
+    apiPost("/recommendations/combos/" + id + "/save-to-history", {})
+      .then(function () { showMessage("Combinada guardada al historial", "ok"); })
+      .catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function initDashboardRecs() {
+    initAposta();
+    // Do NOT auto-run recommendations on load (no automatic sync/compute).
+    loadRecBets();
+    loadRecCombos();
+  }
+
+  function initRecommendations() {
+    loadRecBets();
+    loadRecCombos();
+  }
+
   return {
     showMessage: showMessage,
     apiGet: apiGet,
@@ -755,5 +898,15 @@ var Pirapire = (function () {
     loadHistory: loadHistory,
     settlePrediction: settlePrediction,
     settleCombo: settleCombo,
+    syncAposta: syncAposta,
+    loadApostaRuns: loadApostaRuns,
+    initAposta: initAposta,
+    runRecommendations: runRecommendations,
+    loadRecBets: loadRecBets,
+    loadRecCombos: loadRecCombos,
+    saveRecToHistory: saveRecToHistory,
+    saveComboRecToHistory: saveComboRecToHistory,
+    initDashboardRecs: initDashboardRecs,
+    initRecommendations: initRecommendations,
   };
 })();

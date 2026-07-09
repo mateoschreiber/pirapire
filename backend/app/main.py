@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import engine, init_db
 from .routers import (
+    aposta,
     combo,
     data,
     health,
@@ -16,6 +17,7 @@ from .routers import (
     matches,
     odds,
     pages,
+    recommendations,
     source_runs,
     sources,
     sports,
@@ -67,6 +69,8 @@ app.include_router(data.router)
 app.include_router(markets.router)
 app.include_router(imports.router)
 app.include_router(history.router)
+app.include_router(aposta.router)
+app.include_router(recommendations.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

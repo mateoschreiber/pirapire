@@ -12,11 +12,13 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 def init_db() -> None:
     from . import (  # noqa: F401
         models,
+        models_aposta,
         models_football,
         models_history,
         models_imports,
         models_lol,
         models_markets,
+        models_recommendations,
         models_sources,
     )
 

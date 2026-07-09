@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Pirapire"
     app_env: str = "local"
+    app_timezone: str = "America/Argentina/Buenos_Aires"
+    app_public_url: str = ""
     database_url: str = "sqlite:////app/data/pirapire.db"
     log_level: str = "INFO"
 
@@ -33,6 +35,16 @@ class Settings(BaseSettings):
     http_timeout_read: float = 20.0
     http_timeout_write: float = 5.0
     http_timeout_pool: float = 5.0
+
+    # Aposta.LA (placeholder in Fase 4A: no browser worker configured yet)
+    aposta_sync_enabled: bool = False
+    aposta_browser_worker_url: str = ""
+
+    # Recommendation engine
+    recommender_default_mode: str = "probability"
+    recommender_min_probability: float = 0.55
+    recommender_max_combo_legs: int = 3
+    recommender_max_suggestions: int = 20
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

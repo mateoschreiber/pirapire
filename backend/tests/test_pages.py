@@ -22,6 +22,8 @@ UI_PAGES = [
     "/data/lol/ui",
     "/markets/ui",
     "/imports/ui",
+    "/aposta/ui",
+    "/recommendations/ui",
     "/settings/ui",
 ]
 

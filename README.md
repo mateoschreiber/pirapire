@@ -1,168 +1,169 @@
 # Pirapire
 
-Sistema analitico de cuotas deportivas construido con **FastAPI + SQLModel + SQLite**
-y una interfaz web liviana con **Jinja2 + HTML/CSS/JS vanilla**, empaquetado en un
-unico contenedor Docker de bajo consumo.
+Pirapire es un **sistema analítico de apuestas deportivas** (fútbol y League of
+Legends) que corre en un único contenedor Docker liviano. Importa cuotas,
+sincroniza datos deportivos bajo demanda, estima probabilidades por mercado y
+**recomienda automáticamente** las mejores apuestas individuales y combinadas.
 
-> **Advertencia:** Pirapire es una herramienta **analitica**. Calcula probabilidades
-> implicitas, cuotas justas, valor esperado (EV) y etiquetas de riesgo a partir de
-> datos que el usuario ingresa. **No realiza scraping, no consume APIs externas, no
-> inicia sesion en casas de apuestas y no automatiza apuestas reales.**
+> **Advertencia:** Pirapire es una herramienta **analítica**. No coloca apuestas,
+> no inicia sesión en casas de apuestas y **no automatiza apuestas reales**.
 
-## Caracteristicas
+## Características
 
-- API REST con FastAPI y documentacion automatica (Swagger UI en `/docs`).
-- Interfaz web (dashboard) servida por el mismo servicio, sin React/Node/Vite/CDN.
-- Persistencia ligera con SQLite (archivo unico en `data/pirapire.db`).
-- Modelos con SQLModel: `Sport`, `Team`, `Match`, `OddsSnapshot`, `Prediction`.
-- Motores de calculo puros para cuotas simples y combinadas.
-- Un solo contenedor de aplicacion, sin PostgreSQL, Redis, Celery ni Node.
+- Dashboard con recomendaciones automáticas (mejores apuestas y combinadas).
+- Modos de ranking: probabilidad, ganancia (EV), cuota y balanceado.
+- Importación manual de cuotas por CSV (formato Aposta.LA) y de histórico LoL (Oracle's Elixir).
+- Sincronización manual de datos: football-data.org (primaria) + OpenLigaDB (fallback), Riot Data Dragon (LoL).
+- Catálogo de mercados con aliases ES/EN.
+- Historial de predicciones/combinadas con marcado manual (won/lost/void/pending).
+- API REST documentada (Swagger) y UI en HTML/CSS/JS vanilla.
 
-## Interfaz web
+## Arquitectura liviana
 
-La raiz `/` ahora renderiza un **dashboard HTML** (ya no JSON). El JSON informativo
-anterior sigue disponible en `GET /api/info`.
+- **FastAPI + SQLModel + SQLite + Jinja2 + JavaScript vanilla.**
+- Un solo contenedor de aplicación. Sin PostgreSQL, Redis, Celery, Node, React ni navegadores.
+- Persistencia en un archivo SQLite dentro de `data/`.
+- Toda actualización externa es **manual** (por botón o `POST`); no hay cron ni polling.
 
-| Pagina                 | Ruta            | Descripcion                                  |
-| ---------------------- | --------------- | -------------------------------------------- |
-| Dashboard              | `/`             | Tarjetas resumen y accesos rapidos           |
-| Deportes               | `/sports/ui`    | Alta y listado de deportes                   |
-| Equipos                | `/teams/ui`     | Alta y listado de equipos                    |
-| Partidos               | `/matches/ui`   | Alta y listado de partidos                   |
-| Analizador de Cuotas   | `/odds/ui`      | Analiza una cuota individual (EV, riesgo)    |
-| Simulador de Combinadas| `/combo/ui`     | Analiza combinadas (parlay) con patas        |
-| Historial              | `/history/ui`   | Placeholder para futuro historial            |
-| Configuracion          | `/settings/ui`  | Configuracion local (solo lectura)           |
+## Requisitos
 
-Recursos estaticos: `app/static/css/styles.css` y `app/static/js/app.js`, servidos
-bajo `/static`. La UI consume los endpoints API existentes via `fetch`.
+- Docker Engine 20.10+ y Docker Compose v2.
+- ~300 MB de disco para la imagen.
+- (Opcional) Una API key gratuita de [football-data.org](https://www.football-data.org/) para datos de fútbol.
 
-## Estructura
-
-```
-/opt/pirapire
-├── backend/
-│   ├── app/
-│   │   ├── routers/        # health, sports, teams, matches, odds, combo, pages
-│   │   ├── services/       # odds_engine, combo_engine
-│   │   ├── templates/      # base + una plantilla por pagina (Jinja2)
-│   │   ├── static/         # css/ y js/ (sin CDN)
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── models.py
-│   │   └── schemas.py
-│   ├── tests/
-│   ├── Dockerfile
-│   ├── pytest.ini
-│   └── requirements.txt
-├── data/    logs/    backups/
-├── .env     .env.example
-```
-
-## Endpoints API
-
-| Metodo | Ruta            | Descripcion                                  |
-| ------ | --------------- | -------------------------------------------- |
-| GET    | `/api/info`     | Info general (JSON)                          |
-| GET    | `/health`       | Estado del servicio                          |
-| POST   | `/sports`       | Crear deporte                                |
-| GET    | `/sports`       | Listar deportes                              |
-| POST   | `/teams`        | Crear equipo                                 |
-| GET    | `/teams`        | Listar equipos                               |
-| POST   | `/matches`      | Crear partido                                |
-| GET    | `/matches`      | Listar partidos                              |
-| POST   | `/odds/analyze` | Analizar una cuota simple                    |
-| POST   | `/combo/analyze`| Analizar una combinada                       |
-
-## Fase 2 — Conectores y sincronizacion manual
-
-**Conectores implementados:**
-
-| Fuente | Deporte | Rol | Auth |
-|--------|---------|-----|------|
-| football-data.org | Futbol | Primaria: fixtures, resultados, standings, equipos | `X-Auth-Token` desde `.env` |
-| OpenLigaDB | Futbol | Fallback: solo si la primaria no funciona o `OPENLIGADB_*` esta configurado | Sin auth |
-| Riot Data Dragon | LoL | Unica: parches y campeones (datos estaticos) | Sin auth |
-
-**Sincronizacion:** exclusivamente manual mediante botones en `GET /sources/ui`
-(`Actualizar Futbol` / `Actualizar LoL` / `Actualizar Todo`). No hay cron, scheduler ni polling.
-
-**Endpoints de sync:** `POST /sources/sync/football`, `POST /sources/sync/lol`,
-`POST /sources/sync/all`, `POST /sources/sync/{source_slug}`
-
-**Historial:** `GET /source-runs` y `GET /source-runs/ui`
-
-**Datos cargados:** `GET /data/football/*`, `GET /data/lol/*` y sus UIs.
-
-**Raw snapshots:** cada respuesta externa se guarda con `payload_hash`; se deduplican.
-
-## Fase 3 — Importadores CSV, catálogo de mercados e historial
-
-- **Market Catalog** (`/markets/ui`, `GET /markets`, `POST /markets/seed`): mercados de
-  fútbol y LoL con `source_status` (supported/manual_only/partial), `risk_level` y aliases
-  ES→código para mapear textos de Aposta.LA.
-- **Importadores CSV manuales** (`/imports/ui`): Aposta.LA (cuotas/mercados) y Oracle's
-  Elixir (histórico LoL). Solo se importa al subir archivo o `POST` manual — sin scraping.
-  Cada carga crea un `ManualImportBatch` y registra `ManualImportError` por fila sin abortar
-  todo el archivo. Mercados no reconocidos quedan como `unmapped` con warning.
-  Plantillas descargables: `GET /imports/templates/aposta-odds` y `/imports/templates/oracles-elixir`.
-- **Historial real** (`/history/ui`): el Analizador de Cuotas (`save=true`) persiste
-  `PredictionHistory` y el Simulador (`save=true`) persiste `ComboHistory`/`ComboLegHistory`.
-  Marcado manual won/lost/void/pending vía `POST /history/{predictions,combos}/{id}/settle`.
-
-## Fuentes de datos (registro)
-
-Capa de fuentes externas rankeadas por confiabilidad. En esta fase es **solo
-lectura**: registro de fuentes, ranking y resolucion de fuente primaria por
-`sport` + `data_type`. **No hay conectores de red ni sincronizacion automatica**;
-la actualizacion manual y los conectores llegan en fases siguientes.
-
-- `GET /sources` — fuentes registradas con estado (`enabled` / `disabled_missing_env` / `disabled_reference_only`).
-- `GET /sources/rankings` — ranking por deporte (`football`, `lol`).
-- `GET /sources/capabilities` — capacidades por `data_type` y fuente primaria.
-- `POST /sources/seed` — persiste el registro en las tablas `DataSource` / `SourceCapability`.
-- UI: `GET /sources/ui` (menu **Fuentes**).
-
-## Integracion con el docker-compose existente
-
-Pirapire corre como el servicio `pirapire_app` dentro del `compose` presente en el
-servidor (`/opt/licitaciones/compose.yml`), sin alterar los servicios existentes.
-Se crea un backup del compose antes de cualquier modificacion.
-
-## Comandos de despliegue
+## Instalación rápida (cualquier PC)
 
 ```bash
+git clone https://github.com/mateoschreiber/pirapire.git
+cd pirapire
+cp .env.example .env
+# edita .env con tu editor preferido (nano, vim, etc.)
+nano .env
+docker compose up -d --build
+docker compose ps
+curl http://localhost:8090/health
+```
+
+Se puede instalar en **cualquier carpeta** (`~/pirapire`, `/srv/pirapire`, etc.).
+Los datos y logs se guardan junto al proyecto en `./data` y `./logs`.
+
+### Instalación opcional en /opt
+
+```bash
+sudo mkdir -p /opt/pirapire
+sudo chown -R "$USER:$USER" /opt/pirapire
+git clone https://github.com/mateoschreiber/pirapire.git /opt/pirapire
 cd /opt/pirapire
-docker compose -f /opt/licitaciones/compose.yml config
-docker compose -f /opt/licitaciones/compose.yml up -d --build pirapire_app
-docker compose -f /opt/licitaciones/compose.yml ps pirapire_app
+cp .env.example .env && docker compose up -d --build
 ```
 
-## Acceso
+## Configuración de `.env`
 
-- Dashboard: `http://192.168.1.54:8090/`
-- Swagger UI: `http://192.168.1.54:8090/docs`
-- Healthcheck: `http://192.168.1.54:8090/health`
-- Info JSON: `http://192.168.1.54:8090/api/info`
+Copia `.env.example` a `.env`. Variables clave:
 
-## Tests
+| Variable | Descripción | Default |
+|----------|-------------|---------|
+| `PIRAPIRE_PORT` | Puerto host publicado | `8090` |
+| `PIRAPIRE_CONTAINER_NAME` | Nombre del contenedor | `pirapire_app` |
+| `APP_TIMEZONE` | Zona horaria de la UI | `America/Argentina/Buenos_Aires` |
+| `APP_PUBLIC_URL` | URL pública (opcional, solo display) | vacío |
+| `FOOTBALL_DATA_API_KEY` | API key de football-data.org (opcional) | vacío |
+| `RECOMMENDER_DEFAULT_MODE` | Modo por defecto del recomendador | `probability` |
+
+La API key **nunca** se versiona: vive solo en tu `.env` local.
+
+## Primer arranque
 
 ```bash
-docker compose -f /opt/licitaciones/compose.yml exec pirapire_app pytest -q
-docker compose -f /opt/licitaciones/compose.yml exec pirapire_app ruff check .
+docker compose up -d --build
+docker compose logs -f pirapire_app   # opcional
+curl http://localhost:8090/health     # {"status":"ok"}
 ```
 
-En local (desde `backend/`):
+## URLs locales
+
+Reemplaza `localhost` por la IP del equipo si accedes desde otra máquina de la LAN.
+
+- Dashboard: `http://localhost:8090/`
+- Recomendaciones: `http://localhost:8090/recommendations/ui`
+- Importaciones CSV: `http://localhost:8090/imports/ui`
+- Mercados: `http://localhost:8090/markets/ui`
+- Fuentes: `http://localhost:8090/sources/ui`
+- Historial: `http://localhost:8090/history/ui`
+- Swagger: `http://localhost:8090/docs`
+- Healthcheck: `http://localhost:8090/health`
+
+## Uso básico
+
+### Importar odds de Aposta.LA por CSV
+
+1. Abre **Importaciones** (`/imports/ui`).
+2. Descarga la plantilla `aposta_odds_template.csv`.
+3. Completa las cuotas que ves en la web pública y súbela con **Importar cuotas**.
+
+### Actualizar fuentes de fútbol / LoL (manual)
+
+En **Fuentes** (`/sources/ui`) usa los botones *Actualizar Fútbol* / *Actualizar LoL*.
+Requiere conectividad a las APIs públicas; para fútbol conviene configurar `FOOTBALL_DATA_API_KEY`.
+
+### Recalcular recomendaciones
+
+En el **Dashboard** o en **Recomendaciones** elige el modo (probabilidad / ganancia /
+odds / balanceado), ajusta los filtros y pulsa **Recalcular recomendaciones**.
+
+### Historial y settle manual
+
+Guarda una apuesta/combinada al historial desde las recomendaciones o el analizador,
+y márcala como won/lost/void/pending en **Historial** (`/history/ui`).
+
+## Backups
+
+Los datos viven en `./data/pirapire.db`. Para respaldar:
 
 ```bash
-pip install -r requirements.txt
-ruff check .
-pytest -q
+mkdir -p backups
+cp data/pirapire.db "backups/pirapire_$(date +%Y%m%d_%H%M%S).db"
 ```
 
-## Datos de ejemplo (opcional)
+## Actualización de la app
 
 ```bash
-docker compose -f /opt/licitaciones/compose.yml exec pirapire_app python -m app.seed
+cd <ruta-de-pirapire>
+git pull
+docker compose up -d --build pirapire_app
 ```
+
+Los datos en `./data` se conservan entre actualizaciones.
+
+## Troubleshooting
+
+- **El puerto 8090 está ocupado:** cambia `PIRAPIRE_PORT` en `.env` y vuelve a `docker compose up -d`.
+- **`/health` no responde:** revisa `docker compose logs pirapire_app`.
+- **Fútbol devuelve `partial`/429:** es el rate limit del plan gratuito; sube `FOOTBALL_DATA_REQUEST_DELAY_SECONDS` o baja `FOOTBALL_DATA_MAX_COMPETITIONS_PER_RUN`.
+- **Sin recomendaciones:** primero importa cuotas (CSV) o sincroniza datos, luego *Recalcular*.
+
+## Seguridad y secretos
+
+Ver [SECURITY.md](SECURITY.md). En resumen: no commitees `.env`, no expongas API keys,
+usa Pirapire solo en LAN/VPN y respalda tu SQLite.
+
+## Documentación adicional
+
+- [INSTALL.md](INSTALL.md) — instalación detallada.
+- [DEPLOYMENT.md](DEPLOYMENT.md) — despliegue, puertos, reverse proxy, backups.
+- [SECURITY.md](SECURITY.md) — seguridad y secretos.
+
+## Fuentes oficiales
+
+- Docker: <https://docs.docker.com/engine/install/>
+- Docker Compose (env vars): <https://docs.docker.com/compose/how-tos/environment-variables/set-environment-variables/>
+- FastAPI: <https://fastapi.tiangolo.com/>
+- football-data.org: <https://www.football-data.org/documentation/quickstart>
+- Riot Data Dragon: <https://developer.riotgames.com/docs/lol>
+
+## Endpoints principales
+
+`GET /health` · `GET /api/info` · `GET /docs` · `POST /recommendations/run` ·
+`GET /recommendations/bets` · `GET /recommendations/combos` ·
+`POST /imports/aposta-odds-csv` · `POST /sources/sync/{football,lol,all}` ·
+`POST /odds/analyze` · `POST /combo/analyze` · `GET /history/predictions`

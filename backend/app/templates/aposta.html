@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Aposta.LA{% endblock %}
+{% block header %}Sincronización Aposta.LA{% endblock %}
+{% block content %}
+<div class="notice">
+  En esta fase (4A) <b>no</b> se navega Aposta.LA desde el contenedor (sin Playwright/Chromium).
+  El botón registra una ejecución con estado <code>manual_required</code>. Para cargar cuotas usa
+  <a href="/imports/ui">Importaciones CSV</a>. El worker de navegador es opcional (Fase 4B).
+</div>
+
+<div class="toolbar">
+  <div class="toolbar-actions">
+    <button class="btn btn-primary" onclick="Pirapire.syncAposta()">Sincronizar Aposta.LA</button>
+    <button class="btn btn-secondary" onclick="Pirapire.loadApostaRuns()">Refrescar</button>
+    <a class="btn btn-outline" href="/imports/ui">Ir a Importaciones CSV</a>
+  </div>
+  <div id="sync-status" class="toolbar-status" hidden></div>
+</div>
+
+<section class="card">
+  <h2 class="card-title">Ejecuciones de sync</h2>
+  <table id="aposta-runs-table" class="table">
+    <thead><tr><th>ID</th><th>Estado</th><th>Inicio</th><th>Fin</th><th>Mensaje</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>Pirapire.initAposta();</script>
+{% endblock %}
