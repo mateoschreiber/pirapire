@@ -13,7 +13,10 @@ def init_db() -> None:
     from . import (  # noqa: F401
         models,
         models_football,
+        models_history,
+        models_imports,
         models_lol,
+        models_markets,
         models_sources,
     )
 

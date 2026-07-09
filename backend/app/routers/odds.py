@@ -4,7 +4,7 @@ from sqlmodel import Session
 from ..database import get_session
 from ..models import Prediction
 from ..schemas import OddsAnalyzeRequest, OddsAnalyzeResponse
-from ..services import odds_engine
+from ..services import history_service, odds_engine
 
 router = APIRouter(prefix="/odds", tags=["odds"])
 
@@ -35,6 +35,19 @@ def analyze_odds(
         session.add(prediction)
         session.commit()
 
+    prediction_id = None
+    if payload.save:
+        analysis = {
+            "odds_decimal": payload.odds_decimal,
+            "implied_probability": implied,
+            "model_probability": model_prob,
+            "fair_odds": fair,
+            "expected_value": ev,
+            "risk_label": risk,
+        }
+        saved = history_service.save_prediction(session, payload.model_dump(), analysis)
+        prediction_id = saved.id
+
     return OddsAnalyzeResponse(
         odds_decimal=payload.odds_decimal,
         implied_probability=implied,
@@ -42,4 +55,5 @@ def analyze_odds(
         fair_odds=fair,
         expected_value=ev,
         risk_label=risk,
+        prediction_id=prediction_id,
     )

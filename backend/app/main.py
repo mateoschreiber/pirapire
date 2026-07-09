@@ -5,11 +5,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .database import init_db
+from .database import engine, init_db
 from .routers import (
     combo,
     data,
     health,
+    history,
+    imports,
+    markets,
     matches,
     odds,
     pages,
@@ -27,13 +30,27 @@ logger = logging.getLogger("pirapire")
 async def lifespan(app: FastAPI):
     logger.info("Starting %s (%s)", settings.app_name, settings.app_env)
     init_db()
+    _seed_markets_safe()
     yield
+
+
+def _seed_markets_safe() -> None:
+    """Seed the local market catalog on startup (no network, idempotent)."""
+    try:
+        from sqlmodel import Session
+
+        from .services.market_catalog import seed_catalog
+
+        with Session(engine) as session:
+            seed_catalog(session)
+    except Exception as exc:  # never block startup
+        logger.warning("market catalog seed skipped: %s", exc)
 
 
 app = FastAPI(
     title=settings.app_name,
     description="Sistema analitico de cuotas deportivas. No automatiza apuestas reales.",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -47,6 +64,9 @@ app.include_router(combo.router)
 app.include_router(sources.router)
 app.include_router(source_runs.router)
 app.include_router(data.router)
+app.include_router(markets.router)
+app.include_router(imports.router)
+app.include_router(history.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

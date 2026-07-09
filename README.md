@@ -97,6 +97,20 @@ bajo `/static`. La UI consume los endpoints API existentes via `fetch`.
 
 **Raw snapshots:** cada respuesta externa se guarda con `payload_hash`; se deduplican.
 
+## Fase 3 — Importadores CSV, catálogo de mercados e historial
+
+- **Market Catalog** (`/markets/ui`, `GET /markets`, `POST /markets/seed`): mercados de
+  fútbol y LoL con `source_status` (supported/manual_only/partial), `risk_level` y aliases
+  ES→código para mapear textos de Aposta.LA.
+- **Importadores CSV manuales** (`/imports/ui`): Aposta.LA (cuotas/mercados) y Oracle's
+  Elixir (histórico LoL). Solo se importa al subir archivo o `POST` manual — sin scraping.
+  Cada carga crea un `ManualImportBatch` y registra `ManualImportError` por fila sin abortar
+  todo el archivo. Mercados no reconocidos quedan como `unmapped` con warning.
+  Plantillas descargables: `GET /imports/templates/aposta-odds` y `/imports/templates/oracles-elixir`.
+- **Historial real** (`/history/ui`): el Analizador de Cuotas (`save=true`) persiste
+  `PredictionHistory` y el Simulador (`save=true`) persiste `ComboHistory`/`ComboLegHistory`.
+  Marcado manual won/lost/void/pending vía `POST /history/{predictions,combos}/{id}/settle`.
+
 ## Fuentes de datos (registro)
 
 Capa de fuentes externas rankeadas por confiabilidad. En esta fase es **solo

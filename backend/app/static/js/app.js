@@ -140,6 +140,14 @@ var Pirapire = (function () {
       if (modelProb !== "") payload.model_probability = parseFloat(modelProb);
       var stake = document.getElementById("odds-stake").value;
       if (stake !== "") payload.stake = parseFloat(stake);
+      var saveEl = document.getElementById("odds-save");
+      if (saveEl && saveEl.checked) {
+        payload.save = true;
+        var ml = document.getElementById("odds-match-label");
+        var mt = document.getElementById("odds-market-text");
+        if (ml && ml.value) payload.match_label = ml.value;
+        if (mt && mt.value) payload.market_text = mt.value;
+      }
 
       apiPost("/odds/analyze", payload).then(function (data) {
         var riskClass = "badge-low";
@@ -204,6 +212,12 @@ var Pirapire = (function () {
       var payload = { legs: legs };
       var offered = parseFloat(document.getElementById("combo-offered-odds").value);
       if (!isNaN(offered)) payload.offered_odds = offered;
+      var comboSave = document.getElementById("combo-save");
+      if (comboSave && comboSave.checked) {
+        payload.save = true;
+        var cname = document.getElementById("combo-name");
+        if (cname && cname.value) payload.name = cname.value;
+      }
 
       apiPost("/combo/analyze", payload).then(function (data) {
         var riskClass = "badge-low";
@@ -476,6 +490,244 @@ var Pirapire = (function () {
     }).catch(function () {});
   }
 
+  /* --- Markets (Fase 3) --- */
+  function statusBadgeClass(status) {
+    if (status === "supported") return "badge-low";
+    if (status === "manual_only" || status === "partial" || status === "estimated_only") return "badge-medium";
+    return "badge-high";
+  }
+
+  function fillMarketTable(id, markets) {
+    var tbody = document.querySelector("#" + id + " tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    if (!markets.length) { tbody.innerHTML = '<tr><td colspan="5" class="muted">Sin mercados. Ejecuta Re-seed.</td></tr>'; return; }
+    markets.forEach(function (m) {
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td><code>" + m.market_code + "</code></td>" +
+        "<td>" + m.display_name + "</td>" +
+        "<td>" + (m.category || "") + "</td>" +
+        '<td><span class="badge ' + statusBadgeClass(m.source_status) + '">' + m.source_status + "</span></td>" +
+        "<td>" + m.risk_level + "</td>";
+      tbody.appendChild(tr);
+    });
+  }
+
+  function initMarkets() {
+    apiGet("/markets?sport=football").then(function (rows) { fillMarketTable("markets-football", rows); }).catch(function () {});
+    apiGet("/markets?sport=lol").then(function (rows) { fillMarketTable("markets-lol", rows); }).catch(function () {});
+    apiGet("/markets/aliases").then(function (rows) {
+      renderTable("aliases-table", rows, ["alias_text", "normalized_alias", "language"]);
+    }).catch(function () {});
+  }
+
+  function reseedMarkets() {
+    var box = document.getElementById("markets-status");
+    if (box) { box.textContent = "Re-seeding..."; box.removeAttribute("hidden"); }
+    apiPost("/markets/seed", {}).then(function (res) {
+      if (box) box.textContent = "Mercados: " + res.markets_upserted + " nuevos, aliases: " + res.aliases_upserted + " nuevos.";
+      showMessage("Market catalog actualizado", "ok");
+      initMarkets();
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  /* --- Imports (Fase 3) --- */
+  function uploadCsv(url, fileInputId, resultId) {
+    var input = document.getElementById(fileInputId);
+    var result = document.getElementById(resultId);
+    if (!input || !input.files.length) { showMessage("Selecciona un archivo CSV", "error"); return; }
+    var fd = new FormData();
+    fd.append("file", input.files[0]);
+    if (result) { result.hidden = false; result.innerHTML = '<div class="kv"><span>Estado</span><span>subiendo...</span></div>'; }
+    fetch(url, { method: "POST", body: fd })
+      .then(function (r) { if (!r.ok) throw new Error(r.status + " " + r.statusText); return r.json(); })
+      .then(function (b) {
+        if (result) {
+          result.innerHTML =
+            '<div class="kv"><span>Batch</span><span>#' + b.id + '</span></div>' +
+            '<div class="kv"><span>Estado</span><span><span class="badge ' + statusBadge(b.status) + '">' + b.status + '</span></span></div>' +
+            '<div class="kv"><span>Total</span><span>' + b.total_rows + '</span></div>' +
+            '<div class="kv"><span>Importadas</span><span>' + b.imported_rows + '</span></div>' +
+            '<div class="kv"><span>Omitidas</span><span>' + b.skipped_rows + '</span></div>' +
+            '<div class="kv"><span>Errores</span><span>' + b.error_rows + '</span></div>' +
+            '<div class="kv"><span>Mensaje</span><span>' + (b.message || '') + '</span></div>';
+        }
+        showMessage("Importación batch #" + b.id + ": " + b.status, b.error_rows ? "error" : "ok");
+        loadBatches();
+      })
+      .catch(function (e) { showMessage("Error importando: " + e.message, "error"); });
+  }
+
+  function loadBatches() {
+    var tbody = document.querySelector("#batches-table tbody");
+    if (!tbody) return;
+    apiGet("/imports/batches?limit=30").then(function (rows) {
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="muted">Sin importaciones.</td></tr>'; return; }
+      rows.forEach(function (b) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + b.id + "</td>" +
+          "<td>" + b.import_type + "</td>" +
+          "<td>" + (b.filename || "") + "</td>" +
+          '<td><span class="badge ' + statusBadge(b.status) + '">' + b.status + "</span></td>" +
+          "<td>" + b.total_rows + "</td>" +
+          "<td>" + b.imported_rows + "</td>" +
+          "<td>" + b.skipped_rows + "</td>" +
+          "<td>" + b.error_rows + "</td>" +
+          "<td>" + (b.message || "") + "</td>";
+        tr.style.cursor = "pointer";
+        tr.addEventListener("click", function () { loadBatchErrors(b.id); });
+        tbody.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  function loadBatchErrors(batchId) {
+    var table = document.getElementById("batch-errors-table");
+    var tbody = table ? table.querySelector("tbody") : null;
+    var hint = document.getElementById("batch-errors-hint");
+    if (!tbody) return;
+    apiGet("/imports/batches/" + batchId + "/errors").then(function (rows) {
+      table.removeAttribute("hidden");
+      if (hint) hint.textContent = "Errores/avisos del batch #" + batchId;
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="3" class="muted">Sin errores.</td></tr>'; return; }
+      rows.forEach(function (e) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + e.row_number + "</td>" +
+          '<td><span class="badge ' + (e.level === "error" ? "badge-high" : "badge-medium") + '">' + e.level + "</span></td>" +
+          "<td>" + e.message + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  function initImports() {
+    var aposta = document.getElementById("aposta-form");
+    if (aposta) aposta.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      uploadCsv("/imports/aposta-odds-csv", "aposta-file", "aposta-result");
+    });
+    var oracles = document.getElementById("oracles-form");
+    if (oracles) oracles.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      uploadCsv("/imports/oracles-elixir-csv", "oracles-file", "oracles-result");
+    });
+    loadBatches();
+  }
+
+  /* --- History (Fase 3) --- */
+  var _historyTab = "predictions";
+
+  function settlePrediction(id, result) {
+    apiPost("/history/predictions/" + id + "/settle", { result: result })
+      .then(function () { showMessage("Predicción actualizada: " + result, "ok"); loadHistory(); })
+      .catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function settleCombo(id, result) {
+    apiPost("/history/combos/" + id + "/settle", { result: result })
+      .then(function () { showMessage("Combinada actualizada: " + result, "ok"); loadHistory(); })
+      .catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function settleButtons(kind, id) {
+    var fn = kind === "combo" ? "settleCombo" : "settlePrediction";
+    return ["won", "lost", "void", "pending"].map(function (r) {
+      return '<button class="btn btn-outline filter-btn" onclick="Pirapire.' + fn + '(' + id + ',\'' + r + '\')">' + r + "</button>";
+    }).join(" ");
+  }
+
+  function pct(v) { return (v === null || v === undefined) ? "" : (v * 100).toFixed(1) + "%"; }
+  function num(v) { return (v === null || v === undefined) ? "" : Number(v).toFixed(3); }
+
+  function loadPredictions() {
+    var tbody = document.querySelector("#predictions-table tbody");
+    if (!tbody) return;
+    apiGet("/history/predictions").then(function (rows) {
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="15" class="muted">Sin predicciones guardadas.</td></tr>'; return; }
+      rows.forEach(function (p) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + p.id + "</td>" +
+          "<td>" + fmtDate(p.created_at) + "</td>" +
+          "<td>" + (p.sport || "") + "</td>" +
+          "<td>" + (p.match_label || "") + "</td>" +
+          "<td>" + (p.market_code || p.market_text || "") + "</td>" +
+          "<td>" + (p.line === null || p.line === undefined ? "" : p.line) + "</td>" +
+          "<td>" + (p.selection || "") + "</td>" +
+          "<td>" + num(p.odds_decimal) + "</td>" +
+          "<td>" + pct(p.implied_probability) + "</td>" +
+          "<td>" + pct(p.model_probability) + "</td>" +
+          "<td>" + num(p.expected_value) + "</td>" +
+          '<td><span class="badge ' + riskBadge(p.risk_label) + '">' + (p.risk_label || "") + "</span></td>" +
+          "<td>" + p.status + "</td>" +
+          "<td>" + (p.result || "") + "</td>" +
+          "<td>" + settleButtons("prediction", p.id) + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function loadCombos() {
+    var tbody = document.querySelector("#combos-table tbody");
+    if (!tbody) return;
+    apiGet("/history/combos").then(function (rows) {
+      tbody.innerHTML = "";
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="12" class="muted">Sin combinadas guardadas.</td></tr>'; return; }
+      rows.forEach(function (item) {
+        var c = item.combo;
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + c.id + "</td>" +
+          "<td>" + fmtDate(c.created_at) + "</td>" +
+          "<td>" + (c.name || "") + "</td>" +
+          "<td>" + item.legs.length + "</td>" +
+          "<td>" + num(c.offered_odds) + "</td>" +
+          "<td>" + pct(c.model_probability) + "</td>" +
+          "<td>" + num(c.fair_odds) + "</td>" +
+          "<td>" + num(c.expected_value) + "</td>" +
+          '<td><span class="badge ' + riskBadge(c.risk_label) + '">' + (c.risk_label || "") + "</span></td>" +
+          "<td>" + c.status + "</td>" +
+          "<td>" + (c.result || "") + "</td>" +
+          "<td>" + settleButtons("combo", c.id) + "</td>";
+        tbody.appendChild(tr);
+      });
+    }).catch(function (e) { showMessage("Error: " + e.message, "error"); });
+  }
+
+  function riskBadge(label) {
+    if (label === "low") return "badge-low";
+    if (label === "medium") return "badge-medium";
+    return "badge-high";
+  }
+
+  function loadHistory() {
+    if (_historyTab === "combos") { loadCombos(); } else { loadPredictions(); }
+  }
+
+  function initHistory() {
+    var tabs = document.getElementById("history-tabs");
+    if (tabs && !tabs.dataset.bound) {
+      tabs.dataset.bound = "1";
+      tabs.querySelectorAll(".filter-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          tabs.querySelectorAll(".filter-btn").forEach(function (b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+          _historyTab = btn.getAttribute("data-tab");
+          document.getElementById("predictions-panel").hidden = _historyTab !== "predictions";
+          document.getElementById("combos-panel").hidden = _historyTab !== "combos";
+          loadHistory();
+        });
+      });
+    }
+    loadHistory();
+  }
+
   return {
     showMessage: showMessage,
     apiGet: apiGet,
@@ -496,5 +748,12 @@ var Pirapire = (function () {
     initSourceRuns: initSourceRuns,
     initDataFootball: initDataFootball,
     initDataLol: initDataLol,
+    initMarkets: initMarkets,
+    reseedMarkets: reseedMarkets,
+    initImports: initImports,
+    initHistory: initHistory,
+    loadHistory: loadHistory,
+    settlePrediction: settlePrediction,
+    settleCombo: settleCombo,
   };
 })();

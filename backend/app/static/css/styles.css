@@ -227,6 +227,9 @@ small.muted { font-weight: 400; }
 .btn[disabled] { opacity: 0.55; cursor: progress; }
 .filter-btn { padding: 0.35rem 0.7rem; font-size: 0.82rem; }
 .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.checkbox-field { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text-muted); }
+.checkbox-field input { width: auto; }
+input[type="file"] { padding: 0.4rem; border: 1px dashed var(--border); border-radius: 8px; background: var(--surface-2); }
 
 /* Mobile */
 .nav-toggle { position: absolute; }

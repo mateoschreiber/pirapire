@@ -19,6 +19,15 @@
         <label for="odds-stake">Stake (opcional)</label>
         <input id="odds-stake" type="number" step="0.01" min="0" value="1">
       </div>
+      <div class="form-field">
+        <label for="odds-match-label">Evento (opcional, para guardar)</label>
+        <input id="odds-match-label" placeholder="Ej: Arsenal vs Chelsea">
+      </div>
+      <div class="form-field">
+        <label for="odds-market-text">Mercado (opcional, para guardar)</label>
+        <input id="odds-market-text" placeholder="Ej: Total de goles Over 2.5">
+      </div>
+      <label class="checkbox-field"><input type="checkbox" id="odds-save"> Guardar en historial</label>
       <button class="btn btn-primary" type="submit">Analizar</button>
     </form>
   </section>

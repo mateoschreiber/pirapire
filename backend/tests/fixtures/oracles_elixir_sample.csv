@@ -1,0 +1,5 @@
+gameid,league,split,date,game,patch,side,position,playername,teamname,champion,gamelength,result,kills,deaths,assists,teamkills,teamdeaths,towers,inhibitors,dragons,barons,earnedgold,total cs
+GTEST01,LCK,Summer,2026-06-01,1,14.11,Blue,top,Zeus,T1,Renekton,1750,1,2,1,6,18,7,9,2,4,1,12800,235
+GTEST01,LCK,Summer,2026-06-01,1,14.11,Blue,mid,Faker,T1,Azir,1750,1,6,0,8,18,7,9,2,4,1,15200,270
+GTEST01,LCK,Summer,2026-06-01,1,14.11,Blue,team,,T1,,1750,1,18,7,,18,7,9,2,4,1,,
+GTEST01,LCK,Summer,2026-06-01,1,14.11,Red,team,,GenG,,1750,0,7,18,,7,18,3,0,1,0,,

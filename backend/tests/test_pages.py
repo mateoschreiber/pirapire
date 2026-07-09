@@ -20,6 +20,8 @@ UI_PAGES = [
     "/source-runs/ui",
     "/data/football/ui",
     "/data/lol/ui",
+    "/markets/ui",
+    "/imports/ui",
     "/settings/ui",
 ]
 

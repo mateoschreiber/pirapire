@@ -1,0 +1,6 @@
+sport,competition,event_date,team_a,team_b,market_text,line,selection,odds_decimal,bookmaker
+football,La Liga,2026-08-20,Real Madrid,Barcelona,Total de goles,2.5,over,1.80,ApostaLA
+football,La Liga,2026-08-20,,Barcelona,Total de goles,2.5,over,1.80,ApostaLA
+football,La Liga,2026-08-20,Real Madrid,Barcelona,Total de goles,2.5,over,0.50,ApostaLA
+football,La Liga,2026-08-20,Real Madrid,Barcelona,Mercado Rarisimo Inexistente,1.5,over,1.90,ApostaLA
+lol,LCK,2026-08-21,T1,GenG,Total de torretas destruidas,11.5,over,1.95,ApostaLA

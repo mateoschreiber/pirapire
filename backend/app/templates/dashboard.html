@@ -33,6 +33,26 @@
     <span class="stat-value" id="stat-champions">{{ counts.lol_champions }}</span>
   </div>
   <div class="card stat">
+    <span class="stat-label">Cuotas importadas</span>
+    <span class="stat-value" id="stat-imported-odds">{{ counts.imported_odds }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Batches importados</span>
+    <span class="stat-value" id="stat-batches">{{ counts.import_batches }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Mercados</span>
+    <span class="stat-value" id="stat-markets">{{ counts.markets }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Predicciones</span>
+    <span class="stat-value" id="stat-predictions">{{ counts.predictions }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Combinadas</span>
+    <span class="stat-value" id="stat-combos">{{ counts.combos }}</span>
+  </div>
+  <div class="card stat">
     <span class="stat-label">Último sync</span>
     <span class="stat-value">
       {% if counts.last_update %}
@@ -64,6 +84,9 @@
   <div class="quick-actions">
     <a class="btn btn-outline" href="/sources/ui">Fuentes y sincronización</a>
     <a class="btn btn-outline" href="/source-runs/ui">Historial de ejecuciones</a>
+    <a class="btn btn-outline" href="/imports/ui">Importaciones CSV</a>
+    <a class="btn btn-outline" href="/markets/ui">Mercados</a>
+    <a class="btn btn-outline" href="/history/ui">Historial de predicciones</a>
   </div>
 </section>
 {% endblock %}

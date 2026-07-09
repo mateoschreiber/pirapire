@@ -11,7 +11,10 @@ from ..models_football import (
     FootballStanding,
     FootballTeam,
 )
+from ..models_history import ComboHistory, PredictionHistory
+from ..models_imports import ImportedOdds, ManualImportBatch
 from ..models_lol import LolChampion, LolPatch
+from ..models_markets import MarketCatalog
 from ..models_sources import SourceRun
 from ..services import source_registry as registry
 from ..services import source_resolver
@@ -50,6 +53,11 @@ def _dashboard_counts() -> dict:
             "football_standings": _count(session, FootballStanding),
             "lol_patches": _count(session, LolPatch),
             "lol_champions": _count(session, LolChampion),
+            "imported_odds": _count(session, ImportedOdds),
+            "import_batches": _count(session, ManualImportBatch),
+            "markets": _count(session, MarketCatalog),
+            "predictions": _count(session, PredictionHistory),
+            "combos": _count(session, ComboHistory),
             "last_update": last_update,
             "last_status": last_status,
         }
@@ -145,3 +153,13 @@ def data_football_page(request: Request):
 @router.get("/data/lol/ui", response_class=HTMLResponse)
 def data_lol_page(request: Request):
     return render(request, "data_lol.html", "data_lol")
+
+
+@router.get("/markets/ui", response_class=HTMLResponse)
+def markets_page(request: Request):
+    return render(request, "markets.html", "markets")
+
+
+@router.get("/imports/ui", response_class=HTMLResponse)
+def imports_page(request: Request):
+    return render(request, "imports.html", "imports")

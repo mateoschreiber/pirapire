@@ -34,6 +34,12 @@ class OddsAnalyzeRequest(SQLModel):
     bookmaker: Optional[str] = None
     stake: float = 1.0
     persist: bool = False
+    # Fase 3: save analysis to PredictionHistory
+    save: bool = False
+    sport: Optional[str] = None
+    match_label: Optional[str] = None
+    market_code: Optional[str] = None
+    market_text: Optional[str] = None
 
 
 class OddsAnalyzeResponse(SQLModel):
@@ -43,17 +49,26 @@ class OddsAnalyzeResponse(SQLModel):
     fair_odds: float
     expected_value: float
     risk_label: str
+    prediction_id: Optional[int] = None
 
 
 class ComboLeg(SQLModel):
     probability: float
     odds_decimal: Optional[float] = None
+    market_code: Optional[str] = None
+    market_text: Optional[str] = None
+    line: Optional[float] = None
+    selection: Optional[str] = None
 
 
 class ComboAnalyzeRequest(SQLModel):
     legs: List[ComboLeg]
     offered_odds: Optional[float] = None
     stake: float = 1.0
+    # Fase 3: save analysis to ComboHistory
+    save: bool = False
+    name: Optional[str] = None
+    sport: Optional[str] = None
 
 
 class ComboAnalyzeResponse(SQLModel):
@@ -63,3 +78,4 @@ class ComboAnalyzeResponse(SQLModel):
     expected_value: Optional[float] = None
     risk_label: str
     legs: int
+    combo_id: Optional[int] = None
