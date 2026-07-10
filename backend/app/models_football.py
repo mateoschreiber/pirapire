@@ -77,3 +77,19 @@ class FootballMatch(SQLModel, table=True):
     source_rank: int = 0
     fallback_used: bool = False
     retrieved_at: datetime = Field(default_factory=_now)
+
+class FootballPlayer(SQLModel, table=True):
+    __tablename__ = "footballplayer"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_name: str = Field(index=True)
+    source_id: Optional[str] = Field(index=True)
+    name: str = Field(index=True)
+    position: Optional[str] = None
+    shirt_number: Optional[int] = None
+    date_of_birth: Optional[str] = None
+    nationality: Optional[str] = None
+    team_id: Optional[int] = Field(default=None, foreign_key="footballteam.id", index=True)
+    team_name: Optional[str] = None
+    source_key: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: Optional[datetime] = None

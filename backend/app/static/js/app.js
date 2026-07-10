@@ -901,5 +901,61 @@ var Pirapire = (function () {
     }).catch(function(e) { tbody.innerHTML = '<tr><td colspan="5" class="muted">Error cargando calendario</td></tr>'; });
   }
 
-  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState, loadCalendar: loadCalendar };
+
+  /* Dashboard V3 - Auto-load, cards-based */
+  function initDashboardV3() {
+    loadDashboardV3State();
+    loadUpcomingEvents();
+    loadBestBets();
+    setInterval(function() { loadDashboardV3State(); loadUpcomingEvents(); loadBestBets(); }, 300000);
+  }
+
+  function loadDashboardV3State() {
+    apiGet("/dashboard/state").then(function(state) {
+      var el;
+      el = document.getElementById("st-app"); if (el) el.textContent = "OK";
+      el = document.getElementById("st-aposta"); if (el && state.aposta) el.textContent = (state.aposta.current_odds || 0) + " odds";
+      el = document.getElementById("st-football"); if (el && state.football) el.textContent = (state.football.total_matches || 0) + " matches";
+      el = document.getElementById("st-lol"); if (el && state.lol) el.textContent = (state.lol.games || 0) + " games, " + (state.lol.players || 0) + " players";
+    }).catch(function(e) { console.log("State error:", e); });
+  }
+
+  function loadUpcomingEvents() {
+    var c = document.getElementById("upcoming-events");
+    if (!c) return;
+    apiGet("/dashboard/calendar?days=7").then(function(events) {
+      if (!events || !events.length) { c.innerHTML = "<p class=muted>No hay eventos proximos</p>"; return; }
+      var h = "";
+      events.forEach(function(e) {
+        var d = e.event_date || "";
+        if (d) { var dt = new Date(d); if (!isNaN(dt.getTime())) d = dt.toISOString().slice(0,16).replace("T"," "); }
+        h += "<div class=event-card onclick="location.href='/events/' + (e.event_id || '')" style=cursor:pointer><div class=event-sport>" + (e.sport === "lol" ? "L" : "F") + "</div>";
+        h += "<div class=event-teams>" + (e.team_a||"?") + " vs " + (e.team_b||"?") + "</div>";
+        h += "<div class=event-meta>" + (e.competition||"") + " - " + d + " - " + (e.markets||0) + " mercados</div></div>";
+      });
+      c.innerHTML = h;
+    }).catch(function(e) { console.log("Events error:", e); c.innerHTML = "<p class=muted>Error cargando eventos</p>"; });
+  }
+
+  function loadBestBets() {
+    var c = document.getElementById("best-bets");
+    if (!c) return;
+    apiGet("/recommendations/bets?mode=balanced&limit=10").then(function(bets) {
+      if (!bets || !bets.length) { c.innerHTML = "<p class=muted>No hay oportunidades validadas. El modelo requiere mas datos estadisticos.</p>"; return; }
+      var h = "";
+      bets.forEach(function(b) {
+        h += "<div class=bet-card><div class=bet-event>" + (b.event_label||"") + "</div>";
+        h += "<div class=bet-detail>" + (b.market_text||b.market_code||"") + ": <b>" + (b.selection_text||"") + "</b> @ " + num(b.odds_decimal) + "</div>";
+        h += "<div class=bet-stats>Prob: " + pct(b.model_probability) + " - EV: " + num(b.expected_value) + " - Muestra: " + (b.sample_size||"?") + "</div>";
+        h += "<div class=bet-explanation>" + (b.explanation||"") + "</div></div>";
+      });
+      c.innerHTML = h;
+    }).catch(function(e) { console.log("Bets error:", e); c.innerHTML = "<p class=muted>Error cargando recomendaciones</p>"; });
+  }
+
+  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState, loadCalendar: loadCalendar, initDashboardV3: initDashboardV3, loadBestBets: loadBestBets, loadUpcomingEvents: loadUpcomingEvents };
+
+  document.addEventListener("DOMContentLoaded", function() {
+    try { initTopClock(); initTheme(); } catch(e) {}
+  });
 })();

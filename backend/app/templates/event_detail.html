@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block title %}{{ event.team_a }} vs {{ event.team_b }}
+<section class="card" id="stats-section">
+  <h2 class="card-title">Estadisticas historicas</h2>
+  <div id="event-stats"><p class="muted">Cargando estadisticas...</p></div>
+</section>
+<script>
+fetch("/api/events/" + eventId + "/statistics").then(r => r.json()).then(function(stats) {
+  var h = "";
+  for (var team in stats) {
+    if (team === "event_id" || team === "sport" || team === "window") continue;
+    var t = stats[team];
+    if (!t || !t.matches) continue;
+    h += "<div class=team-stats><h3>" + team + " (" + t.matches + " partidos)</h3>";
+    if (t.wins !== undefined) {
+      h += "<div class=stat-row><span>Forma:</span><span>" + t.wins + "W " + t.draws + "D " + t.losses + "L";
+      if (t.winrate) h += " (" + t.winrate + "%)";
+      h += "</span></div>";
+    }
+    if (t.avg_goals_for) h += "<div class=stat-row><span>Goles/partido:</span><span>" + t.avg_goals_for + " a favor / " + t.avg_goals_against + " en contra</span></div>";
+    if (t.avg_kills) h += "<div class=stat-row><span>Kills/partida:</span><span>" + t.avg_kills + " / " + t.avg_deaths + " muertes</span></div>";
+    if (t.avg_towers) h += "<div class=stat-row><span>Torres/partida:</span><span>" + t.avg_towers + "</span></div>";
+    if (t.both_scored) h += "<div class=stat-row><span>Ambos marcan:</span><span>" + t.both_scored + "/" + t.matches + "</span></div>";
+    if (t.over_2_5) h += "<div class=stat-row><span>Over 2.5:</span><span>" + t.over_2_5 + "/" + t.matches + "</span></div>";
+    if (t.recent) h += "<div class=stat-row><span>Reciente:</span><span>" + t.recent.join(" ") + "</span></div>";
+    h += "</div>";
+  }
+  document.getElementById("event-stats").innerHTML = h || "<p class=muted>Sin estadisticas disponibles</p>";
+}).catch(function(e) { document.getElementById("event-stats").innerHTML = "<p class=muted>Error cargando estadisticas</p>"; });
+</script>
+
+{% endblock %}
+{% block header %}{{ event.team_a }} vs {{ event.team_b }}
+<section class="card" id="stats-section">
+  <h2 class="card-title">Estadisticas historicas</h2>
+  <div id="event-stats"><p class="muted">Cargando estadisticas...</p></div>
+</section>
+<script>
+fetch("/api/events/" + eventId + "/statistics").then(r => r.json()).then(function(stats) {
+  var h = "";
+  for (var team in stats) {
+    if (team === "event_id" || team === "sport" || team === "window") continue;
+    var t = stats[team];
+    if (!t || !t.matches) continue;
+    h += "<div class=team-stats><h3>" + team + " (" + t.matches + " partidos)</h3>";
+    if (t.wins !== undefined) {
+      h += "<div class=stat-row><span>Forma:</span><span>" + t.wins + "W " + t.draws + "D " + t.losses + "L";
+      if (t.winrate) h += " (" + t.winrate + "%)";
+      h += "</span></div>";
+    }
+    if (t.avg_goals_for) h += "<div class=stat-row><span>Goles/partido:</span><span>" + t.avg_goals_for + " a favor / " + t.avg_goals_against + " en contra</span></div>";
+    if (t.avg_kills) h += "<div class=stat-row><span>Kills/partida:</span><span>" + t.avg_kills + " / " + t.avg_deaths + " muertes</span></div>";
+    if (t.avg_towers) h += "<div class=stat-row><span>Torres/partida:</span><span>" + t.avg_towers + "</span></div>";
+    if (t.both_scored) h += "<div class=stat-row><span>Ambos marcan:</span><span>" + t.both_scored + "/" + t.matches + "</span></div>";
+    if (t.over_2_5) h += "<div class=stat-row><span>Over 2.5:</span><span>" + t.over_2_5 + "/" + t.matches + "</span></div>";
+    if (t.recent) h += "<div class=stat-row><span>Reciente:</span><span>" + t.recent.join(" ") + "</span></div>";
+    h += "</div>";
+  }
+  document.getElementById("event-stats").innerHTML = h || "<p class=muted>Sin estadisticas disponibles</p>";
+}).catch(function(e) { document.getElementById("event-stats").innerHTML = "<p class=muted>Error cargando estadisticas</p>"; });
+</script>
+
+{% endblock %}
+{% block content %}
+<div class="notice">
+  <a href="/">&larr; Volver a proximos encuentros</a>
+</div>
+
+<section class="card">
+  <div class="event-header">
+    <span class="badge">{{ event.sport }}</span>
+    <strong>{{ event.competition }}</strong>
+    <span class="muted">{{ event.event_date }}</span>
+    <span>{{ event.total_odds }} cuotas &middot; {{ event.market_count }} mercados</span>
+  </div>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Mercados Aposta.LA</h2>
+  <div class="event-markets" id="event-markets">
+    <p class="muted">Cargando mercados...</p>
+  </div>
+</section>
+
+<section class="card" id="stats-section">
+  <h2 class="card-title">Estadisticas historicas</h2>
+  <div id="event-stats"><p class="muted">Cargando estadisticas...</p></div>
+</section>
+<script>
+fetch("/api/events/" + eventId + "/statistics").then(r => r.json()).then(function(stats) {
+  var h = "";
+  for (var team in stats) {
+    if (team === "event_id" || team === "sport" || team === "window") continue;
+    var t = stats[team];
+    if (!t || !t.matches) continue;
+    h += "<div class=team-stats><h3>" + team + " (" + t.matches + " partidos)</h3>";
+    if (t.wins !== undefined) {
+      h += "<div class=stat-row><span>Forma:</span><span>" + t.wins + "W " + t.draws + "D " + t.losses + "L";
+      if (t.winrate) h += " (" + t.winrate + "%)";
+      h += "</span></div>";
+    }
+    if (t.avg_goals_for) h += "<div class=stat-row><span>Goles/partido:</span><span>" + t.avg_goals_for + " a favor / " + t.avg_goals_against + " en contra</span></div>";
+    if (t.avg_kills) h += "<div class=stat-row><span>Kills/partida:</span><span>" + t.avg_kills + " / " + t.avg_deaths + " muertes</span></div>";
+    if (t.avg_towers) h += "<div class=stat-row><span>Torres/partida:</span><span>" + t.avg_towers + "</span></div>";
+    if (t.both_scored) h += "<div class=stat-row><span>Ambos marcan:</span><span>" + t.both_scored + "/" + t.matches + "</span></div>";
+    if (t.over_2_5) h += "<div class=stat-row><span>Over 2.5:</span><span>" + t.over_2_5 + "/" + t.matches + "</span></div>";
+    if (t.recent) h += "<div class=stat-row><span>Reciente:</span><span>" + t.recent.join(" ") + "</span></div>";
+    h += "</div>";
+  }
+  document.getElementById("event-stats").innerHTML = h || "<p class=muted>Sin estadisticas disponibles</p>";
+}).catch(function(e) { document.getElementById("event-stats").innerHTML = "<p class=muted>Error cargando estadisticas</p>"; });
+</script>
+
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  var eventCtx = { team_a: '{{ event.team_a }}', team_b: '{{ event.team_b }}' };
+  var eventId = window.location.pathname.split("/").pop();
+  fetch("/events/" + eventId).then(r => r.json()).then(function(event) {
+    document.title = event.team_a + " vs " + event.team_b;
+    var h = "";
+    event.markets.forEach(function(m) {
+      h += '<div class="market-group">';
+      h += '<div class="market-title">' + (m.market_text || m.market_code) + (m.line ? " (" + m.line + ")" : "") + ' <span class="muted">overround ' + m.overround_pct + '%</span></div>';
+      h += '<div class="market-selections">';
+      m.selections.forEach(function(s) {
+        h += '<div class="selection-row">';
+        h += '<span class="sel-name">' + (s.selection_raw || s.selection) + '</span>';
+        h += '<span class="sel-odds">' + s.odds_decimal.toFixed(2) + '</span>';
+        h += '<span class="sel-implied">' + s.implied_pct + '%</span>';
+        if (s.no_vig_probability) h += '<span class="sel-novig">(' + s.no_vig_pct + '% sin margen)</span>';
+        h += '</div>';
+      });
+      h += '</div></div>';
+    });
+    document.getElementById("event-markets").innerHTML = h || '<p class="muted">Sin mercados</p>';
+  }).catch(function(e) {
+    document.getElementById("event-markets").innerHTML = '<p class="muted">Error cargando mercados</p>';
+  });
+});
+</script>
+
+<section class="card" id="stats-section">
+  <h2 class="card-title">Estadisticas historicas</h2>
+  <div id="event-stats"><p class="muted">Cargando estadisticas...</p></div>
+</section>
+<script>
+fetch("/api/events/" + eventId + "/statistics").then(r => r.json()).then(function(stats) {
+  var h = "";
+  for (var team in stats) {
+    if (team === "event_id" || team === "sport" || team === "window") continue;
+    var t = stats[team];
+    if (!t || !t.matches) continue;
+    h += "<div class=team-stats><h3>" + team + " (" + t.matches + " partidos)</h3>";
+    if (t.wins !== undefined) {
+      h += "<div class=stat-row><span>Forma:</span><span>" + t.wins + "W " + t.draws + "D " + t.losses + "L";
+      if (t.winrate) h += " (" + t.winrate + "%)";
+      h += "</span></div>";
+    }
+    if (t.avg_goals_for) h += "<div class=stat-row><span>Goles/partido:</span><span>" + t.avg_goals_for + " a favor / " + t.avg_goals_against + " en contra</span></div>";
+    if (t.avg_kills) h += "<div class=stat-row><span>Kills/partida:</span><span>" + t.avg_kills + " / " + t.avg_deaths + " muertes</span></div>";
+    if (t.avg_towers) h += "<div class=stat-row><span>Torres/partida:</span><span>" + t.avg_towers + "</span></div>";
+    if (t.both_scored) h += "<div class=stat-row><span>Ambos marcan:</span><span>" + t.both_scored + "/" + t.matches + "</span></div>";
+    if (t.over_2_5) h += "<div class=stat-row><span>Over 2.5:</span><span>" + t.over_2_5 + "/" + t.matches + "</span></div>";
+    if (t.recent) h += "<div class=stat-row><span>Reciente:</span><span>" + t.recent.join(" ") + "</span></div>";
+    h += "</div>";
+  }
+  document.getElementById("event-stats").innerHTML = h || "<p class=muted>Sin estadisticas disponibles</p>";
+}).catch(function(e) { document.getElementById("event-stats").innerHTML = "<p class=muted>Error cargando estadisticas</p>"; });
+</script>
+
+{% endblock %}

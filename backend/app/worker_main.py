@@ -23,6 +23,15 @@ def run_aposta_sync():
         except Exception as e:
             logger.warning('Aposta sync error: %s', e)
 
+def run_wc_squad_sync():
+    try:
+        from app.services.import_wc_squads import import_wc_squads
+        n = import_wc_squads()
+        import logging; logging.getLogger('pirapire.worker').info('WC squads: %s players', n)
+    except Exception as e:
+        import logging; logging.getLogger('pirapire.worker').warning('WC squads sync error: %s', e)
+
+
 def run_sports_sync():
     from app.services.live_source_sync import sync_if_stale
     with Session(engine) as session:
@@ -38,6 +47,7 @@ if __name__ == '__main__':
     scheduler = BackgroundScheduler()
     scheduler.add_job(run_aposta_sync, IntervalTrigger(minutes=12), id='aposta', coalesce=True, max_instances=1)
     scheduler.add_job(run_sports_sync, IntervalTrigger(hours=4), id='sports', coalesce=True, max_instances=1)
+    scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=24), id='wc_squads', coalesce=True, max_instances=1)
     scheduler.start()
     logger.info('Scheduler: Aposta 12min, Sports 4h')
     run_sports_sync()

@@ -325,3 +325,76 @@ input[type="file"] { padding: 0.4rem; border: 1px dashed var(--border); border-r
   .page-title { font-size: 1rem; }
   .top-clock { font-size: 0.78rem; padding: 0.32rem 0.45rem; }
 }
+
+/* Dashboard V3 - Cards layout */
+.event-cards, .bet-cards { display: flex; flex-direction: column; gap: 0.75rem; }
+.event-card, .bet-card { background: var(--card-bg, #fff); border: 1px solid var(--border, #ddd); border-radius: 8px; padding: 1rem; }
+.event-card { display: flex; align-items: center; gap: 1rem; }
+.event-sport { width: 32px; height: 32px; border-radius: 50%; background: var(--accent, #1976d2); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; flex-shrink: 0; }
+.event-teams { font-weight: 600; flex: 1; }
+.event-meta { font-size: 0.85rem; color: #666; }
+.bet-card { }
+.bet-event { font-weight: 700; margin-bottom: 0.25rem; }
+.bet-detail { font-size: 1.05rem; margin-bottom: 0.25rem; }
+.bet-stats { font-size: 0.85rem; color: #666; margin-bottom: 0.25rem; }
+.bet-explanation { font-size: 0.8rem; color: #888; font-style: italic; }
+.status-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
+.status-item { display: flex; flex-direction: column; min-width: 100px; }
+.status-label { font-size: 0.75rem; text-transform: uppercase; color: #888; }
+.status-value { font-weight: 600; }
+
+@media (max-width: 768px) {
+  .event-card { flex-wrap: wrap; }
+  .status-grid { gap: 0.5rem; }
+  .status-item { min-width: 70px; }
+}
+
+/* Match detail */
+.market-group { margin-bottom: 1.5rem; border-bottom: 1px solid var(--border, #ddd); padding-bottom: 1rem; }
+.market-title { font-weight: 700; margin-bottom: 0.5rem; font-size: 1.05rem; }
+.selection-row { display: flex; gap: 1rem; padding: 0.35rem 0; align-items: center; border-bottom: 1px solid #f0f0f0; }
+.selection-row:last-child { border-bottom: none; }
+.sel-name { flex: 1; }
+.sel-odds { font-weight: 700; min-width: 60px; text-align: right; }
+.sel-implied { min-width: 55px; text-align: right; color: #666; }
+.sel-novig { min-width: 120px; text-align: right; color: #888; font-size: 0.85rem; }
+.event-header { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 768px) {
+  .selection-row { flex-wrap: wrap; }
+  .sel-odds, .sel-implied, .sel-novig { min-width: auto; }
+}
+
+/* Match detail */
+.market-group { margin-bottom: 1.5rem; border-bottom: 1px solid var(--border, #ddd); padding-bottom: 1rem; }
+.market-title { font-weight: 700; margin-bottom: 0.5rem; font-size: 1.05rem; }
+.selection-row { display: flex; gap: 1rem; padding: 0.35rem 0; align-items: center; border-bottom: 1px solid #f0f0f0; }
+.selection-row:last-child { border-bottom: none; }
+.sel-name { flex: 1; }
+.sel-odds { font-weight: 700; min-width: 60px; text-align: right; }
+.sel-implied { min-width: 55px; text-align: right; color: #666; }
+.sel-novig { min-width: 120px; text-align: right; color: #888; font-size: 0.85rem; }
+.event-header { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 768px) {
+  .selection-row { flex-wrap: wrap; }
+  .sel-odds, .sel-implied, .sel-novig { min-width: auto; }
+}
+
+/* Match detail */
+.market-group { margin-bottom: 1.5rem; border-bottom: 1px solid var(--border, #ddd); padding-bottom: 1rem; }
+.market-title { font-weight: 700; margin-bottom: 0.5rem; font-size: 1.05rem; }
+.selection-row { display: flex; gap: 1rem; padding: 0.35rem 0; align-items: center; border-bottom: 1px solid #f0f0f0; }
+.selection-row:last-child { border-bottom: none; }
+.sel-name { flex: 1; }
+.sel-odds { font-weight: 700; min-width: 60px; text-align: right; }
+.sel-implied { min-width: 55px; text-align: right; color: #666; }
+.sel-novig { min-width: 120px; text-align: right; color: #888; font-size: 0.85rem; }
+.event-header { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 768px) {
+  .selection-row { flex-wrap: wrap; }
+  .sel-odds, .sel-implied, .sel-novig { min-width: auto; }
+}
+.main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 1.5rem; }
+.page-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.page-header h1 { margin: 0; font-size: 1.4rem; }
+.menu-toggle { display: none; cursor: pointer; font-size: 1.5rem; }
+@media (max-width: 768px) { .menu-toggle { display: block; } .sidebar { position: fixed; z-index: 40; left: 0; top: 0; height: 100vh; transform: translateX(-100%); transition: transform 0.2s; } .nav-toggle:checked ~ .layout .sidebar { transform: translateX(0); } .main-content { padding: 1rem; } }

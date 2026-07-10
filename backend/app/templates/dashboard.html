@@ -1,112 +1,53 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard{% endblock %}
-{% block header %}Pirapire - Mejores oportunidades{% endblock %}
+{% block header %}Pirapire{% endblock %}
 {% block content %}
-<div class='notice'>
-  <strong>Aviso:</strong> Pirapire es un sistema <b>analitico</b>. Calcula probabilidades,
-  cuotas justas y valor esperado. <b>No automatiza apuestas reales.</b>
+<div class="notice">
+  <strong>Pirapire</strong> &mdash; Sistema analitico. Calcula probabilidades y valor esperado. <b>No automatiza apuestas reales.</b>
 </div>
 
-<!-- Estado de datos -->
-<section class='card' id='data-status-section'>
-  <h2 class='card-title'>Estado de datos</h2>
-  <div class='status-grid'>
-    <div class='status-item' id='status-football'>
-      <span class='status-label'>Futbol</span>
-      <span class='status-value' id='fb-status'>Cargando...</span>
+<section class="card">
+  <h2 class="card-title">Estado</h2>
+  <div class="status-grid">
+    <div class="status-item"><span class="status-label">App</span><span class="status-value">OK</span></div>
+    <div class="status-item"><span class="status-label">Aposta.LA</span><span class="status-value">{{ aposta_odds }} odds</span></div>
+    <div class="status-item"><span class="status-label">Futbol</span><span class="status-value">{{ football_matches }} partidos</span></div>
+    <div class="status-item"><span class="status-label">LoL</span><span class="status-value">{{ lol_games }} games, {{ lol_players }} players</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Proximos encuentros</h2>
+  <div class="event-cards">
+    {% if events %}
+    {% for e in events %}
+    <div class="event-card" style="cursor:pointer" onclick="location.href='/events/{{ e.event_id }}'">
+      <div class="event-sport">{{ 'L' if e.sport == 'lol' else 'F' }}</div>
+      <div class="event-teams">{{ e.team_a or '?' }} vs {{ e.team_b or '?' }}</div>
+      <div class="event-meta">{{ e.competition or '' }} &middot; {{ e.event_date_py or e.event_date or '' }} &middot; {{ e.markets }} mercados</div>
     </div>
-    <div class='status-item' id='status-lol'>
-      <span class='status-label'>LoL</span>
-      <span class='status-value' id='lol-status'>Cargando...</span>
+    {% endfor %}
+    {% else %}
+    <p class="muted">No hay eventos proximos. Sincronizando datos...</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card">
+  <h2 class="card-title">Mejores opciones</h2>
+  <div class="bet-cards">
+    {% if bets %}
+    {% for b in bets %}
+    <div class="bet-card">
+      <div class="bet-event">{{ b.event_label or '' }}</div>
+      <div class="bet-detail">{{ b.market_text or b.market_code or '' }}: <strong>{{ b.selection_text or '' }}</strong> @ {{ b.odds_decimal }}</div>
+      <div class="bet-stats">Prob: {{ (b.model_probability * 100)|round(1) if b.model_probability else '?' }}% &middot; EV: {{ (b.expected_value or 0)|round(3) }} &middot; Muestra: {{ b.sample_size or '?' }}</div>
+      <div class="bet-explanation">{{ b.explanation or '' }}</div>
     </div>
-    <div class='status-item' id='status-aposta'>
-      <span class='status-label'>Aposta.LA</span>
-      <span class='status-value' id='ap-status'>Cargando...</span>
-    </div>
-    <div class='status-item' id='status-recs'>
-      <span class='status-label'>Recomendaciones</span>
-      <span class='status-value' id='rec-status'>Cargando...</span>
-    </div>
+    {% endfor %}
+    {% else %}
+    <p class="muted">No hay oportunidades validadas actualmente. El modelo requiere mas datos estadisticos.</p>
+    {% endif %}
   </div>
 </section>
-
-<!-- Calendario de proximos eventos Aposta.LA -->
-<section class="card" id="calendar-section">
-  <h2 class="card-title">Proximos eventos</h2>
-  <div class="toolbar">
-    <button class="btn btn-outline filter-btn" onclick="Pirapire.loadCalendar('today')">Hoy</button>
-    <button class="btn btn-outline filter-btn" onclick="Pirapire.loadCalendar('tomorrow')">Manana</button>
-    <button class="btn btn-outline filter-btn" onclick="Pirapire.loadCalendar('week')">7 dias</button>
-  </div>
-  <div class="table-scroll">
-    <table id="calendar-table" class="table table-compact">
-      <thead><tr><th>Fecha</th><th>Competicion</th><th>Equipo A</th><th>Equipo B</th><th>Mercados</th></tr></thead>
-      <tbody><tr><td colspan="5" class="muted">Cargando eventos...</td></tr></tbody>
-    </table>
-  </div>
-</section>
-
-<!-- Filtros y boton principal -->
-<section class='card filters-card' id='filters-section'>
-  <h2 class='card-title'>Filtros de recomendacion</h2>
-  <div class='form-grid' id='filter-grid'>
-    <label>Modo<select id='rec-mode' class='form-field'><option value='balanced'>Balanceado</option><option value='probability'>Probabilidad</option><option value='profit'>Ganancia/EV</option><option value='odds'>Cuota</option></select></label>
-    <label>Deporte<select id='rec-sport' class='form-field'><option value=''>Todos</option><option value='football'>Futbol</option><option value='lol'>LoL</option></select></label>
-    <label>Liga<select id='rec-league' class='form-field'><option value=''>Todas</option><option value='LCK'>LCK</option><option value='LPL'>LPL</option><option value='LEC'>LEC</option><option value='LCS'>LCS</option><option value='CBLOL'>CBLOL</option><option value='LCP'>LCP</option><option value='MSI'>MSI</option><option value='WORLDS'>Worlds</option><option value='FIRST_STAND'>First Stand</option></select></label>
-    <label>Prob. minima<input id='rec-minprob' class='form-field' type='number' step='0.01' value='0.45'></label>
-    <label>EV minimo<input id='rec-minev' class='form-field' type='number' step='0.01' value='-0.05'></label>
-    <label>Edge minimo<input id='rec-minedge' class='form-field' type='number' step='0.01' value='0'></label>
-    <label>Cuota minima<input id='rec-minodds' class='form-field' type='number' step='0.01'></label>
-    <label>Cuota maxima<input id='rec-maxodds' class='form-field' type='number' step='0.01'></label>
-    <label>Max. patas<input id='rec-maxlegs' class='form-field' type='number' min='2' max='5' value='3'></label>
-    <label>Riesgo max.<select id='rec-riskmax' class='form-field'><option value=''>Todos</option><option value='low'>Bajo</option><option value='medium'>Medio</option><option value='high'>Alto</option><option value='very_high'>Muy alto</option></select></label>
-    <label>Cobertura min.<select id='rec-coveragemin' class='form-field'><option value=''>Todas</option><option value='odds_implied_only'>Implicita</option><option value='estimated_only'>Estimada</option><option value='heuristic'>Heuristica</option><option value='model'>Modelo</option></select></label>
-  </div>
-  <div class='toolbar'>
-    <button class='btn btn-primary btn-large' id='main-refresh-btn' onclick='Pirapire.refreshAll()'>Actualizar todo y buscar mejores opciones</button>
-    <div id='sync-status' class='toolbar-status' hidden></div>
-  </div>
-</section>
-
-<!-- Mejores apuestas simples -->
-<section class='card' id='singles-section'>
-  <h2 class='card-title'>Mejores apuestas simples</h2>
-  <div class='table-scroll'>
-    <table id='rec-bets-table' class='table table-compact'>
-      <thead><tr><th>Liga</th><th>Evento</th><th>Mercado</th><th>Sel.</th><th>Cuota</th><th>P.modelo</th><th>P.impl</th><th>Justa</th><th>EV</th><th>Edge</th><th>Match</th><th>Cobertura</th><th>Motivo</th></tr></thead>
-      <tbody><tr><td colspan='13' class='muted'>Presiona "Actualizar todo y buscar mejores opciones"</td></tr></tbody>
-    </table>
-  </div>
-</section>
-
-<!-- Mejores combinadas -->
-<section class='card' id='combos-section'>
-  <h2 class='card-title'>Mejores combinadas sugeridas</h2>
-  <div class='table-scroll'>
-    <table id='rec-combos-table' class='table table-compact'>
-      <thead><tr><th>Nombre</th><th>Patas</th><th>Cuota</th><th>P.modelo</th><th>EV</th><th>Riesgo</th></tr></thead>
-      <tbody><tr><td colspan='6' class='muted'>Presiona "Actualizar todo y buscar mejores opciones"</td></tr></tbody>
-    </table>
-  </div>
-</section>
-
-<!-- Observables -->
-<section class='card' id='observable-section' hidden>
-  <h2 class='card-title'>Observables</h2>
-  <div id='observable-list' class='muted'></div>
-</section>
-
-<!-- Problemas detectados -->
-<section class='card' id='blockers-section' hidden>
-  <h2 class='card-title'>Problemas detectados</h2>
-  <ul id='blockers-list'></ul>
-</section>
-
-<section class='card' id='actions-section' hidden>
-  <h2 class='card-title'>Acciones necesarias</h2>
-  <div id='actions-list'></div>
-</section>
-{% endblock %}
-{% block scripts %}
-<script>Pirapire.initDashboardV2(); Pirapire.loadCalendar();</script>
 {% endblock %}

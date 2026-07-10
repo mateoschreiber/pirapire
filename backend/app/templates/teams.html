@@ -1,22 +1,29 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block title %}Equipos{% endblock %}
 {% block header %}Equipos{% endblock %}
 {% block content %}
-<section class="card">
-  <h2 class="card-title">Crear equipo</h2>
-  <form id="team-form" class="form-inline">
-    <div class="form-field"><label for="team-sport-id">Sport ID</label><input id="team-sport-id" type="number" required></div>
-    <div class="form-field"><label for="team-name">Nombre</label><input id="team-name" required></div>
-    <div class="form-field"><label for="team-short-name">Nombre corto</label><input id="team-short-name"></div>
-    <button class="btn btn-primary" type="submit">Guardar</button>
-  </form>
-</section>
-
-<section class="card">
-  <h2 class="card-title">Equipos registrados</h2>
-  <table id="teams-table" class="table"><thead><tr><th>ID</th><th>Sport ID</th><th>Nombre</th><th>Corto</th></tr></thead><tbody></tbody></table>
-</section>
+<section class="card"><h2 class="card-title">Mundial 2026</h2>
+<div id="wc-teams"><p class="muted">Cargando...</p></div></section>
+<section class="card"><h2 class="card-title">LoL - Scope Aposta</h2>
+<div id="lol-teams"><p class="muted">Cargando...</p></div></section>
 {% endblock %}
 {% block scripts %}
-<script>Pirapire.initTeams();</script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  fetch("/data/football/teams").then(r => r.json()).then(teams => {
+    var h = "<table class=table><thead><tr><th>Nombre</th><th>Abrev</th></tr></thead><tbody>";
+    teams.slice(0,50).forEach(t => { h += "<tr><td>"+(t.name||t.id)+"</td><td>"+(t.short_name||t.tla||"")+"</td></tr>"; });
+    h += "</tbody></table>";
+    document.getElementById("wc-teams").innerHTML = h;
+  });
+  fetch("/data/lol/upcoming").then(r => r.json()).then(events => {
+    var teams = new Set();
+    events.forEach(e => { if (e.team_a) teams.add(e.team_a); if (e.team_b) teams.add(e.team_b); });
+    var h = "<table class=table><thead><tr><th>Equipo</th><th>Liga</th><th>Eventos</th></tr></thead><tbody>";
+    teams.forEach(t => { h += "<tr><td>"+t+"</td><td>LRS/MSI</td><td>1</td></tr>"; });
+    h += "</tbody></table>";
+    document.getElementById("lol-teams").innerHTML = h;
+  });
+});
+</script>
 {% endblock %}

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import engine, init_db
 from .routers import (
+    events,
     dashboard,
     aposta,
     combo,
@@ -81,6 +82,9 @@ app.include_router(history.router)
 app.include_router(lol_history.router)
 app.include_router(dashboard.router)
 app.include_router(aposta.router)
+app.include_router(events.router)
+app.include_router(events.router)
+app.include_router(events.router)
 app.include_router(recommendations.router)
 
 app.mount('/static', StaticFiles(directory='app/static'), name='static')

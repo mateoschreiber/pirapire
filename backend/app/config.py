@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     aposta_browser_worker_url: str = ""
     aposta_sync_mode: str = 'csv_folder'
     aposta_json_url: str = ''
-    aposta_fetch_urls: str = 'https://api.aposta.la/apuestas/deporte/1/4,https://api.aposta.la/apuestas/deporte/1/393,https://api.aposta.la/apuestas/libertadores,https://api.aposta.la/apuestas/copa-sudamericana,https://api.aposta.la/apuestas/champions,https://api.aposta.la/apuestas/standard/hoy'
+    aposta_fetch_urls: str = 'https://api.aposta.la/apuestas/deporte/1/4'
     aposta_browser_fetch_enabled: bool = False
     aposta_browser_fetch_url: str = 'https://aposta.la/bets'
     aposta_browser_fetch_esports: str = 'https://aposta.la/bets#sports-hub/esports'

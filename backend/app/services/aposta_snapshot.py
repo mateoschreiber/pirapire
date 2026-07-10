@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
@@ -51,7 +51,7 @@ def normalize_datetime(value):
 def _is_current_odd(odd: ImportedOdds) -> bool:
     if odd.event_date is None:
         return True
-    cutoff = datetime.now(UTC).replace(tzinfo=None)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=3)
     event_dt = normalize_datetime(odd.event_date)
     if event_dt is None:
         return True

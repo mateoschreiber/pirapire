@@ -126,6 +126,10 @@ def classify_candidate(rec: dict, mode: str, min_probability: float, min_ev: flo
         return 'rejected'
     if rec.get('coverage_status') == 'unsupported':
         return 'rejected'
+    if rec.get('market_validated') is False:
+        return 'rejected'
+    if rec.get('coverage_status') == 'heuristic':
+        return 'rejected'
     if rec.get('market_mapping_status') == 'unsupported':
         return 'rejected'
 

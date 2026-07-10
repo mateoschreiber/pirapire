@@ -30,38 +30,12 @@
         <span class="brand-name">{{ app_name }}</span>
       </div>
       <nav class="nav">
-        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Dashboard</a>
-        <a class="nav-link {% if active_page == 'sports' %}active{% endif %}" href="/sports/ui">Deportes</a>
+        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Inicio</a>
+        <a class="nav-link {% if active_page == 'data_football' %}active{% endif %}" href="/data/football/ui">Futbol</a>
+        <a class="nav-link {% if active_page == 'data_lol' %}active{% endif %}" href="/data/lol/ui">LoL</a>
         <a class="nav-link {% if active_page == 'teams' %}active{% endif %}" href="/teams/ui">Equipos</a>
-        <a class="nav-link {% if active_page == 'matches' %}active{% endif %}" href="/matches/ui">Partidos</a>
-        <a class="nav-link {% if active_page == 'odds' %}active{% endif %}" href="/odds/ui">Analizador de Cuotas</a>
-        <a class="nav-link {% if active_page == 'combo' %}active{% endif %}" href="/combo/ui">Simulador de Combinadas</a>
-        <a class="nav-link {% if active_page == 'recommendations' %}active{% endif %}" href="/recommendations/ui">Recomendaciones</a>
-        <a class="nav-link {% if active_page == 'sources' %}active{% endif %}" href="/sources/ui">Fuentes</a>
-        <a class="nav-link {% if active_page == 'source_runs' %}active{% endif %}" href="/source-runs/ui">Actualizaciones</a>
-        <a class="nav-link {% if active_page == 'data_football' %}active{% endif %}" href="/data/football/ui">Datos Futbol</a>
-        <a class="nav-link {% if active_page == 'data_lol' %}active{% endif %}" href="/data/lol/ui">Datos LoL</a>
-        <a class="nav-link {% if active_page == 'markets' %}active{% endif %}" href="/markets/ui">Mercados</a>
-        <a class="nav-link {% if active_page == 'imports' %}active{% endif %}" href="/imports/ui">Importaciones</a>
-        <a class="nav-link {% if active_page == 'aposta' %}active{% endif %}" href="/aposta/ui">Aposta.LA</a>
         <a class="nav-link {% if active_page == 'history' %}active{% endif %}" href="/history/ui">Historial</a>
-        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings/ui">Configuración</a>
-        <a class="nav-link nav-external" href="/docs" target="_blank" rel="noopener">Swagger &#8599;</a>
-      </nav>
-      <div class="sidebar-foot">
-        <span class="badge badge-muted">env: {{ app_env }}</span>
-      </div>
-    </aside>
-
-    <div class="main">
-      <header class="topbar">
-        <label for="nav-toggle" class="hamburger" aria-label="Abrir menú">&#9776;</label>
-        <h1 class="page-title">{% block header %}{{ app_name }}{% endblock %}</h1>
-        <div id="top-clock" class="top-clock" aria-live="polite">--:--:--</div>
-        <button id="themeToggle" class="btn btn-ghost" type="button" aria-label="Cambiar tema" title="Cambiar tema">&#9680;</button>
-      </header>
-
-      <main class="content">
+        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings/ui">Config</a>
         <div id="flash" class="flash" hidden></div>
         {% block content %}{% endblock %}
       </main>

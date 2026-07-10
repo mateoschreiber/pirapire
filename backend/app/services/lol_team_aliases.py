@@ -32,3 +32,6 @@ def upsert_alias(session: Session, canonical: str, alias: str, league_slug: str 
     if existing:
         return
     session.add(LolTeamAlias(canonical_team=canonical, alias=alias, normalized_alias=normalized, league_slug=league_slug))
+
+# Kambi/Aposta.LA team aliases
+KAMBI_ALIASES = [('Malvinas', 'Malvinas Gaming'), ('9z Team', '9z Globant'), ('Maze Gaming', 'Maze Gaming'), ('Volticons', 'Volticons'), ('Docta Esports Club', 'Docta Esports'), ('Golden Lions', 'Golden Lions'), ('ZEN Esports', 'ZEN Esports (Argentinian Team)'), ('Seven Dark', 'Seven Dark'), ('Playtime', 'Playtime'), ('Aurora Gaming', 'Aurora Gaming')]

@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 from sqlmodel import Session, select
 
 from ...config import settings
-from ...models_lol import LolChampion, LolGameHistory, LolPatch, LolTeamGameStat
+from ...models_lol import LolChampion, LolGameHistory, LolPatch, LolPlayerGameStat, LolTeamGameStat
 from ...models_sources import SourceRun
 from ...sources.lol.datadragon import RiotDataDragonClient
 from .. import raw_snapshots, source_runs
@@ -174,6 +174,136 @@ def _upsert_leaguepedia_game(session, row):
     return (changed, updated, 0)
 
 
+
+
+def _leaguepedia_player_rows_with_offset(offset=0):
+    """Query ScoreboardPlayers from Leaguepedia Cargo."""
+    today = datetime.now(UTC)
+    start = (today - timedelta(days=settings.leaguepedia_import_lookback_days)).strftime('%Y-%m-%d %H:%M:%S')
+    end = (today + timedelta(days=settings.leaguepedia_import_lookahead_days)).strftime('%Y-%m-%d %H:%M:%S')
+    quote = chr(34)
+    where = 'SG.DateTime_UTC >= ' + quote + start + quote + ' AND SG.DateTime_UTC <= ' + quote + end + quote
+    params = {
+        'tables': 'ScoreboardPlayers=SP,ScoreboardGames=SG',
+        'join_on': 'SP.GameId=SG.GameId',
+        'fields': 'SP.Name,SP.Team,SP.Role,SP.Champion,SP.Kills,SP.Deaths,SP.Assists,SP.CS,SP.Gold,SP.DamageToChampions,SG.DateTime_UTC,SG.Team1,SG.Team2,SG.Winner,SG.OverviewPage,SG.GameId',
+        'where': where,
+        'format': 'json',
+        'limit': '500',
+    }
+    url = settings.leaguepedia_base_url + '?' + urlencode(params)
+    req = Request(url, headers={'User-Agent': settings.leaguepedia_user_agent})
+    with urlopen(req, timeout=20) as res:
+        return json.loads(res.read().decode('utf-8')), url
+
+
+def _safe_str(val):
+    if val is None:
+        return ''
+    if isinstance(val, (int, float)):
+        return str(val)
+    return str(val).strip()
+
+
+def _safe_int(val):
+    if val is None:
+        return None
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
+        return int(val)
+    try:
+        return int(str(val).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _upsert_leaguepedia_player(session, row):
+    """Import a ScoreboardPlayers row into LolPlayerGameStat."""
+    player_name = _safe_str(row.get('Name'))
+    team_name = _safe_str(row.get('Team'))
+    role = _safe_str(row.get('Role')).lower()
+    champion = _safe_str(row.get('Champion'))
+    game_id = _safe_str(row.get('GameId'))
+    dt = _parse_leaguepedia_datetime(row.get('DateTime UTC'))
+
+    if not player_name or not team_name or not game_id or player_name == '0':
+        return (0, 0, 1)
+
+    league_raw = row.get('OverviewPage') or ''
+    league = canonical_league(league_raw) or league_raw
+
+    source_key = 'leaguepedia|' + game_id + '|' + player_name + '|' + role
+
+    existing = session.exec(
+        select(LolPlayerGameStat).where(LolPlayerGameStat.source_key == source_key)
+    ).first()
+    if existing:
+        return (0, 1, 0)
+
+    kills = _safe_int(row.get('Kills'))
+    deaths = _safe_int(row.get('Deaths'))
+    assists = _safe_int(row.get('Assists'))
+    cs = _safe_int(row.get('CS'))
+    gold = _safe_int(row.get('Gold'))
+    damage = _safe_int(row.get('DamageToChampions'))
+
+    session.add(LolPlayerGameStat(
+        source_name='leaguepedia',
+        source_game_id=game_id,
+        year=dt.year if dt else None,
+        league=league,
+        date=dt.isoformat() if dt else None,
+        team_name=team_name,
+        player_name=player_name,
+        role=role,
+        champion=champion,
+        kills=kills,
+        deaths=deaths,
+        assists=assists,
+        cs=cs,
+        gold=gold,
+        damage=damage,
+        source_key=source_key,
+    ))
+    return (1, 0, 0)
+
+
+def _run_leaguepedia_players(session, run: SourceRun):
+    """Import players from Leaguepedia ScoreboardPlayers."""
+    if not settings.leaguepedia_sync_enabled:
+        return (0, 0, 0)
+    try:
+        rows, url = _leaguepedia_player_rows(0)
+    except Exception as exc:
+        source_runs.log(session, run, 'warning', f'leaguepedia players cargo failed: {type(exc).__name__}: {exc}')
+        return (0, 0, 0)
+
+    raw_snapshots.save_snapshot(session, run.id, 'leaguepedia', 'lol', 'scoreboard_players', rows, external_id='recent-window')
+    inserted = updated = skipped = 0
+    all_rows = list(rows)
+    page = 0
+    while len(rows) >= 500:
+        page += 1
+        try:
+            next_rows, _ = _leaguepedia_player_rows_with_offset(page * 500)
+            all_rows.extend(next_rows)
+            rows = next_rows
+        except Exception:
+            break
+    for row in all_rows:
+        i, u, s = _upsert_leaguepedia_player(session, row)
+        inserted += i
+        updated += u
+        skipped += s
+        if inserted % 100 == 0:
+            session.commit()
+
+    session.commit()
+    source_runs.log(session, run, 'info', f'leaguepedia players rows={len(rows)} inserted={inserted} updated={updated} skipped={skipped}')
+    return inserted, updated, skipped
+
+
 def _run_leaguepedia(session, run: SourceRun):
     if not settings.leaguepedia_sync_enabled:
         return (0, 0, 0)
@@ -190,6 +320,10 @@ def _run_leaguepedia(session, run: SourceRun):
         updated += u
         skipped += s
     source_runs.log(session, run, 'info', f'leaguepedia scoreboard rows={len(rows)} inserted={inserted} updated={updated} skipped={skipped}')
+    pi, pu, ps = _run_leaguepedia_players(session, run)
+    inserted += pi
+    updated += pu
+    skipped += ps
     return inserted, updated, skipped
 
 

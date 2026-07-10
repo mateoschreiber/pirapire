@@ -13,6 +13,7 @@ from ..config import settings
 from ..models_aposta import ApostaEvent, ApostaMarket, ApostaSelection, ApostaSyncRun
 from ..models_imports import ImportedOdds, ManualImportBatch
 from . import aposta_html_parser
+from . import aposta_lol_parser
 from . import aposta_snapshot_parser
 from .aposta_snapshot import current_odds as snapshot_current_odds
 from .aposta_snapshot import expired_odds as snapshot_expired_odds
@@ -83,6 +84,17 @@ def load_snapshot() -> tuple[str, list[tuple[str, str, Path | None]]]:
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f'Failed to fetch {url}: {e}')
+        # Kambi API for LoL events
+        try:
+            from . import kambi_lol_connector
+            lol_data = kambi_lol_connector.fetch_lol_events()
+            lol_rows = kambi_lol_connector.parse_kambi_to_rows(lol_data, fetch_details=True)
+            if lol_rows:
+                import json
+                sources.append(('aposta-lol-kambi', json.dumps(lol_rows), None))
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'LoL Kambi fetch failed: {e}')
         return mode, sources
     return 'manual_required', []
 
@@ -92,6 +104,13 @@ def parse_source(name: str, text: str) -> tuple[list[dict], list[str]]:
         return aposta_snapshot_parser.parse_csv(text)
     if name.startswith('aposta-fetch:'):
         rows = aposta_html_parser.parse_aposta_html(text, name)
+        return rows, []
+    if name.startswith('aposta-lol-kambi'):
+        import json
+        rows = json.loads(text)
+        return rows, []
+    if name.startswith('aposta-lol-browser'):
+        rows = aposta_lol_parser.parse_lol_html(text, name)
         return rows, []
     stripped = text.lstrip()
     if stripped.startswith('{') or stripped.startswith('['):
