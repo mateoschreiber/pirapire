@@ -37,14 +37,52 @@ class Settings(BaseSettings):
     http_timeout_pool: float = 5.0
 
     # Aposta.LA (placeholder in Fase 4A: no browser worker configured yet)
-    aposta_sync_enabled: bool = False
+    aposta_sync_enabled: bool = True
     aposta_browser_worker_url: str = ""
+    aposta_sync_mode: str = 'csv_folder'
+    aposta_json_url: str = ''
+    aposta_import_dir: str = '/app/data/imports/aposta'
+    aposta_archive_dir: str = '/app/data/imports/archive'
+    aposta_error_dir: str = '/app/data/imports/errors'
+    auto_recommend_on_aposta_sync: bool = True
+    auto_sync_sports_before_recommend: bool = True
+    source_stale_hours: int = 12
+    recommender_event_grace_minutes: int = 30
+    leaguepedia_sync_enabled: bool = True
+    leaguepedia_base_url: str = 'https://lol.fandom.com/wiki/Special:CargoExport'
+    leaguepedia_import_lookback_days: int = 21
+    leaguepedia_import_lookahead_days: int = 14
+
+    # LoL historical competitive data
+    lol_history_enabled: bool = True
+    lol_history_start_year: int = 2021
+    lol_history_end_year: str = 'auto'
+    lol_history_active_leagues: str = 'LCK,LPL,LEC,LCS,CBLOL,LCP,MSI,WORLDS,FIRST_STAND'
+    lol_history_include_legacy: bool = True
+    lol_history_legacy_leagues: str = 'LTA,LLA,PCS,VCS,LJL,LCO,TCL,LCL'
+    lol_history_import_on_startup: bool = False
+    lol_history_refresh_hours: int = 24
+    lol_history_min_games_team: int = 8
+    lol_history_min_games_player: int = 5
+    lol_history_recent_games_window: int = 20
+    lol_history_patch_weighting: bool = True
+    lol_history_patch_half_life: int = 3
+    lol_history_source_priority: str = 'oracles_elixir,lolesports,leaguepedia'
+    lol_aposta_min_match_confidence: float = 0.70
+    lol_history_import_dir: str = '/app/data/imports/oracles'
+    lol_history_allow_download: bool = False
+    lol_history_download_url_template: str = ''
 
     # Recommendation engine
     recommender_default_mode: str = "probability"
     recommender_min_probability: float = 0.55
     recommender_max_combo_legs: int = 3
     recommender_max_suggestions: int = 20
+    recommender_min_edge: float = 0.02
+    recommender_min_ev: float = 0.0
+    recommender_only_positive_ev: bool = False
+    recommender_min_match_confidence: float = 0.70
+    recommender_include_stale_odds: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -98,7 +98,19 @@ code { background: var(--surface-2); padding: 0.1rem 0.35rem; border-radius: 5px
   top: 0;
   z-index: 10;
 }
-.page-title { font-size: 1.25rem; margin: 0; flex: 1; }
+.page-title { font-size: 1.25rem; margin: 0; flex: 1; min-width: 0; }
+.top-clock {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
 .hamburger { display: none; font-size: 1.4rem; cursor: pointer; user-select: none; }
 
 .content { padding: 1.5rem; flex: 1; max-width: 1200px; width: 100%; }
@@ -246,4 +258,70 @@ input[type="file"] { padding: 0.4rem; border: 1px dashed var(--border); border-r
   }
   .nav-toggle:checked ~ .layout .sidebar { transform: translateX(0); }
   .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* Dashboard recommendation layout */
+.dashboard-shell {
+  max-width: none;
+}
+.recommendations-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.recommendation-card {
+  min-width: 0;
+  overflow: hidden;
+}
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 1px solid var(--border);
+}
+.table-scroll .table {
+  min-width: 980px;
+}
+.table-compact {
+  font-size: 0.84rem;
+}
+.table-compact th,
+.table-compact td {
+  padding: 0.55rem 0.65rem;
+  vertical-align: middle;
+}
+.table-compact td {
+  overflow-wrap: anywhere;
+}
+.table-compact .event-cell,
+.table-compact .name-cell,
+.table-compact .reason-cell {
+  min-width: 130px;
+  max-width: 220px;
+}
+.table-compact .reason-cell {
+  color: var(--text-muted);
+}
+.table-actions {
+  white-space: nowrap;
+}
+.filters-card .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+}
+.filters-card label {
+  min-width: 0;
+  font-size: 0.88rem;
+}
+@media (max-width: 1100px) {
+  .recommendations-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 820px) {
+  .content { padding: 1rem; }
+  .table-scroll .table { min-width: 820px; }
+}
+@media (max-width: 640px) {
+  .topbar { gap: 0.55rem; padding-inline: 0.75rem; }
+  .page-title { font-size: 1rem; }
+  .top-clock { font-size: 0.78rem; padding: 0.32rem 0.45rem; }
 }

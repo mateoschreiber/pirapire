@@ -36,6 +36,14 @@ LOL_MARKETS = {
 
 # ---- Aliases (Spanish text from Aposta.LA -> market_code) ----
 FOOTBALL_ALIASES = [
+    ('Resultado', 'match_winner'),
+    ('Ganador', 'match_winner'),
+    ('Equipo gana', 'match_winner'),
+    ('1X2', 'match_winner'),
+    ('Superior a', 'total_goals_over_under'),
+    ('Inferior a', 'total_goals_over_under'),
+    ('Total', 'total_goals_over_under'),
+    ('Handicap', 'team_goals_over_under'),
     ("Ganador del partido", "match_winner"),
     ("Empate no en juego", "match_winner"),
     ("Ganador del partido (sin empate)", "match_winner"),

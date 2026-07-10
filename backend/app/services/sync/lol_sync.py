@@ -1,14 +1,20 @@
 """Manual LoL synchronization (Riot Data Dragon static data)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+
+import hashlib
+import json
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from sqlmodel import Session, select
 
 from ...config import settings
-from ...models_lol import LolChampion, LolPatch
+from ...models_lol import LolChampion, LolGameHistory, LolPatch, LolTeamGameStat
 from ...models_sources import SourceRun
 from ...sources.lol.datadragon import RiotDataDragonClient
 from .. import raw_snapshots, source_runs
+from ..lol_league_catalog import canonical_league
 
 
 def _upsert_patch(session, version, source_name, rank):
@@ -60,6 +66,133 @@ def _upsert_champion(session, champ, source_name, rank, fallback):
     return (1, 0, 0)
 
 
+def _parse_leaguepedia_datetime(value):
+    if not value:
+        return None
+    text = str(value).replace('T', ' ').replace('Z', '').strip()
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(text[:19], fmt).replace(tzinfo=UTC)
+        except ValueError:
+            continue
+    return None
+
+
+def _leaguepedia_rows():
+    today = datetime.now(UTC)
+    start = (today - timedelta(days=settings.leaguepedia_import_lookback_days)).strftime('%Y-%m-%d %H:%M:%S')
+    end = (today + timedelta(days=settings.leaguepedia_import_lookahead_days)).strftime('%Y-%m-%d %H:%M:%S')
+    quote = chr(34)
+    where = 'SG.DateTime_UTC >= ' + quote + start + quote + ' AND SG.DateTime_UTC <= ' + quote + end + quote
+    params = {
+        'tables': 'ScoreboardGames=SG,Tournaments=T',
+        'join_on': 'SG.Tournament=T.OverviewPage',
+        'fields': 'SG.DateTime_UTC,SG.Team1,SG.Team2,SG.Winner,T.Name,T.League,SG.OverviewPage',
+        'where': where,
+        'format': 'json',
+        'limit': '500',
+    }
+    url = settings.leaguepedia_base_url + '?' + urlencode(params)
+    req = Request(url, headers={'User-Agent': settings.leaguepedia_user_agent})
+    with urlopen(req, timeout=20) as res:
+        return json.loads(res.read().decode('utf-8')), url
+
+
+def _row_id(row):
+    payload = '|'.join([
+        str(row.get('DateTime UTC') or ''),
+        str(row.get('Team1') or ''),
+        str(row.get('Team2') or ''),
+        str(row.get('OverviewPage') or ''),
+    ])
+    return hashlib.sha1(payload.encode()).hexdigest()[:24]
+
+
+def _upsert_leaguepedia_game(session, row):
+    team1 = (row.get('Team1') or '').strip()
+    team2 = (row.get('Team2') or '').strip()
+    winner = str(row.get('Winner') or '').strip()
+    dt = _parse_leaguepedia_datetime(row.get('DateTime UTC'))
+    if not team1 or not team2 or winner not in ('1', '2') or dt is None:
+        return (0, 0, 1)
+    if dt > datetime.now(UTC):
+        return (0, 0, 1)
+    league_raw = row.get('League') or row.get('Name') or row.get('OverviewPage')
+    league = canonical_league(league_raw) or league_raw
+    gid = _row_id(row)
+    winner_team = team1 if winner == '1' else team2
+    existing = session.exec(
+        select(LolGameHistory).where(
+            LolGameHistory.source_name == 'leaguepedia',
+            LolGameHistory.source_game_id == gid,
+        )
+    ).first()
+    is_new = existing is None
+    game = existing or LolGameHistory(source_name='leaguepedia', source_game_id=gid, source_key=gid)
+    game.year = dt.year
+    game.league = league
+    game.date = dt.isoformat()
+    game.blue_team = team1
+    game.red_team = team2
+    game.winner_team = winner_team
+    game.updated_at = datetime.now(UTC)
+    session.add(game)
+    session.commit()
+    session.refresh(game)
+
+    changed = 1 if is_new else 0
+    updated = 0 if is_new else 1
+    for team, opponent in ((team1, team2), (team2, team1)):
+        stat = session.exec(
+            select(LolTeamGameStat).where(
+                LolTeamGameStat.source_name == 'leaguepedia',
+                LolTeamGameStat.source_game_id == gid,
+                LolTeamGameStat.team_name == team,
+            )
+        ).first()
+        stat_new = stat is None
+        stat = stat or LolTeamGameStat(
+            game_id=game.id,
+            source_name='leaguepedia',
+            source_game_id=gid,
+            team_name=team,
+            source_key=gid + ':' + team,
+        )
+        stat.game_id = game.id
+        stat.year = dt.year
+        stat.league = league
+        stat.date = dt.isoformat()
+        stat.team_name = team
+        stat.opponent_name = opponent
+        stat.result = 1 if team == winner_team else 0
+        session.add(stat)
+        if stat_new:
+            changed += 1
+        else:
+            updated += 1
+    session.commit()
+    return (changed, updated, 0)
+
+
+def _run_leaguepedia(session, run: SourceRun):
+    if not settings.leaguepedia_sync_enabled:
+        return (0, 0, 0)
+    try:
+        rows, url = _leaguepedia_rows()
+    except Exception as exc:
+        source_runs.log(session, run, 'warning', f'leaguepedia cargo failed: {type(exc).__name__}: {exc}')
+        return (0, 0, 0)
+    raw_snapshots.save_snapshot(session, run.id, 'leaguepedia', 'lol', 'scoreboard_games', rows, external_id='recent-window')
+    inserted = updated = skipped = 0
+    for row in rows:
+        i, u, s = _upsert_leaguepedia_game(session, row)
+        inserted += i
+        updated += u
+        skipped += s
+    source_runs.log(session, run, 'info', f'leaguepedia scoreboard rows={len(rows)} inserted={inserted} updated={updated} skipped={skipped}')
+    return inserted, updated, skipped
+
+
 def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict:
     inserted = updated = skipped = 0
     client = RiotDataDragonClient(settings.datadragon_base_url, settings.datadragon_locale)
@@ -105,6 +238,11 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
         source_runs.log(session, run, "info", f"{len(champions)} champions ({used_locale})")
     else:
         source_runs.log(session, run, "error", "champion.json failed on both locales")
+
+    i, u, s = _run_leaguepedia(session, run)
+    inserted += i
+    updated += u
+    skipped += s
 
     status = source_runs.resolve_status(inserted, updated, skipped, run.error_count or 0)
     return {"inserted": inserted, "updated": updated, "skipped": skipped, "status": status}
