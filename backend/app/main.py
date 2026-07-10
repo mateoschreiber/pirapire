@@ -72,9 +72,6 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(pages.router)
-app.include_router(sports.router)
-app.include_router(teams.router)
-app.include_router(matches.router)
 app.include_router(odds.router)
 app.include_router(combo.router)
 app.include_router(sources.router)

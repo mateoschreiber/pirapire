@@ -3,7 +3,6 @@
 from sqlmodel import Session, select
 
 from .database import engine, init_db
-from .models import Match, Sport, Team
 
 
 def seed() -> None:

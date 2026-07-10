@@ -130,7 +130,8 @@ def get_aposta_state(session: Session) -> dict:
         exp = snapshot_expired(session)
         hist = snapshot_historical(session)
 
-        cur_not_expired = [odd for odd in cur if odd.event_date and odd.event_date > now()] if cur else []
+        _now_naive = datetime.utcnow()
+        cur_not_expired = [odd for odd in cur if odd.event_date and odd.event_date > _now_naive] if cur else []
         unmatched_odds = len([odd for odd in hist if odd.market_code is None])
 
         unmapped_set = set()

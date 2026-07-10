@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from ..config import settings
 from ..models_aposta import ApostaEvent, ApostaMarket, ApostaSelection, ApostaSyncRun
 from ..models_imports import ImportedOdds, ManualImportBatch
+from . import aposta_html_parser
 from . import aposta_snapshot_parser
 from .aposta_snapshot import current_odds as snapshot_current_odds
 from .aposta_snapshot import expired_odds as snapshot_expired_odds
@@ -72,12 +73,26 @@ def load_snapshot() -> tuple[str, list[tuple[str, str, Path | None]]]:
     if mode == 'browser_worker' and settings.aposta_browser_worker_url.strip():
         base = settings.aposta_browser_worker_url.strip().rstrip('/')
         return mode, [('aposta-browser-worker', read_url(base + '/snapshot'), None)]
+    if mode == 'aposta_fetch' and settings.aposta_fetch_urls.strip():
+        urls = [u.strip() for u in settings.aposta_fetch_urls.split(',') if u.strip()]
+        sources = []
+        for url in urls:
+            try:
+                html = read_url(url)
+                sources.append((f'aposta-fetch:{url}', html, None))
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f'Failed to fetch {url}: {e}')
+        return mode, sources
     return 'manual_required', []
 
 
 def parse_source(name: str, text: str) -> tuple[list[dict], list[str]]:
     if name.lower().endswith('.csv'):
         return aposta_snapshot_parser.parse_csv(text)
+    if name.startswith('aposta-fetch:'):
+        rows = aposta_html_parser.parse_aposta_html(text, name)
+        return rows, []
     stripped = text.lstrip()
     if stripped.startswith('{') or stripped.startswith('['):
         return aposta_snapshot_parser.parse_json(text)
@@ -95,7 +110,15 @@ def normalized_key(row: dict, batch_id: int) -> str:
 
 def store_row(session: Session, batch: ManualImportBatch, row: dict) -> tuple[ImportedOdds, bool]:
     market_id, market_code = map_market(session, row['sport'], row['market_text'])
+    if not market_code:
+        market_code = row.get('market_code', '')
     event_date = row.get('event_date')
+    if isinstance(event_date, str) and event_date:
+        try:
+            from datetime import datetime as dt
+            event_date = dt.fromisoformat(event_date)
+        except ValueError:
+            event_date = None
     mapping_status = 'mapped' if market_id or market_code else 'unmapped'
     odd = ImportedOdds(
         batch_id=batch.id,
@@ -115,7 +138,7 @@ def store_row(session: Session, batch: ManualImportBatch, row: dict) -> tuple[Im
         source_name='aposta_la',
         is_current=True,
         captured_at=now(),
-        event_date_sort=event_date.isoformat() if event_date else None,
+        event_date_sort=event_date.isoformat() if hasattr(event_date, 'isoformat') else (str(event_date) if event_date else None),
         market_mapping_status=mapping_status,
     )
     session.add(odd)

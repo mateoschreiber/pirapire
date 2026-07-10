@@ -66,7 +66,7 @@ class ImportedOdds(SQLModel, table=True):
     event_date_sort: Optional[str] = None
 
 
-class LolOracleGame(SQLModel, table=True):
+# retired: class LolOracleGame(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     batch_id: int = Field(foreign_key="manualimportbatch.id", index=True)
     source_game_id: str = Field(index=True)
@@ -93,7 +93,7 @@ class LolOracleGame(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
-class LolOraclePlayerStat(SQLModel, table=True):
+# retired: class LolOraclePlayerStat(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     batch_id: int = Field(foreign_key="manualimportbatch.id", index=True)
     source_game_id: str = Field(index=True)

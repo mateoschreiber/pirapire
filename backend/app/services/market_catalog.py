@@ -36,6 +36,10 @@ LOL_MARKETS = {
 
 # ---- Aliases (Spanish text from Aposta.LA -> market_code) ----
 FOOTBALL_ALIASES = [
+    ('Partido (tiempo reglamentario)', 'match_winner'),
+    ('Partido', 'match_winner'),
+    ('Más / Menos', 'total_goals_over_under'),
+    ('Mas / Menos', 'total_goals_over_under'),
     ('Resultado', 'match_winner'),
     ('Ganador', 'match_winner'),
     ('Equipo gana', 'match_winner'),
