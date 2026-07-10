@@ -53,6 +53,18 @@ class ImportedOdds(SQLModel, table=True):
     source_name: str = "imported"
     created_at: datetime = Field(default_factory=_now)
 
+    # Snapshot + matching fields (Phase 2+)
+    is_current: bool = True
+    is_matched: bool = False
+    match_confidence: Optional[float] = None
+    matched_event_id: Optional[int] = None
+    matched_event_type: Optional[str] = None
+    market_mapping_status: Optional[str] = None
+    snapshot_id: Optional[int] = None
+    captured_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    event_date_sort: Optional[str] = None
+
 
 class LolOracleGame(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

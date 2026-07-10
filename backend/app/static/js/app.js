@@ -774,5 +774,103 @@ var Pirapire = (function () {
   function saveComboRecToHistory(id) { apiPost("/recommendations/combos/" + id + "/save-to-history", {}).then(function () { showMessage("Combinada guardada al historial", "ok"); }).catch(function (e) { showMessage("Error: " + e.message, "error"); }); }
   function initDashboardRecs() { initAposta(); loadLatestRecommendations(); }
   function initRecommendations() { loadLatestRecommendations(); }
-  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations };
+  /* --- Dashboard V2 --- */
+  function initDashboardV2() { loadDashboardState(); }
+
+  function loadDashboardState() {
+    apiGet("/dashboard/state").then(function(state) {
+      renderDataStatus(state);
+      if (state.recommendations && state.recommendations.blockers && state.recommendations.blockers.length > 0) {
+        renderBlockers(state.recommendations.blockers);
+      }
+      renderActions(state);
+      loadLatestRecommendations();
+    }).catch(function(e) { showMessage("Error cargando estado: " + e.message, "error"); });
+  }
+
+  function refreshAll() {
+    var btn = document.getElementById("main-refresh-btn");
+    if (btn) btn.setAttribute("disabled", "disabled");
+    setSyncStatus("Actualizando datos y buscando mejores opciones...");
+    var payload = recFilters();
+    payload.sync_sports_if_stale = true;
+    payload.refresh_aposta = true;
+    payload.use_latest_snapshot_if_no_new_source = true;
+    delete payload.force_aposta_refresh;
+    delete payload.sync_sources_if_stale;
+    apiPost("/dashboard/refresh", payload).then(function(res) {
+      setSyncStatus("Singles: " + (res.singles || 0) + " | Combos: " + (res.combos || 0) + " | Observables: " + (res.observables || 0));
+      showMessage(res.message || "Refresco completado", res.status === "error" ? "error" : "ok");
+      loadDashboardState();
+    }).catch(function(e) { showMessage("Error: " + e.message, "error"); })
+    .finally(function() { if (btn) btn.removeAttribute("disabled"); });
+  }
+
+  function renderDataStatus(state) {
+    var fb = state.football || {};
+    var fbEl = document.getElementById("fb-status");
+    if (fbEl) fbEl.innerHTML = (fb.stale ? "<span class=\"badge badge-high\">Desactualizado</span> " : "<span class=\"badge badge-ok\">OK</span> ") +
+      (fb.competitions || 0) + " comps, " + (fb.future_matches || 0) + " futuros";
+    var lo = state.lol || {};
+    var loEl = document.getElementById("lol-status");
+    if (loEl) loEl.innerHTML = (lo.player_data_available ? "<span class=\"badge badge-ok\">OK</span> " : "<span class=\"badge badge-medium\">Sin jugadores</span> ") +
+      (lo.games || 0) + " partidas, " + (lo.teams || 0) + " equipos";
+    var ap = state.aposta || {};
+    var apEl = document.getElementById("ap-status");
+    if (apEl) apEl.innerHTML = (ap.current_odds > 0 ? "<span class=\"badge badge-ok\">" + ap.current_odds + " vigentes</span> " : "<span class=\"badge badge-high\">0 vigentes</span> ") +
+      (ap.expired_odds || 0) + " vencidas, " + (ap.historical_odds || 0) + " historicas";
+    var rec = state.recommendations || {};
+    var recEl = document.getElementById("rec-status");
+    if (recEl) recEl.innerHTML = (rec.singles || 0) + " apuestas, " + (rec.combos || 0) + " combinadas" +
+      (rec.latest_run ? " (hace " + timeAgo(rec.latest_run) + ")" : "");
+  }
+
+  function renderBlockers(blockers) {
+    var section = document.getElementById("blockers-section");
+    var list = document.getElementById("blockers-list");
+    if (!section || !list) return;
+    if (!blockers || blockers.length === 0) { section.setAttribute("hidden", ""); return; }
+    section.removeAttribute("hidden");
+    list.innerHTML = "";
+    blockers.forEach(function(b) { var li = document.createElement("li"); li.textContent = b; li.className = "text-error"; list.appendChild(li); });
+  }
+
+  function renderActions(state) {
+    var section = document.getElementById("actions-section");
+    var div = document.getElementById("actions-list");
+    if (!section || !div) return;
+    var actions = [];
+    if ((state.aposta || {}).current_odds === 0) {
+      actions.push("Colocar archivo CSV de Aposta.LA con cuotas actuales en /opt/pirapire/data/imports/aposta");
+    }
+    if ((state.lol || {}).games === 0) {
+      actions.push("Colocar archivos CSV de Oracle's Elixir en /opt/pirapire/data/imports/oracles");
+    }
+    if ((state.football || {}).stale) {
+      actions.push("Sincronizar datos de futbol: ir a Datos Futbol y presionar Sincronizar");
+    }
+    if (actions.length === 0) { section.setAttribute("hidden", ""); return; }
+    section.removeAttribute("hidden");
+    div.innerHTML = actions.map(function(a) { return "<p class=\"muted\">" + a + "</p>"; }).join("");
+  }
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return "?";
+    var then = new Date(isoStr); var now = new Date();
+    var diffMs = now - then; var mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "ahora";
+    if (mins < 60) return mins + "min";
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + "h";
+    return Math.floor(hours / 24) + "d";
+  }
+
+  function setSyncStatus(msg) {
+    var el = document.getElementById("sync-status");
+    if (!el) return;
+    el.removeAttribute("hidden");
+    el.textContent = msg;
+  }
+
+  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState };
 })();

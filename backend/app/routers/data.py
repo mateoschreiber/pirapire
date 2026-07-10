@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
+from datetime import UTC, datetime, timedelta
 
+from fastapi import APIRouter, Depends
+from sqlmodel import Session, func, select
+
+from ..config import settings
 from ..database import get_session
 from ..models_football import (
     FootballCompetition,
@@ -24,10 +27,11 @@ def football_teams(limit: int = 500, session: Session = Depends(get_session)) ->
 
 
 @router.get("/football/matches")
-def football_matches(limit: int = 200, session: Session = Depends(get_session)) -> list:
-    return session.exec(
-        select(FootballMatch).order_by(FootballMatch.start_time.desc()).limit(limit)
-    ).all()
+def football_matches(status: str | None = None, limit: int = 200, session: Session = Depends(get_session)) -> list:
+    query = select(FootballMatch)
+    if status:
+        query = query.where(FootballMatch.status == status.upper())
+    return session.exec(query.order_by(FootballMatch.start_time.asc()).limit(limit)).all()
 
 
 @router.get("/football/standings")
@@ -35,6 +39,49 @@ def football_standings(limit: int = 500, session: Session = Depends(get_session)
     return session.exec(
         select(FootballStanding).order_by(FootballStanding.position).limit(limit)
     ).all()
+
+
+def _naive(dt) -> datetime | None:
+    if dt is None:
+        return None
+    if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
+
+@router.get("/football/status")
+def football_status(session: Session = Depends(get_session)) -> dict:
+    competitions = session.exec(select(func.count()).select_from(FootballCompetition)).one()
+    total_matches = session.exec(select(func.count()).select_from(FootballMatch)).one()
+    future_matches = session.exec(
+        select(func.count()).select_from(FootballMatch)
+        .where(FootballMatch.start_time > datetime.now(UTC))
+    ).one()
+    finished_matches = session.exec(
+        select(func.count()).select_from(FootballMatch)
+        .where(FootballMatch.status == 'FINISHED')
+    ).one()
+
+    last_match = session.exec(
+        select(FootballMatch).order_by(FootballMatch.retrieved_at.desc())
+    ).first()
+
+    stale_hours = getattr(settings, 'source_stale_hours', 12)
+    stale_threshold = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=stale_hours)
+    last_retrieved = _naive(last_match.retrieved_at) if last_match else None
+
+    return {
+        'last_sync': last_match.retrieved_at.isoformat() if last_match and last_match.retrieved_at else None,
+        'stale': not last_match or not last_retrieved or last_retrieved < stale_threshold,
+        'competitions_configured': settings.football_data_competitions,
+        'competitions_processed': competitions,
+        'future_matches': future_matches,
+        'finished_matches': finished_matches,
+        'total_matches': total_matches,
+        'lookback_days': settings.sync_default_lookback_days,
+        'lookahead_days': settings.sync_default_lookahead_days,
+        'max_competitions_per_run': settings.football_data_max_competitions_per_run,
+    }
 
 
 @router.get("/lol/patches")

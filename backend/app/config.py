@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     datadragon_base_url: str = "https://ddragon.leagueoflegends.com"
     datadragon_locale: str = "es_MX"
 
-    sync_default_lookback_days: int = 30
-    sync_default_lookahead_days: int = 14
+    sync_default_lookback_days: int = 45
+    sync_default_lookahead_days: int = 21
 
     http_timeout_connect: float = 5.0
     http_timeout_read: float = 20.0

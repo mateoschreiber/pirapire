@@ -5,6 +5,9 @@ from ..config import settings
 from ..database import get_session
 from ..models_aposta import ApostaEvent, ApostaMarket, ApostaSelection, ApostaSyncRun
 from ..services import aposta_sync, live_source_sync
+from ..services.aposta_snapshot import current_odds as snapshot_current
+from ..services.aposta_snapshot import expired_odds as snapshot_expired
+from ..services.aposta_snapshot import historical_odds as snapshot_historical
 from ..services.recommender import recommendation_service
 
 router = APIRouter(prefix='/aposta', tags=['aposta'])
@@ -102,7 +105,22 @@ def sync_and_recommend(payload: dict = Body(default={}), session: Session = Depe
 def status(session: Session = Depends(get_session)) -> dict:
     last = session.exec(select(ApostaSyncRun).order_by(ApostaSyncRun.id.desc())).first()
     batch = aposta_sync.latest_aposta_batch(session)
-    return {'worker_configured': bool(settings.aposta_browser_worker_url.strip()), 'sync_enabled': settings.aposta_sync_enabled, 'sync_mode': settings.aposta_sync_mode, 'import_dir': settings.aposta_import_dir, 'host_import_dir': '/opt/pirapire/data/imports/aposta', 'last_run': last, 'latest_batch_id': batch.id if batch else None, 'message': None if batch else MANUAL_MESSAGE}
+    cur = snapshot_current(session)
+    exp = snapshot_expired(session)
+    hist = snapshot_historical(session)
+    return {
+        'worker_configured': bool(settings.aposta_browser_worker_url.strip()),
+        'sync_enabled': settings.aposta_sync_enabled,
+        'sync_mode': settings.aposta_sync_mode,
+        'import_dir': settings.aposta_import_dir,
+        'host_import_dir': '/opt/pirapire/data/imports/aposta',
+        'last_run': last,
+        'latest_batch_id': batch.id if batch else None,
+        'current_odds': len(cur),
+        'expired_odds': len(exp),
+        'historical_odds': len(hist),
+        'message': None if batch else MANUAL_MESSAGE,
+    }
 
 
 @router.get('/options')
@@ -119,7 +137,7 @@ def options(sport: str | None = None, competition: str | None = None, event: str
             continue
         if market and market.lower() not in (odd.market_text or '').lower():
             continue
-        out.append({'id': odd.id, 'sport': odd.sport, 'competition': odd.competition, 'event_date': odd.event_date, 'event': label, 'team_a': odd.team_a, 'team_b': odd.team_b, 'market_text': odd.market_text, 'market_code': odd.market_code, 'line': odd.line, 'selection': odd.selection, 'odds_decimal': odd.odds_decimal, 'bookmaker': odd.bookmaker, 'batch_id': odd.batch_id})
+        out.append({'id': odd.id, 'sport': odd.sport, 'competition': odd.competition, 'event_date': odd.event_date, 'event': label, 'team_a': odd.team_a, 'team_b': odd.team_b, 'market_text': odd.market_text, 'market_code': odd.market_code, 'line': odd.line, 'selection': odd.selection, 'odds_decimal': odd.odds_decimal, 'bookmaker': odd.bookmaker, 'batch_id': odd.batch_id, 'is_current': odd.is_current})
         if len(out) >= limit:
             break
     return out

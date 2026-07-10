@@ -23,6 +23,12 @@ def init_db() -> None:
     )
 
     SQLModel.metadata.create_all(engine)
+    _run_migrations()
+
+
+def _run_migrations() -> None:
+    from .services.aposta_snapshot import run_migrations
+    run_migrations(engine)
 
 
 def get_session() -> Iterator[Session]:

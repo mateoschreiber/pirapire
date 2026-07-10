@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -12,7 +13,10 @@ from ..config import settings
 from ..models_aposta import ApostaEvent, ApostaMarket, ApostaSelection, ApostaSyncRun
 from ..models_imports import ImportedOdds, ManualImportBatch
 from . import aposta_snapshot_parser
-from .event_matcher import match_imported_odd
+from .aposta_snapshot import current_odds as snapshot_current_odds
+from .aposta_snapshot import expired_odds as snapshot_expired_odds
+from .aposta_snapshot import mark_expired, set_current_batch
+from .event_matcher import match_and_store, match_imported_odd
 from .market_mapper import map_market
 
 
@@ -44,26 +48,30 @@ def ensure_dirs() -> None:
         Path(folder).mkdir(parents=True, exist_ok=True)
 
 
+def _import_paths() -> tuple[Path, Path, Path]:
+    return Path(settings.aposta_import_dir), Path(settings.aposta_archive_dir), Path(settings.aposta_error_dir)
+
+
 def read_url(url: str) -> str:
     req = Request(url, headers={'User-Agent': 'Pirapire/1.0'})
     with urlopen(req, timeout=20) as res:
         return res.read().decode('utf-8')
 
 
-def load_snapshot() -> tuple[str, list[tuple[str, str]]]:
+def load_snapshot() -> tuple[str, list[tuple[str, str, Path | None]]]:
     mode = (settings.aposta_sync_mode or 'disabled').strip().lower()
     ensure_dirs()
+    import_dir, _, _ = _import_paths()
     if mode == 'disabled' or not settings.aposta_sync_enabled:
         return 'manual_required', []
     if mode == 'csv_folder':
-        folder = Path(settings.aposta_import_dir)
-        files = sorted(folder.glob('*.csv'))
-        return mode, [(f.name, f.read_text(encoding='utf-8-sig')) for f in files]
+        files = sorted(import_dir.glob('*.csv'))
+        return mode, [(f.name, f.read_text(encoding='utf-8-sig'), f) for f in files]
     if mode == 'json_url' and settings.aposta_json_url.strip():
-        return mode, [('aposta-json-url', read_url(settings.aposta_json_url.strip()))]
+        return mode, [('aposta-json-url', read_url(settings.aposta_json_url.strip()), None)]
     if mode == 'browser_worker' and settings.aposta_browser_worker_url.strip():
         base = settings.aposta_browser_worker_url.strip().rstrip('/')
-        return mode, [('aposta-browser-worker', read_url(base + '/snapshot'))]
+        return mode, [('aposta-browser-worker', read_url(base + '/snapshot'), None)]
     return 'manual_required', []
 
 
@@ -87,12 +95,14 @@ def normalized_key(row: dict, batch_id: int) -> str:
 
 def store_row(session: Session, batch: ManualImportBatch, row: dict) -> tuple[ImportedOdds, bool]:
     market_id, market_code = map_market(session, row['sport'], row['market_text'])
+    event_date = row.get('event_date')
+    mapping_status = 'mapped' if market_id or market_code else 'unmapped'
     odd = ImportedOdds(
         batch_id=batch.id,
         sport=row['sport'],
         bookmaker='Aposta.LA',
         competition=row.get('competition'),
-        event_date=row.get('event_date'),
+        event_date=event_date,
         team_a=row.get('team_a'),
         team_b=row.get('team_b'),
         market_text=row['market_text'],
@@ -103,6 +113,10 @@ def store_row(session: Session, batch: ManualImportBatch, row: dict) -> tuple[Im
         odds_decimal=row['odds_decimal'],
         normalized_key=normalized_key(row, batch.id),
         source_name='aposta_la',
+        is_current=True,
+        captured_at=now(),
+        event_date_sort=event_date.isoformat() if event_date else None,
+        market_mapping_status=mapping_status,
     )
     session.add(odd)
     session.commit()
@@ -171,16 +185,33 @@ def latest_aposta_batch(session: Session) -> ManualImportBatch | None:
 
 
 def current_odds(session: Session, include_stale: bool = False, include_past: bool = False) -> list[ImportedOdds]:
-    query = select(ImportedOdds).where(ImportedOdds.source_name == 'aposta_la')
-    if not include_stale:
-        batch = latest_aposta_batch(session)
-        if batch is None:
-            return []
-        query = query.where(ImportedOdds.batch_id == batch.id)
-    rows = session.exec(query.order_by(ImportedOdds.id.desc())).all()
+    mark_expired(session)
+    if include_stale:
+        return snapshot_current_odds(session, include_stale=True)
+    odds = snapshot_current_odds(session)
     if include_past:
-        return rows
-    return filter_current_odds(rows)
+        return odds
+    return filter_current_odds(odds)
+
+
+def run_event_matching_on_batch(session: Session, batch_id: int) -> dict:
+    odds = session.exec(
+        select(ImportedOdds).where(ImportedOdds.batch_id == batch_id)
+    ).all()
+    matched = 0
+    high_confidence = 0
+    for odd in odds:
+        result = match_and_store(session, odd)
+        if result.get('match_confidence', 0.0) >= 0.30:
+            matched += 1
+        if result.get('match_confidence', 0.0) >= 0.70:
+            high_confidence += 1
+    session.commit()
+    return {
+        'total': len(odds),
+        'matched': matched,
+        'high_confidence': high_confidence,
+    }
 
 
 def sync(session: Session, force_refresh: bool = False) -> dict:
@@ -190,8 +221,11 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
     session.refresh(run)
     warnings = []
     imported = []
+    import_dir, archive_dir, error_dir = _import_paths()
+
     try:
         mode, sources = load_snapshot()
+
         if mode == 'manual_required' or not sources:
             run.status = 'manual_required'
             run.finished_at = now()
@@ -199,7 +233,18 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
             session.add(run)
             session.commit()
             session.refresh(run)
-            return {'run': run, 'imported': 0, 'mapped': 0, 'unmapped': 0, 'warnings': [run.message]}
+            return {
+                'run': run,
+                'imported': 0,
+                'mapped': 0,
+                'unmapped': 0,
+                'matched_events': 0,
+                'current_odds': len(current_odds(session)),
+                'expired_odds': len(snapshot_expired_odds(session)),
+                'warnings': [run.message],
+            }
+
+        mark_expired(session)
 
         batch = ManualImportBatch(sport='mixed', import_type='aposta_odds', filename=f'aposta_run_{run.id}')
         session.add(batch)
@@ -209,28 +254,63 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
         mapped = 0
         unmapped = 0
         parsed_rows = 0
-        for name, text in sources:
-            rows, errors = parse_source(name, text)
-            warnings.extend(errors[:20])
-            parsed_rows += len(rows)
-            for row in rows:
-                odd, ok = store_row(session, batch, row)
-                imported.append(odd)
-                if ok:
-                    mapped += 1
-                else:
-                    unmapped += 1
+        failed_files = []
+        success_files = []
+
+        for name, text, file_path in sources:
+            try:
+                rows, errors = parse_source(name, text)
+                warnings.extend(errors[:20])
+                parsed_rows += len(rows)
+                for row in rows:
+                    odd, ok = store_row(session, batch, row)
+                    imported.append(odd)
+                    if ok:
+                        mapped += 1
+                    else:
+                        unmapped += 1
+                if file_path and file_path.exists():
+                    try:
+                        dest = archive_dir / file_path.name
+                        shutil.move(str(file_path), str(dest))
+                        success_files.append(file_path.name)
+                    except Exception:
+                        pass
+            except Exception as e:
+                failed_files.append(name)
+                warnings.append(f'Error processing {name}: {e}')
+                if file_path and file_path.exists():
+                    try:
+                        dest = error_dir / file_path.name
+                        shutil.move(str(file_path), str(dest))
+                    except Exception:
+                        pass
+
         batch.imported_rows = len(imported)
         batch.total_rows = parsed_rows + len(warnings)
         batch.error_rows = len(warnings)
-        batch.status = 'success' if imported and not warnings else ('partial' if imported else 'error')
-        batch.message = f'{len(imported)} Aposta.LA odds imported from {mode}'
+        if not imported and not success_files:
+            batch.status = 'error' if failed_files else 'partial'
+            batch.message = f'No se pudieron importar cuotas desde {mode}'
+            if failed_files:
+                batch.message += f'; archivos con error: {", ".join(failed_files[:5])}'
+        else:
+            batch.status = 'success' if imported and not warnings else ('partial' if imported else 'error')
+            batch.message = f'{len(imported)} Aposta.LA odds imported from {mode}'
+            if success_files:
+                batch.message += f'; {len(success_files)} archivos procesados'
+
         batch.finished_at = now()
         session.add(batch)
+
+        set_current_batch(session, batch.id)
+
+        match_result = run_event_matching_on_batch(session, batch.id)
 
         current_imported = filter_current_odds(imported)
         past_imported = len(imported) - len(current_imported)
         mirror_aposta_tables(session, current_imported, run)
+
         run.status = batch.status
         run.finished_at = now()
         run.captured_responses = len(sources)
@@ -243,10 +323,26 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
         run.message = batch.message
         if past_imported:
             run.message += f'; {past_imported} cuotas vencidas quedan solo como historial/estadistica'
+        if match_result.get('matched', 0) > 0:
+            run.message += f'; {match_result["matched"]}/{match_result["total"]} odds matched to events'
+
         session.add(run)
         session.commit()
         session.refresh(run)
-        return {'run': run, 'imported': len(imported), 'mapped': mapped, 'unmapped': unmapped, 'warnings': warnings}
+
+        return {
+            'run': run,
+            'imported': len(imported),
+            'mapped': mapped,
+            'unmapped': unmapped,
+            'matched_events': match_result.get('matched', 0),
+            'high_confidence_matches': match_result.get('high_confidence', 0),
+            'current_odds': len(current_odds(session)),
+            'expired_odds': len(snapshot_expired_odds(session)),
+            'files_processed': len(success_files),
+            'files_failed': len(failed_files),
+            'warnings': warnings,
+        }
     except Exception as exc:
         run.status = 'error'
         run.finished_at = now()
@@ -255,12 +351,23 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
         session.add(run)
         session.commit()
         session.refresh(run)
-        return {'run': run, 'imported': 0, 'mapped': 0, 'unmapped': 0, 'warnings': [str(exc)]}
+        return {
+            'run': run,
+            'imported': 0,
+            'mapped': 0,
+            'unmapped': 0,
+            'matched_events': 0,
+            'current_odds': len(current_odds(session)),
+            'expired_odds': len(snapshot_expired_odds(session)),
+            'files_processed': 0,
+            'files_failed': 0,
+            'warnings': [str(exc)],
+        }
 
 
 def match_summary(session: Session, odds: list[ImportedOdds]) -> tuple[int, int]:
     matched = 0
     for odd in odds:
-        if match_imported_odd(session, odd).get('match_confidence', 0.0) >= settings.recommender_min_match_confidence:
+        if odd.is_matched and odd.match_confidence and odd.match_confidence >= settings.recommender_min_match_confidence:
             matched += 1
     return matched, max(0, len(odds) - matched)

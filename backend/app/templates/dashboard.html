@@ -1,82 +1,96 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard{% endblock %}
-{% block header %}Dashboard{% endblock %}
+{% block header %}Pirapire - Mejores oportunidades{% endblock %}
 {% block content %}
 <div class='notice'>
   <strong>Aviso:</strong> Pirapire es un sistema <b>analitico</b>. Calcula probabilidades,
   cuotas justas y valor esperado. <b>No automatiza apuestas reales.</b>
 </div>
 
-<section class='cards'>
-  <div class='card stat'><span class='stat-label'>Competiciones</span><span class='stat-value'>{{ counts.football_competitions }}</span></div>
-  <div class='card stat'><span class='stat-label'>Equipos</span><span class='stat-value'>{{ counts.football_teams }}</span></div>
-  <div class='card stat'><span class='stat-label'>Partidos</span><span class='stat-value' id="stat-matches">{{ counts.football_matches }}</span></div>
-  <div class='card stat'><span class='stat-label'>Posiciones</span><span class='stat-value'>{{ counts.football_standings }}</span></div>
-  <div class='card stat'><span class='stat-label'>Parches LoL</span><span class='stat-value'>{{ counts.lol_patches }}</span></div>
-  <div class='card stat'><span class='stat-label'>Campeones LoL</span><span class='stat-value' id="stat-champions">{{ counts.lol_champions }}</span></div>
-  <div class='card stat'><span class='stat-label'>Cuotas importadas</span><span class='stat-value'>{{ counts.imported_odds }}</span></div>
-  <div class='card stat'><span class='stat-label'>Predicciones</span><span class='stat-value'>{{ counts.predictions }}</span></div>
-  <div class='card stat'><span class='stat-label'>Combinadas</span><span class='stat-value'>{{ counts.combos }}</span></div>
-  <div class='card stat'><span class='stat-label'>Estado API</span><span class='stat-value'><span class='badge badge-low' id='stat-api'>ok</span></span></div>
+<!-- Estado de datos -->
+<section class='card' id='data-status-section'>
+  <h2 class='card-title'>Estado de datos</h2>
+  <div class='status-grid'>
+    <div class='status-item' id='status-football'>
+      <span class='status-label'>Futbol</span>
+      <span class='status-value' id='fb-status'>Cargando...</span>
+    </div>
+    <div class='status-item' id='status-lol'>
+      <span class='status-label'>LoL</span>
+      <span class='status-value' id='lol-status'>Cargando...</span>
+    </div>
+    <div class='status-item' id='status-aposta'>
+      <span class='status-label'>Aposta.LA</span>
+      <span class='status-value' id='ap-status'>Cargando...</span>
+    </div>
+    <div class='status-item' id='status-recs'>
+      <span class='status-label'>Recomendaciones</span>
+      <span class='status-value' id='rec-status'>Cargando...</span>
+    </div>
+  </div>
 </section>
 
-<section class='card filters-card'>
+<!-- Filtros y boton principal -->
+<section class='card filters-card' id='filters-section'>
   <h2 class='card-title'>Filtros de recomendacion</h2>
-  <div class='form-grid'>
+  <div class='form-grid' id='filter-grid'>
     <label>Modo<select id='rec-mode' class='form-field'><option value='balanced'>Balanceado</option><option value='probability'>Probabilidad</option><option value='profit'>Ganancia/EV</option><option value='odds'>Cuota</option></select></label>
     <label>Deporte<select id='rec-sport' class='form-field'><option value=''>Todos</option><option value='football'>Futbol</option><option value='lol'>LoL</option></select></label>
     <label>Liga<select id='rec-league' class='form-field'><option value=''>Todas</option><option value='LCK'>LCK</option><option value='LPL'>LPL</option><option value='LEC'>LEC</option><option value='LCS'>LCS</option><option value='CBLOL'>CBLOL</option><option value='LCP'>LCP</option><option value='MSI'>MSI</option><option value='WORLDS'>Worlds</option><option value='FIRST_STAND'>First Stand</option></select></label>
-    <label>Prob. minima<input id='rec-minprob' class='form-field' type='number' step='0.01' value='0.50'></label>
-    <label>EV minimo<input id='rec-minev' class='form-field' type='number' step='0.01' value='0'></label>
-    <label>Edge minimo<input id='rec-minedge' class='form-field' type='number' step='0.01' value='0.02'></label>
+    <label>Prob. minima<input id='rec-minprob' class='form-field' type='number' step='0.01' value='0.45'></label>
+    <label>EV minimo<input id='rec-minev' class='form-field' type='number' step='0.01' value='-0.05'></label>
+    <label>Edge minimo<input id='rec-minedge' class='form-field' type='number' step='0.01' value='0'></label>
     <label>Cuota minima<input id='rec-minodds' class='form-field' type='number' step='0.01'></label>
     <label>Cuota maxima<input id='rec-maxodds' class='form-field' type='number' step='0.01'></label>
     <label>Max. patas<input id='rec-maxlegs' class='form-field' type='number' min='2' max='5' value='3'></label>
-    <label>Sample min.<input id='rec-minsample' class='form-field' type='number' min='0' step='1'></label>
     <label>Riesgo max.<select id='rec-riskmax' class='form-field'><option value=''>Todos</option><option value='low'>Bajo</option><option value='medium'>Medio</option><option value='high'>Alto</option><option value='very_high'>Muy alto</option></select></label>
     <label>Cobertura min.<select id='rec-coveragemin' class='form-field'><option value=''>Todas</option><option value='odds_implied_only'>Implicita</option><option value='estimated_only'>Estimada</option><option value='heuristic'>Heuristica</option><option value='model'>Modelo</option></select></label>
   </div>
   <div class='toolbar'>
-    <div class='toolbar-actions'>
-      <button class='btn btn-primary' id='aposta-refresh-btn' onclick='Pirapire.syncApostaAndRecommend()'>Actualizar Aposta.LA y recalcular</button>
-      <button class='btn btn-secondary' onclick='Pirapire.runRecommendations()'>Recalcular con ultimo snapshot</button>
-    </div>
+    <button class='btn btn-primary btn-large' id='main-refresh-btn' onclick='Pirapire.refreshAll()'>Actualizar todo y buscar mejores opciones</button>
     <div id='sync-status' class='toolbar-status' hidden></div>
   </div>
 </section>
 
-<section class='card' id='lol-history-summary' hidden>
-  <h2 class='card-title'>Cobertura LoL</h2>
-  <div class='quick-actions' id='lol-history-kpis'></div>
+<!-- Mejores apuestas simples -->
+<section class='card' id='singles-section'>
+  <h2 class='card-title'>Mejores apuestas simples</h2>
+  <div class='table-scroll'>
+    <table id='rec-bets-table' class='table table-compact'>
+      <thead><tr><th>Liga</th><th>Evento</th><th>Mercado</th><th>Sel.</th><th>Cuota</th><th>P.modelo</th><th>P.impl</th><th>Justa</th><th>EV</th><th>Edge</th><th>Match</th><th>Cobertura</th><th>Motivo</th></tr></thead>
+      <tbody><tr><td colspan='13' class='muted'>Presiona "Actualizar todo y buscar mejores opciones"</td></tr></tbody>
+    </table>
+  </div>
 </section>
 
-<div class='recommendations-grid'>
-  <section class='card recommendation-card'>
-    <h2 class='card-title'>Mejores apuestas simples <span class='muted'>(<span id='rec-mode-label'>-</span>)</span></h2>
-    <div class='table-scroll'>
-      <table id='rec-bets-table' class='table table-compact'>
-        <thead><tr><th>Liga</th><th>Evento</th><th>Mercado</th><th>Sel.</th><th>Cuota</th><th>P.modelo</th><th>P.impl</th><th>Justa</th><th>EV</th><th>Edge</th><th>Match</th><th>Sample</th><th>Cobertura</th><th>Motivo</th><th></th></tr></thead>
-        <tbody><tr><td colspan='15' class='muted'>Cargando ultimo run...</td></tr></tbody>
-      </table>
-    </div>
-  </section>
+<!-- Mejores combinadas -->
+<section class='card' id='combos-section'>
+  <h2 class='card-title'>Mejores combinadas sugeridas</h2>
+  <div class='table-scroll'>
+    <table id='rec-combos-table' class='table table-compact'>
+      <thead><tr><th>Nombre</th><th>Patas</th><th>Cuota</th><th>P.modelo</th><th>EV</th><th>Riesgo</th></tr></thead>
+      <tbody><tr><td colspan='6' class='muted'>Presiona "Actualizar todo y buscar mejores opciones"</td></tr></tbody>
+    </table>
+  </div>
+</section>
 
-  <section class='card recommendation-card'>
-    <h2 class='card-title'>Mejores combinadas sugeridas</h2>
-    <div class='table-scroll'>
-      <table id='rec-combos-table' class='table table-compact'>
-        <thead><tr><th>Nombre</th><th>Patas</th><th>Cuota</th><th>P.modelo</th><th>EV</th><th>Riesgo</th><th></th></tr></thead>
-        <tbody><tr><td colspan='7' class='muted'>Cargando ultimo run...</td></tr></tbody>
-      </table>
-    </div>
-  </section>
-</div>
+<!-- Observables -->
+<section class='card' id='observable-section' hidden>
+  <h2 class='card-title'>Observables</h2>
+  <div id='observable-list' class='muted'></div>
+</section>
 
-<section class='card' style='font-size:0.85rem; color:var(--text-muted)'>
-  Zona horaria: <strong>{{ tz_name }}</strong> (UTC {{ tz_offset }}).
-  Ultima sync Aposta.LA: <span id='aposta-last-status'>...</span>
+<!-- Problemas detectados -->
+<section class='card' id='blockers-section' hidden>
+  <h2 class='card-title'>Problemas detectados</h2>
+  <ul id='blockers-list'></ul>
+</section>
+
+<section class='card' id='actions-section' hidden>
+  <h2 class='card-title'>Acciones necesarias</h2>
+  <div id='actions-list'></div>
 </section>
 {% endblock %}
 {% block scripts %}
-<script>Pirapire.initDashboardRecs();</script>
+<script>Pirapire.initDashboardV2();</script>
 {% endblock %}

@@ -79,6 +79,7 @@ def build_recommendation(session: Session, odd) -> dict:
         'matched_event_id': match.get('matched_event_id'),
         'match_reason': match.get('match_reason'),
         'explanation': est.get('explanation'),
+        'market_mapping_status': odd.market_mapping_status or 'unsupported',
     }
     rec['source_context_json'] = json.dumps(source_context(odd, match, est), default=str)
     return rec
@@ -100,6 +101,60 @@ def league_matches(odd, league: str | None) -> bool:
     if not league:
         return True
     return canonical_league(odd.competition) == league or (odd.competition or '').upper() == league.upper()
+
+
+def classify_candidate(rec: dict, mode: str, min_probability: float, min_ev: float | None,
+                       min_edge: float | None, only_positive_ev: bool, only_matched: bool,
+                       risk_max: str | None, coverage_min: str | None) -> str:
+    if not rec['odds_decimal'] or rec['odds_decimal'] <= 1:
+        return 'rejected'
+    if mode != 'odds' and rec['model_probability'] < min_probability:
+        return 'rejected'
+    if min_ev is not None and rec['expected_value'] < min_ev:
+        return 'rejected'
+    if min_edge is not None and rec['edge'] < min_edge:
+        return 'rejected'
+    if only_positive_ev and rec['expected_value'] <= 0:
+        return 'rejected'
+    if only_matched and rec.get('match_confidence', 0.0) < settings.recommender_min_match_confidence:
+        return 'rejected'
+    if not risk_allowed(rec.get('risk_label'), risk_max):
+        return 'rejected'
+    if not coverage_allowed(rec.get('coverage_status'), coverage_min):
+        return 'rejected'
+    if rec.get('coverage_status') == 'unsupported':
+        return 'rejected'
+    if rec.get('market_mapping_status') == 'unsupported':
+        return 'rejected'
+
+    has_match = rec.get('match_confidence', 0.0) >= settings.recommender_min_match_confidence
+    has_data = rec.get('coverage_status') in ('model', 'heuristic')
+    has_positive_ev = rec.get('expected_value', 0) > 0
+
+    if has_match and has_data and has_positive_ev and rec.get('model_probability', 0) >= min_probability:
+        return 'recommended'
+    if (has_data or rec.get('model_confidence', 0) > 0.3) and rec.get('model_probability', 0) >= 0.30:
+        return 'observable'
+    return 'rejected'
+
+
+def build_rejected_summary(rejected: list[dict]) -> dict:
+    reasons = {}
+    for r in rejected:
+        if not r.get('market_code'):
+            reason = 'mercado no mapeado'
+        elif r.get('match_confidence', 0.0) < 0.30:
+            reason = 'evento no matcheado (confianza baja)'
+        elif r.get('coverage_status') == 'unsupported':
+            reason = 'mercado no soportado'
+        elif r.get('expected_value', 0) <= 0:
+            reason = 'EV no positivo'
+        elif r.get('model_probability', 0) < 0.30:
+            reason = 'probabilidad modelo baja'
+        else:
+            reason = 'filtro restrictivo'
+        reasons[reason] = reasons.get(reason, 0) + 1
+    return reasons
 
 
 def run(
@@ -146,7 +201,11 @@ def run(
     if not odds_rows:
         manual_rows = session.exec(select(ImportedOdds).order_by(ImportedOdds.id.desc())).all()
         odds_rows = aposta_sync.filter_current_odds(manual_rows)
-    recs = []
+
+    recommended = []
+    observable = []
+    rejected = []
+
     for odd in odds_rows:
         if sport and odd.sport != sport:
             continue
@@ -160,28 +219,24 @@ def run(
             continue
         if not odd.market_code and not include_unmapped and mode in ('profit', 'balanced'):
             continue
-        rec = build_recommendation(session, odd)
-        if mode != 'odds' and rec['model_probability'] < min_probability:
-            continue
-        if min_ev is not None and rec['expected_value'] < min_ev:
-            continue
-        if min_edge is not None and rec['edge'] < min_edge:
-            continue
-        if min_sample_size is not None and (rec.get('sample_size') or 0) < min_sample_size:
-            continue
-        if only_positive_ev and rec['expected_value'] <= 0:
-            continue
-        if only_matched and rec['match_confidence'] < settings.recommender_min_match_confidence:
-            continue
-        if not risk_allowed(rec['risk_label'], risk_max):
-            continue
-        if not coverage_allowed(rec['coverage_status'], coverage_min):
-            continue
-        if rec.get('coverage_status') == 'unsupported' and odd.sport == 'lol':
-            continue
-        recs.append(rec)
+        if min_sample_size is not None:
+            rec = build_recommendation(session, odd)
+            if (rec.get('sample_size') or 0) < min_sample_size:
+                rejected.append(rec)
+                continue
+        else:
+            rec = build_recommendation(session, odd)
 
-    ranked = ranking.rank(recs, mode)
+        classification = classify_candidate(rec, mode, min_probability, min_ev, min_edge,
+                                            only_positive_ev, only_matched, risk_max, coverage_min)
+        if classification == 'recommended':
+            recommended.append(rec)
+        elif classification == 'observable':
+            observable.append(rec)
+        else:
+            rejected.append(rec)
+
+    ranked = ranking.rank(recommended, mode)
     top = ranked[:max_suggestions]
 
     for rec in top:
@@ -216,28 +271,28 @@ def run(
 
     combo_pool = [r for r in top if r.get('match_confidence', 0.0) >= settings.recommender_min_match_confidence or r.get('coverage_status') in ('model', 'heuristic')]
     combos = combo_builder.build(combo_pool, mode, max_legs=max_legs, max_combos=max_suggestions, max_combo_odds=max_combo_odds)
-    for combo in combos:
+    for c in combos:
         crow = ComboRecommendation(
             run_id=run_row.id,
-            sport=combo.get('sport'),
-            name=' + '.join(leg.get('event_label', '') for leg in combo['legs']),
-            legs_count=combo['legs_count'],
-            offered_odds=combo['offered_odds'],
-            model_probability=combo['model_probability'],
-            fair_odds=combo['fair_odds'],
-            expected_value=combo['expected_value'],
-            probability_score=combo.get('probability_score', 0.0),
-            profit_score=combo.get('profit_score', 0.0),
-            odds_score=combo.get('odds_score', 0.0),
-            balanced_score=combo.get('balanced_score', 0.0),
-            rank_score=combo.get('rank_score', 0.0),
+            sport=c.get('sport'),
+            name=' + '.join(leg.get('event_label', '') for leg in c['legs']),
+            legs_count=c['legs_count'],
+            offered_odds=c['offered_odds'],
+            model_probability=c['model_probability'],
+            fair_odds=c['fair_odds'],
+            expected_value=c['expected_value'],
+            probability_score=c.get('probability_score', 0.0),
+            profit_score=c.get('profit_score', 0.0),
+            odds_score=c.get('odds_score', 0.0),
+            balanced_score=c.get('balanced_score', 0.0),
+            rank_score=c.get('rank_score', 0.0),
             rank_mode=mode,
-            risk_label=combo.get('risk_label'),
+            risk_label=c.get('risk_label'),
         )
         session.add(crow)
         session.commit()
         session.refresh(crow)
-        for order, leg in enumerate(combo['legs'], start=1):
+        for order, leg in enumerate(c['legs'], start=1):
             session.add(ComboRecommendationLeg(
                 combo_id=crow.id,
                 recommendation_id=leg.get('id'),
@@ -251,11 +306,21 @@ def run(
             ))
         session.commit()
 
+    rejected_summary = build_rejected_summary(rejected)
+    blockers = []
+    if len(top) == 0:
+        if len(rejected) > 0:
+            blockers.append('{} opciones rechazadas por filtros; revisar /aposta/options para verlas'.format(len(rejected)))
+        if len(observable) > 0:
+            blockers.append('{} opciones observables con datos incompletos'.format(len(observable)))
+        if not odds_rows:
+            blockers.append('No hay cuotas actuales para recomendar')
+
     run_row.status = 'success'
     run_row.finished_at = datetime.now(UTC)
     run_row.total_candidates = len(odds_rows)
     run_row.total_recommendations = len(top)
-    run_row.message = '%s singles, %s combos (mode=%s)' % (len(top), len(combos), mode)
+    run_row.message = '{} singles, {} combos (mode={})'.format(len(top), len(combos), mode)
     if not odds_rows:
         run_row.message += '; no hay cuotas actuales o futuras para recomendar'
     session.add(run_row)
@@ -269,4 +334,8 @@ def run(
         'total_candidates': len(odds_rows),
         'total_recommendations': len(top),
         'total_combos': len(combos),
+        'observables': len(observable),
+        'rejected': len(rejected),
+        'rejected_summary': rejected_summary,
+        'blockers': blockers,
     }

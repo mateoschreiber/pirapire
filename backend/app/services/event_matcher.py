@@ -2,27 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime
 from difflib import SequenceMatcher
-import re
-import unicodedata
 
 from sqlmodel import Session, select
 
 from ..models_football import FootballCompetition, FootballMatch, FootballTeam
 from ..models_imports import ImportedOdds
 from . import lol_aposta_matcher
-
-
-def normalize_name(value: str | None) -> str:
-    text = (value or '').strip().lower()
-    text = unicodedata.normalize('NFKD', text)
-    text = ''.join(c for c in text if not unicodedata.combining(c))
-    text = re.sub(r'[^a-z0-9 ]+', ' ', text)
-    text = re.sub(r'\b(fc|cf|club|de|the|team|esports|e sports|gaming)\b', ' ', text)
-    return ' '.join(text.split())
+from .text_normalizer import normalize
 
 
 def ratio(a: str | None, b: str | None) -> float:
-    na, nb = normalize_name(a), normalize_name(b)
+    na, nb = normalize(a), normalize(b)
     if not na or not nb:
         return 0.0
     if na == nb:
@@ -35,7 +25,11 @@ def ratio(a: str | None, b: str | None) -> float:
 def date_score(a: datetime | None, b: datetime | None) -> float:
     if not a or not b:
         return 0.55
-    diff_hours = abs((a.replace(tzinfo=None) - b.replace(tzinfo=None)).total_seconds()) / 3600
+    if hasattr(a, 'tzinfo') and a.tzinfo:
+        a = a.replace(tzinfo=None)
+    if hasattr(b, 'tzinfo') and b.tzinfo:
+        b = b.replace(tzinfo=None)
+    diff_hours = abs((a - b).total_seconds()) / 3600
     if diff_hours <= 8:
         return 1.0
     if diff_hours <= 36:
@@ -71,11 +65,17 @@ def football(session: Session, odd: ImportedOdds) -> dict:
         dscore = date_score(odd.event_date, match.start_time)
         confidence = 0.68 * team_score + 0.17 * comp_score + 0.15 * dscore
         if best is None or confidence > best['match_confidence']:
+            league = None
+            if odd.competition:
+                league = odd.competition.upper()
+            elif comp:
+                league = comp.code or comp.name
             best = {
                 'matched_source': 'football_match',
                 'matched_event_id': match.id,
                 'match_confidence': round(confidence, 3),
                 'match_reason': f'teams={team_score:.2f}; competition={comp_score:.2f}; date={dscore:.2f}',
+                'league': league,
                 'home_team_id': match.home_team_id,
                 'away_team_id': match.away_team_id,
                 'home_team_name': home.name,
@@ -85,7 +85,7 @@ def football(session: Session, odd: ImportedOdds) -> dict:
 
 
 def lol(session: Session, odd: ImportedOdds) -> dict:
- return lol_aposta_matcher.match_imported_odd(session, odd)
+    return lol_aposta_matcher.match_imported_odd(session, odd)
 
 
 def match_imported_odd(session: Session, odd: ImportedOdds) -> dict:
@@ -94,3 +94,14 @@ def match_imported_odd(session: Session, odd: ImportedOdds) -> dict:
     if odd.sport == 'lol':
         return lol(session, odd)
     return unmatched()
+
+
+def match_and_store(session: Session, odd: ImportedOdds) -> dict:
+    result = match_imported_odd(session, odd)
+    confidence = result.get('match_confidence', 0.0) or 0.0
+    odd.is_matched = confidence >= 0.30
+    odd.match_confidence = confidence
+    odd.matched_event_id = result.get('matched_event_id')
+    odd.matched_event_type = result.get('matched_source')
+    session.add(odd)
+    return result

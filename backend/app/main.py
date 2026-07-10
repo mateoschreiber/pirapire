@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import engine, init_db
 from .routers import (
+    dashboard,
     aposta,
     combo,
     data,
@@ -83,6 +84,7 @@ app.include_router(markets.router)
 app.include_router(imports.router)
 app.include_router(history.router)
 app.include_router(lol_history.router)
+app.include_router(dashboard.router)
 app.include_router(aposta.router)
 app.include_router(recommendations.router)
 
