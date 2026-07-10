@@ -1,4 +1,4 @@
-"""Poisson football model with Dixon-Coles adjustment, attack/defense ratings, home advantage, and time decay."""
+"""Corrected Poisson football model — Phase 1."""
 from __future__ import annotations
 
 import math
@@ -18,168 +18,189 @@ ESTIMATED_ONLY = {
 
 
 def _decay_weight(match_date, ref_date: datetime, half_life_days: float = 365.0) -> float:
-    """Exponential time decay: weight = 2^(-days/half_life)."""
+    """Exponential time decay."""
     if match_date is None:
-        return 0.5
+        return 0.3
     if isinstance(match_date, str):
         try:
             match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
         except (ValueError, TypeError):
-            return 0.5
+            return 0.3
     if not isinstance(match_date, datetime):
-        return 0.5
-    days = (ref_date - match_date.replace(tzinfo=None)).days
-    return math.pow(2.0, -max(0, days) / half_life_days)
+        return 0.3
+    days = max(0, (ref_date.replace(tzinfo=None) - match_date.replace(tzinfo=None)).days)
+    return math.pow(2.0, -days / half_life_days)
 
 
-def _poisson_prob(lmbda: float, k: int) -> float:
-    """Poisson probability mass function."""
+def _poisson_pmf(lmbda: float, k: int) -> float:
     if lmbda <= 0:
         return 1.0 if k == 0 else 0.0
     return math.exp(-lmbda) * (lmbda ** k) / math.factorial(k)
 
 
-def _score_probability(home_lambda: float, away_lambda: float, max_goals: int = 10) -> dict:
-    """Calculate match outcome probabilities from Poisson lambdas."""
-    home_win = draw = away_win = 0.0
-    goal_probs = defaultdict(float)
-
-    for i in range(max_goals + 1):
-        for j in range(max_goals + 1):
-            p = _poisson_prob(home_lambda, i) * _poisson_prob(away_lambda, j)
-            if i > j:
-                home_win += p
-            elif i == j:
-                draw += p
-            else:
-                away_win += p
-            goal_probs[i + j] += p
-
-    return {
-        'home': home_win,
-        'draw': draw,
-        'away': away_win,
-        'goal_probs': dict(goal_probs),
-    }
+def _shrinkage(team_value: float, league_value: float, sample_weight: float, min_samples: int = 10) -> float:
+    """Bayesian shrinkage toward league average for small samples."""
+    alpha = min(1.0, sample_weight / max(min_samples, 1))
+    return alpha * team_value + (1.0 - alpha) * league_value
 
 
-class PoissonModel:
-    """Poisson model with Dixon-Coles adjustment for football match prediction."""
+class CorrectedPoissonModel:
+    """Poisson model with proper team filtering, weighted ratings, shrinkage, and Dixon-Coles."""
 
-    def __init__(self, matches: list, ref_date: datetime | None = None):
+    def __init__(self, matches: list, home_id: int | None = None, away_id: int | None = None,
+                 ref_date: datetime | None = None):
         self.ref_date = ref_date or datetime.utcnow()
+        self.home_id = home_id
+        self.away_id = away_id
+
+        # Per-team stats: total weighted goals for/against, total weight
+        self.team_goals_for = defaultdict(float)
+        self.team_goals_against = defaultdict(float)
+        self.team_weight_attack = defaultdict(float)
+        self.team_weight_defense = defaultdict(float)
         self.home_advantage = 0.0
-        self.team_attack: dict[int, float] = defaultdict(lambda: 0.0)
-        self.team_defense: dict[int, float] = defaultdict(lambda: 0.0)
-        self.league_avg = 1.35  # average goals per team per match
+        self.league_avg_goals = 1.35
+
+        # Sample sizes per team
+        self.home_sample = 0
+        self.away_sample = 0
+        self.total_sample = 0
+        self.competition_sample = 0
+
         self.rho = -0.06  # Dixon-Coles low-score correlation
-        self.sample_size = 0
+
         self._fit(matches)
 
     def _fit(self, matches: list):
-        """Fit Poisson model parameters from match history."""
-        if not matches:
-            return
-
-        home_goals = defaultdict(list)
-        away_goals = defaultdict(list)
-        valid_matches = []
-
+        valid = []
         for m in matches:
             if m.home_score is None or m.away_score is None:
                 continue
             if m.home_team_id is None or m.away_team_id is None:
                 continue
-            weight = _decay_weight(m.start_time, self.ref_date)
-            valid_matches.append((m, weight))
+            w = _decay_weight(m.start_time, self.ref_date)
+            valid.append((m, w))
 
-        if not valid_matches:
+        if not valid:
             return
 
-        self.sample_size = len(valid_matches)
+        self.total_sample = len(valid)
 
-        # Calculate league average goals
-        total_goals = sum((m.home_score or 0) + (m.away_score or 0) for m, w in valid_matches)
-        total_weight = sum(w for _, w in valid_matches)
-        if total_weight > 0:
-            self.league_avg = max(0.5, total_goals / (total_weight * 2))  # per team
+        # Team-specific stats
+        for m, w in valid:
+            # Home team: scored home_score, conceded away_score
+            self.team_goals_for[m.home_team_id] += (m.home_score or 0) * w
+            self.team_goals_against[m.home_team_id] += (m.away_score or 0) * w
+            self.team_weight_attack[m.home_team_id] += w
+            self.team_weight_defense[m.home_team_id] += w
 
-        # Iterative fitting (simplified: 3 iterations)
-        teams = set()
-        for m, _ in valid_matches:
-            teams.add(m.home_team_id)
-            teams.add(m.away_team_id)
+            # Away team: scored away_score, conceded home_score
+            self.team_goals_for[m.away_team_id] += (m.away_score or 0) * w
+            self.team_goals_against[m.away_team_id] += (m.home_score or 0) * w
+            self.team_weight_attack[m.away_team_id] += w
+            self.team_weight_defense[m.away_team_id] += w
 
-        for _ in range(3):
-            for team in teams:
-                atk = []
-                dfs = []
-                for m, w in valid_matches:
-                    if m.home_team_id == team:
-                        atk.append((m.home_score or 0, w))
-                    if m.away_team_id == team:
-                        atk.append((m.away_score or 0, w))
-                        dfs.append((m.home_score or 0, w))
-                    if m.home_team_id != team and m.away_team_id != team:
-                        continue
+        # Home advantage
+        hg = sum((m.home_score or 0) * w for m, w in valid)
+        ag = sum((m.away_score or 0) * w for m, w in valid)
+        total_w = sum(w for _, w in valid)
+        if total_w > 0:
+            avg_home = hg / total_w if total_w > 0 else 0
+            avg_away = ag / total_w if total_w > 0 else 0
+            self.league_avg_goals = max(0.5, (hg + ag) / (2 * total_w)) if total_w > 0 else 1.35
+            self.home_advantage = max(0.0, avg_home - avg_away)
 
-                if atk:
-                    total = sum(g * w for g, w in atk)
-                    tw = sum(w for _, w in atk)
-                    self.team_attack[team] = max(0.3, total / max(tw, 0.01)) / max(self.league_avg, 0.5)
+        # Sample sizes for the specific matchup
+        if self.home_id:
+            self.home_sample = int(self.team_weight_attack.get(self.home_id, 0))
+        if self.away_id:
+            self.away_sample = int(self.team_weight_attack.get(self.away_id, 0))
 
-            # Home advantage
-            hg = sum((m.home_score or 0) * w for m, w in valid_matches)
-            ag = sum((m.away_score or 0) * w for m, w in valid_matches)
-            if total_weight > 0:
-                self.home_advantage = max(-0.5, min(1.0, (hg - ag) / total_weight / max(self.league_avg, 0.5)))
+    def _team_attack_rating(self, team_id: int | None) -> float:
+        if team_id is None:
+            return 1.0
+        gf = self.team_goals_for.get(team_id, 0)
+        tw = self.team_weight_attack.get(team_id, 0)
+        if tw <= 0:
+            return 1.0
+        raw = gf / tw
+        avg = self.league_avg_goals
+        return _shrinkage(raw / max(avg, 0.5), 1.0, tw)
+
+    def _team_defense_rating(self, team_id: int | None) -> float:
+        if team_id is None:
+            return 1.0
+        ga = self.team_goals_against.get(team_id, 0)
+        tw = self.team_weight_defense.get(team_id, 0)
+        if tw <= 0:
+            return 1.0
+        raw = ga / tw
+        avg = self.league_avg_goals
+        return _shrinkage(raw / max(avg, 0.5), 1.0, tw)
 
     def predict_match(self, home_id: int, away_id: int) -> dict:
-        """Predict outcome probabilities for a specific match."""
-        home_atk = self.team_attack.get(home_id, 1.0)
-        home_def = self.team_defense.get(home_id, 1.0)
-        away_atk = self.team_attack.get(away_id, 1.0)
-        away_def = self.team_defense.get(away_id, 1.0)
+        home_atk = self._team_attack_rating(home_id)
+        home_def = self._team_defense_rating(home_id)
+        away_atk = self._team_attack_rating(away_id)
+        away_def = self._team_defense_rating(away_id)
 
-        home_lambda = max(0.1, self.league_avg * home_atk * away_def + self.home_advantage)
-        away_lambda = max(0.1, self.league_avg * away_atk * home_def)
+        home_lambda = max(0.10, self.league_avg_goals * home_atk * away_def + self.home_advantage * 0.4)
+        away_lambda = max(0.10, self.league_avg_goals * away_atk * home_def)
 
-        probs = _score_probability(home_lambda, away_lambda)
+        max_g = 12
+        probs = [[0.0] * (max_g + 1) for _ in range(max_g + 1)]
+        for i in range(max_g + 1):
+            for j in range(max_g + 1):
+                probs[i][j] = _poisson_pmf(home_lambda, i) * _poisson_pmf(away_lambda, j)
 
-        # Dixon-Coles adjustment for low scores
-        if self.rho and self.rho != 0:
+        # Dixon-Coles adjustment for 0-0, 1-0, 0-1, 1-1
+        rho = self.rho
+        if abs(rho) > 1e-9:
             for i in range(2):
                 for j in range(2):
-                    pij = _poisson_prob(home_lambda, i) * _poisson_prob(away_lambda, j)
+                    p = _poisson_pmf(home_lambda, i) * _poisson_pmf(away_lambda, j)
                     if i == 0 and j == 0:
-                        adj = pij * (1.0 + home_lambda * away_lambda * self.rho)
+                        adj = p * (1.0 + home_lambda * away_lambda * rho)
                     elif i == 0 and j == 1:
-                        adj = pij * (1.0 - home_lambda * self.rho)
+                        adj = p * (1.0 - home_lambda * rho)
                     elif i == 1 and j == 0:
-                        adj = pij * (1.0 - away_lambda * self.rho)
+                        adj = p * (1.0 - away_lambda * rho)
                     elif i == 1 and j == 1:
-                        adj = pij * (1.0 + self.rho)
+                        adj = p * (1.0 + rho)
                     else:
-                        continue
+                        adj = p
+                    probs[i][j] = max(0.0, adj)
 
-                    if i == 0 and j == 0:
-                        probs['draw'] -= pij
-                        probs['draw'] += adj * (i == j)
-                        if i > j:
-                            probs['home'] -= pij
-                            probs['home'] += adj
-                        elif i < j:
-                            probs['away'] -= pij
-                            probs['away'] += adj
+        # Normalize
+        total_p = sum(sum(row) for row in probs)
+        if total_p > 0:
+            for i in range(max_g + 1):
+                for j in range(max_g + 1):
+                    probs[i][j] /= total_p
+
+        # Calculate outcome probabilities
+        home_win = sum(probs[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i > j)
+        away_win = sum(probs[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i < j)
+        draw = sum(probs[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i == j)
+
+        # Goal total probabilities
+        goal_probs = defaultdict(float)
+        for i in range(max_g + 1):
+            for j in range(max_g + 1):
+                goal_probs[i + j] += probs[i][j]
 
         return {
-            'home': max(0.05, min(0.95, probs['home'])),
-            'draw': max(0.05, min(0.95, probs['draw'])),
-            'away': max(0.05, min(0.95, probs['away'])),
-            'goal_probs': probs['goal_probs'],
-            'home_lambda': home_lambda,
-            'away_lambda': away_lambda,
+            'home': home_win,
+            'draw': draw,
+            'away': away_win,
+            'goal_probs': dict(goal_probs),
+            'home_lambda': round(home_lambda, 3),
+            'away_lambda': round(away_lambda, 3),
         }
+
+    @property
+    def effective_sample(self) -> int:
+        return max(self.home_sample, self.away_sample)
 
 
 def completed_matches(session: Session) -> list:
@@ -188,102 +209,97 @@ def completed_matches(session: Session) -> list:
     ).all()
 
 
-def selection_is_under(context: dict) -> bool:
-    return (context.get('selection') or '').lower() in ('under', 'menos')
-
-
-def invert_for_under(prob: float, context: dict) -> float:
-    return 1.0 - prob if selection_is_under(context) else prob
-
-
 def team_ids(context: dict) -> set[int]:
     ids = set()
     for key in ('home_team_id', 'away_team_id'):
-        value = context.get(key)
-        if value:
-            ids.add(value)
+        v = context.get(key)
+        if v:
+            ids.add(v)
     return ids
 
 
-def make_result(prob: float, coverage: str, sample_size: int, explanation: str) -> dict:
+def make_result(prob: float, coverage: str, sample_size: int, model, explanation: str) -> dict:
     return {
-        'probability': max(0.05, min(0.95, prob)),
+        'probability': prob,
         'coverage_status': coverage,
         'sample_size': sample_size,
+        'model_confidence': round(min(1.0, sample_size / 30.0), 3) if sample_size > 0 else 0.0,
         'explanation': explanation,
     }
 
 
+def selection_is_under(context: dict) -> bool:
+    return (context.get('selection') or '').lower() in ('under', 'menos')
+
+
 def estimate(session: Session, market_code: str, odds_decimal: float, context: dict):
     context = context or {}
-    matches = completed_matches(session)
-    ids = team_ids(context)
 
     if market_code in ESTIMATED_ONLY:
-        return {'probability': None, 'coverage_status': 'estimated_only', 'sample_size': 0,
-                'explanation': 'Mercado sin datos estadisticos suficientes'}
+        return {'probability': None, 'coverage_status': 'insufficient_data', 'sample_size': 0,
+                'model_confidence': 0.0, 'explanation': 'Mercado sin datos estadisticos'}
 
-    if not ids:
-        return None
-
-    # Fit Poisson model
-    model = PoissonModel(matches)
     home_id = context.get('home_team_id')
     away_id = context.get('away_team_id')
-
     if not home_id or not away_id:
         return None
 
-    predict = model.predict_match(home_id, away_id)
+    matches = completed_matches(session)
+    model = CorrectedPoissonModel(matches, home_id, away_id)
+
+    if model.effective_sample < 3:
+        return {'probability': None, 'coverage_status': 'insufficient_data', 'sample_size': model.effective_sample,
+                'model_confidence': 0.0, 'explanation': f'Muestra insuficiente: {model.effective_sample} partidos'}
+
+    pred = model.predict_match(home_id, away_id)
+    sample = model.effective_sample
+    coverage = 'model' if sample >= 30 else 'heuristic'
 
     if market_code == 'match_winner':
         sel = (context.get('selection') or '').lower()
-        prob_map = {'home': predict['home'], 'away': predict['away'], 'draw': predict['draw']}
+        prob_map = {'home': pred['home'], 'away': pred['away'], 'draw': pred['draw']}
         if sel in prob_map:
-            return make_result(prob_map[sel], 'model' if model.sample_size >= 20 else 'heuristic',
-                               model.sample_size,
-                               f'Poisson 1X2: home_lambda={predict["home_lambda"]:.2f}, away_lambda={predict["away_lambda"]:.2f}, muestra={model.sample_size}')
+            return make_result(prob_map[sel], coverage, sample, model,
+                f'Poisson 1X2: home={pred["home_lambda"]} away={pred["away_lambda"]}, muestra={sample}')
 
     if market_code == 'total_goals_over_under':
         line = context.get('line')
         if line is not None:
-            prob_over = sum(p for g, p in predict['goal_probs'].items() if g > line)
-            prob = invert_for_under(prob_over, context)
-            return make_result(prob, 'model' if model.sample_size >= 20 else 'heuristic',
-                               model.sample_size,
-                               f'Poisson total goles >{line}: {len(predict["goal_probs"])} escenarios, muestra={model.sample_size}')
+            prob_over = sum(p for g, p in pred['goal_probs'].items() if g > line)
+            prob = 1.0 - prob_over if selection_is_under(context) else prob_over
+            return make_result(prob, coverage, sample, model,
+                f'Poisson >{line} goles: home_lambda={pred["home_lambda"]} away_lambda={pred["away_lambda"]}, muestra={sample}')
 
     if market_code == 'both_teams_to_score':
-        # BTTS probability = 1 - P(both score 0)
-        # Using Poisson: P(home=0)*P(away=0)
-        p_no_score = _poisson_prob(predict['home_lambda'], 0) * _poisson_prob(predict['away_lambda'], 0)
-        prob_btts = 1.0 - p_no_score
-        prob = 1.0 - prob_btts if (context.get('selection') or '').lower() == 'no' else prob_btts
-        return make_result(prob, 'model' if model.sample_size >= 20 else 'heuristic',
-                           model.sample_size,
-                           f'BTTS via Poisson: {len(predict["goal_probs"])} escenarios, muestra={model.sample_size}')
+        # P(BTTS) = P(home>0 AND away>0) = sum over i>0,j>0 of P(i,j)
+        btts = 0.0
+        for g, p in pred['goal_probs'].items():
+            btts += p  # This is wrong - need proper joint probability
+        # Correct BTTS: P(home>0 AND away>0) = 1 - P(home=0) - P(away=0) + P(home=0,away=0)
+        p_h0 = _poisson_pmf(pred['home_lambda'], 0)
+        p_a0 = _poisson_pmf(pred['away_lambda'], 0)
+        p_00 = p_h0 * p_a0  # independence assumption for Poisson
+        btts_correct = 1.0 - p_h0 - p_a0 + p_00
+        prob = 1.0 - btts_correct if (context.get('selection') or '').lower() == 'no' else btts_correct
+        return make_result(max(0.02, min(0.98, prob)), coverage, sample, model,
+            f'BTTS: home_lambda={pred["home_lambda"]} away_lambda={pred["away_lambda"]}, muestra={sample}')
 
     if market_code == 'team_goals_over_under':
         line = context.get('line')
         if line is not None:
             sel = (context.get('selection') or '').lower()
-            team_lambda = predict['home_lambda'] if sel in ('home', 'equipo a', 'local') else predict['away_lambda']
-            prob_over = 1.0 - sum(_poisson_prob(team_lambda, k) for k in range(int(line) + 1))
-            prob = invert_for_under(prob_over, context)
-            return make_result(prob, 'model' if model.sample_size >= 20 else 'heuristic',
-                               model.sample_size,
-                               f'Poisson goles equipo >{line}: lambda={team_lambda:.2f}, muestra={model.sample_size}')
+            team_lambda = pred['home_lambda'] if sel in ('home', 'equipo a', 'local') else pred['away_lambda']
+            prob_over = 1.0 - sum(_poisson_pmf(team_lambda, k) for k in range(int(line) + 1))
+            prob = 1.0 - prob_over if selection_is_under(context) else prob_over
+            return make_result(max(0.02, min(0.98, prob)), coverage, sample, model,
+                f'Goles equipo >{line}: lambda={team_lambda:.2f}, muestra={sample}')
 
     if market_code == 'double_chance':
         sel = (context.get('selection') or '').lower()
-        values = {
-            '1x': predict['home'] + predict['draw'],
-            'x2': predict['draw'] + predict['away'],
-            '12': predict['home'] + predict['away'],
-        }
+        values = {'1x': pred['home'] + pred['draw'], 'x2': pred['draw'] + pred['away'],
+                  '12': pred['home'] + pred['away']}
         if sel in values:
-            return make_result(values[sel], 'model' if model.sample_size >= 20 else 'heuristic',
-                               model.sample_size,
-                               f'Doble oportunidad Poisson: muestra={model.sample_size}')
+            return make_result(max(0.02, min(0.98, values[sel])), coverage, sample, model,
+                f'Doble oportunidad Poisson, muestra={sample}')
 
     return None

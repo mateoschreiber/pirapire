@@ -1,0 +1,45 @@
+import logging, os, sys, signal
+sys.path.insert(0, '/app')
+from app.config import settings
+from app.database import engine, init_db
+from sqlmodel import Session
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('pirapire.worker')
+
+def run_aposta_sync():
+    from app.services.aposta_sync import sync
+    from app.services.recommender.recommendation_service import run as rec_run
+    with Session(engine) as session:
+        try:
+            result = sync(session)
+            count = result.get('imported', 0)
+            logger.info('Aposta: %s odds', count)
+            if count > 0:
+                r = rec_run(session, mode='balanced')
+                logger.info('Recs: %s singles', r.get('singles', 0))
+        except Exception as e:
+            logger.warning('Aposta sync error: %s', e)
+
+def run_sports_sync():
+    from app.services.live_source_sync import sync_if_stale
+    with Session(engine) as session:
+        try:
+            sync_if_stale(session)
+            logger.info('Sports sync done')
+        except Exception as e:
+            logger.warning('Sports sync error: %s', e)
+
+if __name__ == '__main__':
+    logger.info('Pirapire worker starting')
+    init_db()
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(run_aposta_sync, IntervalTrigger(minutes=12), id='aposta', coalesce=True, max_instances=1)
+    scheduler.add_job(run_sports_sync, IntervalTrigger(hours=4), id='sports', coalesce=True, max_instances=1)
+    scheduler.start()
+    logger.info('Scheduler: Aposta 12min, Sports 4h')
+    run_sports_sync()
+    run_aposta_sync()
+    signal.pause()
