@@ -7,11 +7,42 @@ from ..services.dashboard_state import get_full_state
 
 router = APIRouter(prefix='/dashboard', tags=['dashboard'])
 
-
 @router.get('/state')
 def dashboard_state(session: Session = Depends(get_session)) -> dict:
     return get_full_state(session)
 
+
+from datetime import datetime, timedelta
+from sqlmodel import select
+
+
+@router.get("/backtest")
+def dashboard_backtest(session: Session = Depends(get_session)):
+    from ..services.backtesting import backtest_1x2, backtest_over_under
+    return {"1x2": backtest_1x2(session), "over_under_2.5": backtest_over_under(session, line=2.5)}
+
+@router.get("/calendar")
+def dashboard_calendar(session: Session = Depends(get_session), days: int = 7):
+    from ..models_imports import ImportedOdds
+    rows = session.exec(
+        select(ImportedOdds)
+        .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current == True)
+        .order_by(ImportedOdds.event_date_sort)
+    ).all()
+
+    events = {}
+    for row in rows:
+        key = row.team_a + "|" + (row.team_b or "") + "|" + (row.competition or "") + "|" + (row.event_date_sort or "")
+        if key not in events:
+            events[key] = {
+                "team_a": row.team_a, "team_b": row.team_b,
+                "competition": row.competition, "event_date": row.event_date_sort,
+                "sport": row.sport, "markets": 0,
+            }
+        events[key]["markets"] += 1
+
+    result = sorted(events.values(), key=lambda e: e.get("event_date") or "")
+    return result[:50]
 
 @router.post('/refresh')
 def dashboard_refresh(payload: dict = Body(default={}), session: Session = Depends(get_session)) -> dict:

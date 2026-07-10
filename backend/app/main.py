@@ -16,14 +16,11 @@ from .routers import (
     imports,
     lol_history,
     markets,
-    matches,
     odds,
     pages,
     recommendations,
     source_runs,
     sources,
-    sports,
-    teams,
 )
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -36,6 +33,14 @@ async def lifespan(app: FastAPI):
     init_db()
     _seed_markets_safe()
     _seed_lol_catalog_safe()
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(_scheduled_aposta_sync, IntervalTrigger(minutes=15), id='aposta_sync')
+    scheduler.add_job(_scheduled_football_sync, IntervalTrigger(hours=6), id='football_sync')
+    scheduler.start()
+    logger.info('Scheduler started: Aposta every 15min, Football every 6h')
+
     yield
 
 
@@ -61,6 +66,27 @@ def _seed_lol_catalog_safe() -> None:
             seed_catalog(session)
     except Exception as exc:
         logger.warning('LoL league catalog seed skipped: %s', exc)
+
+
+def _scheduled_aposta_sync():
+    try:
+        from sqlmodel import Session
+        from .services.aposta_sync import sync as aposta_sync
+        from .services.recommender.recommendation_service import run as rec_run
+        with Session(engine) as session:
+            result = aposta_sync(session)
+            if result.get('imported', 0) > 0:
+                rec_run(session, mode='balanced')
+    except Exception as e:
+        logger.warning('Scheduled Aposta sync failed: %s', e)
+
+
+def _scheduled_football_sync():
+    try:
+        from .services.sync.football_sync import sync as fb_sync
+        fb_sync()
+    except Exception as e:
+        logger.warning('Scheduled football sync failed: %s', e)
 
 
 app = FastAPI(

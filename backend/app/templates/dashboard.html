@@ -30,6 +30,22 @@
   </div>
 </section>
 
+<!-- Calendario de proximos eventos Aposta.LA -->
+<section class="card" id="calendar-section">
+  <h2 class="card-title">Proximos eventos</h2>
+  <div class="toolbar">
+    <button class="btn btn-outline filter-btn" onclick="Pirapire.loadCalendar('today')">Hoy</button>
+    <button class="btn btn-outline filter-btn" onclick="Pirapire.loadCalendar('tomorrow')">Manana</button>
+    <button class="btn btn-outline filter-btn" onclick="Pirapire.loadCalendar('week')">7 dias</button>
+  </div>
+  <div class="table-scroll">
+    <table id="calendar-table" class="table table-compact">
+      <thead><tr><th>Fecha</th><th>Competicion</th><th>Equipo A</th><th>Equipo B</th><th>Mercados</th></tr></thead>
+      <tbody><tr><td colspan="5" class="muted">Cargando eventos...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
 <!-- Filtros y boton principal -->
 <section class='card filters-card' id='filters-section'>
   <h2 class='card-title'>Filtros de recomendacion</h2>
@@ -92,5 +108,5 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script>Pirapire.initDashboardV2();</script>
+<script>Pirapire.initDashboardV2(); Pirapire.loadCalendar();</script>
 {% endblock %}

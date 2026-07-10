@@ -51,7 +51,7 @@ def build_recommendation(session: Session, odd) -> dict:
     }
     est = probability_engine.estimate(session, odd.sport, odd.market_code, odd.odds_decimal, context)
     model_prob = est['model_probability']
-    risk = odds_engine.risk_label(model_prob) if 0 < model_prob <= 1 else 'high'
+    risk = odds_engine.risk_label(model_prob) if model_prob is not None and model_prob > 0 else 'high'
     league = match.get('league') or canonical_league(odd.competition) or odd.competition
     rec = {
         'sport': odd.sport,
@@ -108,13 +108,15 @@ def classify_candidate(rec: dict, mode: str, min_probability: float, min_ev: flo
                        risk_max: str | None, coverage_min: str | None) -> str:
     if not rec['odds_decimal'] or rec['odds_decimal'] <= 1:
         return 'rejected'
+    if rec.get('model_probability') is None:
+        return 'rejected'
     if mode != 'odds' and rec['model_probability'] < min_probability:
         return 'rejected'
-    if min_ev is not None and rec['expected_value'] < min_ev:
+    if min_ev is not None and (rec.get('expected_value') or 0) < min_ev:
         return 'rejected'
-    if min_edge is not None and rec['edge'] < min_edge:
+    if min_edge is not None and (rec.get('edge') or 0) < min_edge:
         return 'rejected'
-    if only_positive_ev and rec['expected_value'] <= 0:
+    if only_positive_ev and (rec.get('expected_value') or 0) <= 0:
         return 'rejected'
     if only_matched and rec.get('match_confidence', 0.0) < settings.recommender_min_match_confidence:
         return 'rejected'
@@ -147,7 +149,7 @@ def build_rejected_summary(rejected: list[dict]) -> dict:
             reason = 'evento no matcheado (confianza baja)'
         elif r.get('coverage_status') == 'unsupported':
             reason = 'mercado no soportado'
-        elif r.get('expected_value', 0) <= 0:
+        elif (r.get('expected_value') or 0) <= 0:
             reason = 'EV no positivo'
         elif r.get('model_probability', 0) < 0.30:
             reason = 'probabilidad modelo baja'

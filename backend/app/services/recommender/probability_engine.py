@@ -35,21 +35,34 @@ def estimate(session: Session, sport: str, market_code: str, odds_decimal: float
         coverage = 'unsupported'
 
     match_confidence = context.get('match_confidence') or 0.0
+
     if data_probability is None:
-        model = implied
-        coverage = coverage or 'odds_implied_only'
+        model = None
+        coverage = 'insufficient_data'
         data_weight = 0.0
     else:
-        sample_weight = min(1.0, sample_size / 20.0) if sample_size else 0.35
-        match_weight = max(0.0, min(1.0, match_confidence or 0.55))
-        data_weight = max(0.15, min(0.85, sample_weight * match_weight))
-        if raw_confidence is not None:
-            data_weight = min(0.85, max(data_weight, float(raw_confidence) * match_weight))
-        if match_confidence and match_confidence < 0.70:
-            data_weight = min(data_weight, 0.25)
-            if coverage == 'model':
-                coverage = 'estimated_only'
-        model = data_weight * data_probability + (1.0 - data_weight) * implied
+        model = data_probability
+        coverage = coverage or 'model'
+        data_weight = min(1.0, (sample_size / 20.0) if sample_size else 0.35)
+        if match_confidence and match_confidence < 0.50:
+            coverage = 'insufficient_data'
+            model = None
+            data_weight = 0.0
+        elif match_confidence and match_confidence < 0.70:
+            coverage = 'estimated_only'
+
+    if model is None:
+        return {
+            'model_probability': None,
+            'implied_probability': implied,
+            'fair_odds': None,
+            'expected_value': None,
+            'edge': None,
+            'coverage_status': 'insufficient_data',
+            'model_confidence': 0.0,
+            'sample_size': 0,
+            'explanation': explanation or 'Datos insuficientes para generar prediccion estadistica',
+        }
 
     model = clamp(model)
     fair = 1.0 / model if model > 0 else 0.0
@@ -64,8 +77,8 @@ def estimate(session: Session, sport: str, market_code: str, odds_decimal: float
         'fair_odds': fair,
         'expected_value': ev,
         'edge': edge,
-        'coverage_status': coverage or 'odds_implied_only',
-        'model_confidence': round(data_weight if data_probability is not None else 0.0, 3),
+        'coverage_status': coverage or 'model',
+        'model_confidence': round(data_weight, 3),
         'sample_size': sample_size,
         'explanation': explanation,
     }

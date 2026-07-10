@@ -872,5 +872,34 @@ var Pirapire = (function () {
     el.textContent = msg;
   }
 
-  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState };
+
+  function loadCalendar(filter) {
+    filter = filter || "week";
+    var tbody = document.querySelector("#calendar-table tbody");
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">Cargando calendario...</td></tr>';
+    var days = filter === "today" ? 1 : filter === "tomorrow" ? 2 : 7;
+    apiGet("/dashboard/calendar?days=" + days).then(function(events) {
+      tbody.innerHTML = "";
+      if (!events || !events.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No hay eventos proximos</td></tr>';
+        return;
+      }
+      events.forEach(function(e) {
+        var tr = document.createElement("tr");
+        var dateStr = e.event_date || "";
+        if (dateStr) {
+          try { var d = new Date(dateStr); if (!isNaN(d)) { dateStr = d.toLocaleDateString("es-PY", {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); } } catch(_) {}
+        }
+        appendCell(tr, dateStr);
+        appendCell(tr, e.competition || "", "comp-cell");
+        appendCell(tr, e.team_a || "", "team-cell");
+        appendCell(tr, e.team_b || "", "team-cell");
+        appendCell(tr, e.markets || 0);
+        tbody.appendChild(tr);
+      });
+    }).catch(function(e) { tbody.innerHTML = '<tr><td colspan="5" class="muted">Error cargando calendario</td></tr>'; });
+  }
+
+  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState, loadCalendar: loadCalendar };
 })();

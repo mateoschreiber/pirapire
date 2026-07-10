@@ -11,3 +11,4 @@ ruff==0.9.2
 beautifulsoup4>=4.12
 lxml>=5.3
 requests>=2.31
+apscheduler>=3.10
