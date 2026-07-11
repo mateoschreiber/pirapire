@@ -187,22 +187,23 @@ def mark_expired(session: Session) -> int:
 
 
 def activate_snapshots(session: Session, snapshot_ids: list[int]) -> None:
-    """Make only the latest successful capture per source current.
-
-    A batch is an import transport detail, never public event identity.
-    """
+    """Make only the latest successful capture per source current efficiently."""
     snapshots = [session.get(CaptureSnapshot, sid) for sid in snapshot_ids]
     snapshots = [snap for snap in snapshots if snap is not None]
-    sources = {snap.source for snap in snapshots}
-    for source in sources:
-        for snap in session.exec(select(CaptureSnapshot).where(CaptureSnapshot.source == source)).all():
-            snap.is_current = snap.id in snapshot_ids
+    by_source = {snap.source: snap.id for snap in snapshots}
+    for source, active_id in by_source.items():
+        source_snapshot_ids = [snap.id for snap in session.exec(
+            select(CaptureSnapshot).where(CaptureSnapshot.source == source)
+        ).all()]
+        for snap in session.exec(select(CaptureSnapshot).where(CaptureSnapshot.id.in_(source_snapshot_ids))).all():
+            snap.is_current = snap.id == active_id
             session.add(snap)
-        for odd in session.exec(select(ImportedOdds).where(ImportedOdds.source_name == "aposta_la")).all():
-            captured = session.get(CaptureSnapshot, odd.capture_snapshot_id)
-            if captured and captured.source == source:
-                odd.is_current = captured.id in snapshot_ids
-                odd.captured_at = captured.finished_at or now()
+        if source_snapshot_ids:
+            for odd in session.exec(select(ImportedOdds).where(
+                ImportedOdds.capture_snapshot_id.in_(source_snapshot_ids)
+            )).all():
+                odd.is_current = odd.capture_snapshot_id == active_id
+                odd.captured_at = now()
                 session.add(odd)
     session.commit()
 
