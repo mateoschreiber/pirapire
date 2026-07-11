@@ -137,3 +137,63 @@ No se observaron 429 durante los syncs reales. Football aplicó espera de 7 segu
 - App: healthy.
 - Worker: healthy, misma imagen que app.
 - Browser: healthy.
+
+## Re-verificación y corrección (2026-07-11, ronda 2)
+
+Al re-ejecutar la suite completa se detectó un fallo dependiente del orden en
+`tests/test_pages.py::test_dashboard_event_cards_are_keyboard_accessible_links`.
+Cuando pruebas previas siembran eventos de Aposta, el dashboard renderiza
+`event-card`s y activa la aserción `"onclick=" not in html`, que capturaba el
+`onclick` inline del botón de tema en `base.html`. El handler ya se enlazaba por
+JavaScript (`addEventListener` en `initTheme`), de modo que el `onclick` inline
+era redundante. Se eliminó y se agregó `type="button"`.
+
+- Commit de corrección: `12c2ea085dbb9e425a20fc2da2f0a2eb1ab044c1`.
+- Imagen única app/worker reconstruida: `sha256:bdc9524566faa6396a2dce24fb8e8d1c71ec811f16df2d05199b8147484c7145`.
+- `BUILD_COMMIT` dentro del contenedor: `12c2ea08...` (coincide).
+- App y worker recreados preservando volúmenes; los tres contenedores `healthy`.
+
+### Backup previo
+
+- Backup: `backups/phase0d_fix_20260711_161704/`.
+- SQLite backup SHA-256: `0888d5cd393d6a4c0dbfabb08bece11b5888f8839ed2268c4ab65e12956a6c06`.
+- `.env` backup SHA-256: `58da4a8f57993f32879573cbc1ab0a8c5f11ee888cb47e5ab31afcecadeb4123`.
+- `integrity_check=ok`.
+
+### Verificaciones
+
+- `pytest` completo: 173 passed, 5 skipped, 0 failed.
+- `pytest` phase 0D (`test_phase0d_clients`, `test_football_data_org`, `test_integration_settings`): 31 passed.
+- `ruff` sobre los archivos de la fase 0D: `All checks passed!`.
+- `compileall`: correcto.
+- `node --check` sobre `app.js`: correcto.
+- `git diff --check`: correcto.
+- HTML desplegado: 0 `onclick=Pirapire.toggleTheme`, botón `themeToggle` presente.
+
+### Sincronización controlada post-deploy
+
+Ejecutada dos veces por proveedor para confirmar idempotencia (conteos antes = después):
+
+- Estado inicial y final idéntico: 84 equipos, 1.249 jugadores (1.249 claves únicas), 105 partidos (105 IDs únicos), 3 metadatos TheSportsDB.
+- Football run 1: `success`, 0 insertados, 1.401 actualizados, 11 omitidos, 0 errores.
+- Football run 2: `success`, 0 insertados, 1.249 actualizados, 12 omitidos, 0 errores.
+- TheSportsDB run 1 y 2: `success`, 0 insertados, 0 actualizados, 5 omitidos (metadata ya presente; sin odds).
+- Riot run 1: `success`, 1 omitido — `unconfigured`, omitido sin convertirse en fallo global.
+- Sin 429 observados; football respetó pacing de 7 s y TheSportsDB espera mínima de 2 s.
+
+### Matriz de estado por proveedor (post-deploy)
+
+| Proveedor | Estado | Requests | Filas | Cobertura |
+|---|---|---|---|---|
+| Football-data.org | `success` (`active_accepted_risk`, `source=ui`) | 8 | 1.256 | 7 competiciones |
+| TheSportsDB | `success` (Free v1) | 5 | 5 | metadata fallback |
+| Leaguepedia | `success` | 2 | 4.693 | 361 filas scoreboard |
+| Riot API | `unconfigured` | 0 | 0 | 0 identidades/matches |
+| Data Dragon | `success` | 2 | 174 | 173 campeones |
+
+### Seguridad (re-escaneo)
+
+- `1b7f` (last4 football) ausente de `.env`.
+- Logs del contenedor app: 0 coincidencias de `X-Auth-Token`/`X-Riot-Token`/`Authorization:`.
+- HTML de inicio: 0 coincidencias de tokens o `api_key`.
+- `docker inspect`: 0 asignaciones residuales de football-data.org ni cabeceras de token.
