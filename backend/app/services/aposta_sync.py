@@ -211,6 +211,15 @@ def store_row(
         canonical_event_id=event.id,
         canonical_market_id=market.id,
         canonical_outcome_id=outcome.id,
+        raw_market_label=row.get("raw_market_label") or row.get("market_text"),
+        raw_outcome_label=row.get("raw_outcome_label") or row.get("selection_raw") or row.get("selection"),
+        market_key=row.get("source_market_id") or market.identity_key,
+        outcome_key=row.get("source_outcome_id") or outcome.identity_key,
+        period=row.get("period"),
+        map_number=row.get("map_number"),
+        participant_name=row.get("participant_name"),
+        player_name=row.get("player_name"),
+        role=row.get("role"),
     )
     session.add(odd)
     session.commit()

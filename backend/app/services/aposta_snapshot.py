@@ -52,6 +52,9 @@ def run_migrations(engine) -> None:
             "kickoff_utc": "TIMESTAMP", "source_market_id": "TEXT", "source_outcome_id": "TEXT",
             "capture_snapshot_id": "INTEGER", "canonical_event_id": "INTEGER",
             "canonical_market_id": "INTEGER", "canonical_outcome_id": "INTEGER",
+            "raw_market_label": "TEXT", "raw_outcome_label": "TEXT", "market_key": "TEXT",
+            "outcome_key": "TEXT", "period": "TEXT", "map_number": "INTEGER",
+            "participant_name": "TEXT", "player_name": "TEXT", "role": "TEXT",
         }
         for name, definition in new_columns.items():
             if name not in existing_columns:
@@ -75,6 +78,7 @@ def run_migrations(engine) -> None:
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_apostaevent_event_key ON apostaevent(event_key) WHERE event_key IS NOT NULL")
         conn.execute("CREATE INDEX IF NOT EXISTS ix_importedodds_event_key_current ON importedodds(event_key, is_current)")
         conn.execute("CREATE INDEX IF NOT EXISTS ix_importedodds_capture_snapshot ON importedodds(capture_snapshot_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS ix_importedodds_market_key_current ON importedodds(event_key, market_key, is_current)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_canonicalmarket_identity ON canonicalmarket(identity_key)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_canonicaloutcome_identity ON canonicaloutcome(identity_key)")
         conn.execute("CREATE INDEX IF NOT EXISTS ix_capturesnapshot_source_current ON capturesnapshot(source, is_current)")

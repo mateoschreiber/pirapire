@@ -5,6 +5,7 @@ from ..database import get_session
 from ..models_imports import ImportedOdds
 from ..models_aposta import ApostaEvent
 from ..utils.datetime_utils import event_time_display
+from ..services.no_vig import calculate as calculate_no_vig
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -24,20 +25,6 @@ def _legacy_key(session: Session, legacy_id: str) -> str:
     if len(keys) != 1:
         raise HTTPException(status_code=409, detail="Legacy event id resolves ambiguously")
     return keys.pop()
-
-
-def _can_calculate_no_vig(
-    sport: str, market_code: str | None, selection_count: int
-) -> bool:
-    code = (market_code or "").lower()
-    expected = (
-        3
-        if code in {"match_winner", "1x2"}
-        else 2
-        if code in {"total_goals_over_under", "over_under"}
-        else None
-    )
-    return sport == "football" and expected is not None and selection_count == expected
 
 
 @router.get("/{event_key}")
@@ -79,23 +66,32 @@ def event_detail(event_key: str, session: Session = Depends(get_session)):
         "event_time_status": first.event_time_status,
         "source": first.source_name,
         "total_odds": len(odds),
+        "odds_count": len(odds),
+        "market_count": len({o.market_key or o.source_market_id or o.canonical_market_id for o in odds}),
     }
 
     # Group markets
     markets = {}
     for o in odds:
-        key = f"{o.market_text}|{o.line}|{o.market_code}"
+        key = o.market_key or o.source_market_id or f"fallback:{o.canonical_market_id or o.market_text}|{o.line}|{o.period}|{o.player_name or ''}|{o.participant_name or ''}"
         if key not in markets:
             markets[key] = {
-                "market_text": o.market_text,
+                "market_key": key,
+                "market_text": o.raw_market_label or o.market_text,
+                "raw_market_label": o.raw_market_label or o.market_text,
                 "market_code": o.market_code,
                 "line": o.line,
+                "period": o.period,
+                "map_number": o.map_number,
+                "participant_name": o.participant_name,
+                "player_name": o.player_name,
                 "selections": [],
             }
         markets[key]["selections"].append(
             {
+                "outcome_key": o.outcome_key or o.source_outcome_id,
                 "selection": o.selection,
-                "selection_raw": (o.selection or ""),
+                "selection_raw": o.raw_outcome_label or o.selection or "",
                 "odds_decimal": o.odds_decimal,
                 "implied_probability": round(1.0 / o.odds_decimal, 4)
                 if o.odds_decimal
@@ -108,31 +104,15 @@ def event_detail(event_key: str, session: Session = Depends(get_session)):
     for mk in markets.values():
         selections = mk["selections"]
         total_implied = sum(s["implied_probability"] for s in selections)
-        available = _can_calculate_no_vig(
-            first.sport, mk.get("market_code"), len(selections)
-        )
-        for s in selections:
-            s["no_vig_probability"] = (
-                round(s["implied_probability"] / total_implied, 4)
-                if available and total_implied > 0
-                else None
-            )
-            s["implied_pct"] = round(s["implied_probability"] * 100, 1)
-            s["no_vig_pct"] = (
-                round(s["no_vig_probability"] * 100, 1)
-                if s["no_vig_probability"] is not None
-                else None
-            )
-
-        mk["overround_pct"] = (
-            round((total_implied - 1.0) * 100, 2) if available else None
-        )
+        probabilities, reason = calculate_no_vig(first.sport, mk.get("market_code"), selections)
+        for selection, probability in zip(selections, probabilities):
+            selection["no_vig_probability"] = probability
+            selection["implied_pct"] = round(selection["implied_probability"] * 100, 1)
+            selection["no_vig_pct"] = round(probability * 100, 1) if probability is not None else None
+        available = reason is None
+        mk["overround_pct"] = round((total_implied - 1.0) * 100, 2) if available else None
         mk["no_vig_available"] = available
-        mk["no_vig_status"] = (
-            "available"
-            if available
-            else "No disponible: mercado pendiente de normalización."
-        )
+        mk["no_vig_status"] = "available" if available else reason
         mk["selection_count"] = len(selections)
         mk["has_full_market"] = available
         market_list.append(mk)

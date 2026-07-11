@@ -81,3 +81,14 @@ class ImportedOdds(SQLModel, table=True):
     canonical_event_id: Optional[int] = Field(default=None, index=True)
     canonical_market_id: Optional[int] = Field(default=None, index=True)
     canonical_outcome_id: Optional[int] = Field(default=None, index=True)
+
+    # Provider labels and canonical market/outcome grouping (Phase 3).
+    raw_market_label: Optional[str] = None
+    raw_outcome_label: Optional[str] = None
+    market_key: Optional[str] = Field(default=None, index=True)
+    outcome_key: Optional[str] = Field(default=None, index=True)
+    period: Optional[str] = None
+    map_number: Optional[int] = None
+    participant_name: Optional[str] = None
+    player_name: Optional[str] = None
+    role: Optional[str] = None

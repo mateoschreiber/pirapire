@@ -39,21 +39,41 @@ def fetch_event_detail(event_id):
 
 
 def _map_market(market_name):
-    name = market_name.lower()
-    if (
-        "map" in name
-        and "handicap" not in name
-        and "total" not in name
-        and "score" not in name
-    ):
-        return "map_winner"
-    if "total maps" in name or ("total" in name and "map" in name.lower()):
-        return "total_maps_over_under"
-    if "score" in name:
+    """Classify only observed, unambiguous Kambi labels; unknown stays unmapped."""
+    name = market_name.casefold()
+    if "correct map score" in name or "correct score" in name:
         return "correct_map_score"
+    if "total maps" in name:
+        return "total_maps_over_under" if "over" in name or "under" in name else "total_maps"
+    if "match odds" in name or re.fullmatch(r"map \d+", name):
+        return "series_winner" if "match" in name else "map_winner"
     if "handicap" in name:
         return "map_handicap"
-    return "map_winner"
+    if "total kills" in name:
+        return "player_kills" if "player" in name else "total_kills"
+    if "total deaths" in name:
+        return "player_deaths"
+    if "total minutes" in name or "duration" in name:
+        return "map_duration"
+    if "turret" in name or "tower" in name:
+        return "total_turrets"
+    if "inhibitor" in name:
+        return "total_inhibitors"
+    if "player with most kills" in name:
+        return "player_most_kills"
+    return None
+
+
+def _market_dimensions(market_name, outcome_label):
+    map_match = re.search(r"Map (\d+)", market_name, re.I)
+    player_match = re.search(r"(?:by|the) Player\s+(.+)$", market_name, re.I)
+    participant_match = re.search(r"by\s+(.+)$", market_name, re.I)
+    return {
+        "period": f"map_{map_match.group(1)}" if map_match else "series",
+        "map_number": int(map_match.group(1)) if map_match else None,
+        "player_name": player_match.group(1).strip() if player_match else None,
+        "participant_name": participant_match.group(1).strip() if participant_match else None,
+    }
 
 
 def _normalize_selection(label, home, away):
@@ -123,6 +143,7 @@ def parse_kambi_to_rows(lol_data, fetch_details=True):
                 label = outcome.get("label", "") or outcome.get("englishLabel", "")
                 selection = _normalize_selection(label, home, away)
 
+                dimensions = _market_dimensions(market_name, label)
                 line = None
                 m = re.search(r"Map (\d+)", market_name)
                 if m:
@@ -145,10 +166,13 @@ def parse_kambi_to_rows(lol_data, fetch_details=True):
                         "team_a": home,
                         "team_b": away,
                         "market_text": market_name,
+                        "raw_market_label": market_name,
                         "market_code": market_code,
+                        **dimensions,
                         "line": line,
                         "selection": selection,
                         "selection_raw": label,
+                        "raw_outcome_label": label,
                         "odds_decimal": odds_decimal,
                         "bookmaker": "Aposta.LA",
                         "source_url": f"kambi:event:{event_id}",
