@@ -217,3 +217,9 @@ Comprobación enmascarada al finalizar 0B:
 - confirmación del usuario recibida: no
 
 Por lo tanto siguen bloqueados el commit final, despliegue, petición con credenciales, sync y healthchecks finales. Los contenedores productivos continúan sin cambios.
+
+## Actualización Fase 0C
+
+El gestor cifrado de integraciones y el parche visual fueron desplegados con el commit `1772622008d43733eb98e88f46e34dda7a3be031`. App, worker y browser están healthy; app y worker comparten la digest `sha256:8e9d21077af95216344204a8a96b7f5d9a3e1ef75b2be4f85e1213f003020748`.
+
+Football sync queda bloqueado mientras la fuente efectiva no sea un override UI probado. La invocación de control cerró con 0 inserts, 0 updates y ninguna petición externa. La Fase 0 aún no se cierra: el usuario debe revocar la clave expuesta, crear una nueva e ingresarla directamente en Config. Después se eliminará el fallback antiguo de `.env` y se ejecutará el sync final.

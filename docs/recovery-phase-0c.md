@@ -126,3 +126,29 @@ Capturas:
 7. Escanear SQLite, logs, inspect, HTML y artefactos.
 
 La clave maestra debe respaldarse por separado junto con SQLite. Un backup de SQLite sin su clave maestra no permite recuperar las credenciales cifradas.
+
+## Despliegue de bootstrap
+
+Desplegado el commit `1772622008d43733eb98e88f46e34dda7a3be031` sin borrar volúmenes.
+
+- Imagen app/worker: `sha256:8e9d21077af95216344204a8a96b7f5d9a3e1ef75b2be4f85e1213f003020748`.
+- App y worker: misma digest.
+- App: healthy.
+- Worker: healthy.
+- Browser: healthy.
+- Config productivo: 7 cards, inputs secretos vacíos, consola limpia.
+- Acceso anónimo a integraciones: HTTP 401.
+- Football block test: `partial`, 0 inserted, 0 updated, 1 skipped; ninguna petición al proveedor.
+- Log sanitizado: `football sync blocked until a tested Config credential is active`.
+- Credenciales UI configuradas: 0.
+- Credenciales en `docker inspect`, logs y `/api/info`: ninguna.
+
+Backup previo al despliegue: `backups/phase0c_20260711_115601/`.
+
+- SQLite SHA-256: `0b5404c3b07f7622338e8461282176e55919d6b6065256a7f76dd297691cf057`.
+- `.env` SHA-256: `f88e6750c95b46c2b55830a4efac33807f817b6b3bbd97bd7c58e8d4d7d1684d`.
+- Clave maestra, respaldada por separado tras su primera generación: SHA-256 `3f2ab9202f70debb2c8fe1fb7a9a590cae3ae96f4cfc6d62d437d8211831a417`.
+- SQLite: `integrity_check=ok`.
+- Directorio: `0700`; `.env` y clave maestra: `0600`; SQLite: `0640`.
+
+La aplicación está lista para la acción del usuario. El secreto bootstrap debe leerse localmente, sin copiarlo a chats o reportes, mediante acceso administrativo al contenedor/servidor. Después del login en Config, la nueva clave debe ingresarse en Football-data.org → Guardar nueva. Hasta entonces football continúa bloqueado y la credencial expuesta permanece pendiente de revocación y eliminación de `.env`.
