@@ -1,10 +1,29 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
 from ..database import get_session
 from ..models_imports import ImportedOdds
+from ..models_aposta import ApostaEvent
 from ..utils.datetime_utils import event_time_display
 
 router = APIRouter(prefix="/api/events", tags=["events"])
+
+
+def _event_for_key(session: Session, event_key: str) -> ApostaEvent:
+    event = session.exec(select(ApostaEvent).where(ApostaEvent.event_key == event_key)).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
+def _legacy_key(session: Session, legacy_id: str) -> str:
+    rows = session.exec(select(ImportedOdds).where(ImportedOdds.id == int(legacy_id))).all()
+    keys = {row.event_key for row in rows if row.event_key}
+    if not keys:
+        raise HTTPException(status_code=404, detail="Legacy event id not found")
+    if len(keys) != 1:
+        raise HTTPException(status_code=409, detail="Legacy event id resolves ambiguously")
+    return keys.pop()
 
 
 def _can_calculate_no_vig(
@@ -21,32 +40,25 @@ def _can_calculate_no_vig(
     return sport == "football" and expected is not None and selection_count == expected
 
 
-@router.get("/{event_id}")
-def event_detail(event_id: int, session: Session = Depends(get_session)):
+@router.get("/{event_key}")
+def event_detail(event_key: str, session: Session = Depends(get_session)):
     """Get all markets and odds for a specific event."""
-    # Find the reference event row
+    if event_key.isdigit():
+        key = _legacy_key(session, event_key)
+        return RedirectResponse(url=f"/api/events/{key}", status_code=308)
+    canonical_event = _event_for_key(session, event_key)
     ref = session.exec(
-        select(ImportedOdds)
-        .where(
-            ImportedOdds.is_current,
-            ImportedOdds.id == event_id,
-        )
-        .limit(1)
+        select(ImportedOdds).where(ImportedOdds.is_current, ImportedOdds.event_key == event_key).limit(1)
     ).first()
-
     if not ref:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="Event has no active odds")
 
     # Find all odds for the same event identity
     odds = session.exec(
         select(ImportedOdds)
         .where(
             ImportedOdds.is_current,
-            ImportedOdds.sport == ref.sport,
-            ImportedOdds.team_a == ref.team_a,
-            ImportedOdds.team_b == ref.team_b,
-            ImportedOdds.competition == ref.competition,
-            ImportedOdds.event_date_sort == ref.event_date_sort,
+            ImportedOdds.event_key == event_key,
         )
         .order_by(ImportedOdds.market_text, ImportedOdds.line)
     ).all()
@@ -54,14 +66,15 @@ def event_detail(event_id: int, session: Session = Depends(get_session)):
     # Build event info
     first = ref
     event = {
-        "event_id": event_id,
+        "event_key": event_key,
+        "event_id": ref.id,
         "sport": first.sport,
         "team_a": first.team_a,
         "team_b": first.team_b,
         "competition": first.competition,
-        "event_date": first.event_date_sort,
+        "event_date": canonical_event.kickoff_utc or first.kickoff_utc or first.event_date_sort,
         "event_date_display": event_time_display(
-            first.event_date_sort, first.event_time_status
+            canonical_event.kickoff_utc or first.kickoff_utc or first.event_date_sort, first.event_time_status
         ),
         "event_time_status": first.event_time_status,
         "source": first.source_name,
@@ -128,13 +141,17 @@ def event_detail(event_id: int, session: Session = Depends(get_session)):
     return event
 
 
-@router.get("/{event_id}/statistics")
+@router.get("/{event_key}/statistics")
 def event_statistics(
-    event_id: int, session: Session = Depends(get_session), window: str = "365d"
+    event_key: str, session: Session = Depends(get_session), window: str = "365d"
 ):
     """Get descriptive statistics for a specific event."""
-    ref = session.get(ImportedOdds, event_id)
-    if not ref or not ref.is_current:
+    if event_key.isdigit():
+        key = _legacy_key(session, event_key)
+        return RedirectResponse(url=f"/api/events/{key}/statistics", status_code=308)
+    _event_for_key(session, event_key)
+    ref = session.exec(select(ImportedOdds).where(ImportedOdds.event_key == event_key, ImportedOdds.is_current).limit(1)).first()
+    if not ref:
         raise HTTPException(status_code=404, detail="Event not found")
 
     # Map Aposta Spanish names to football-data.org English names
@@ -156,7 +173,8 @@ def event_statistics(
     }
 
     stats = {
-        "event_id": event_id,
+        "event_key": event_key,
+        "event_id": ref.id,
         "team_a": ref.team_a,
         "team_b": ref.team_b,
         "sport": ref.sport,

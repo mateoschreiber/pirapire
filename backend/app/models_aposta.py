@@ -34,6 +34,15 @@ class ApostaEvent(SQLModel, table=True):
     start_time: Optional[datetime] = None
     status: Optional[str] = None
     external_id: Optional[str] = Field(default=None, index=True)
+    # Canonical identity. ``id`` and ``external_id`` stay available during
+    # compatibility migration, but public links use event_key.
+    source: str = Field(default="aposta_la", index=True)
+    source_event_id: Optional[str] = Field(default=None, index=True)
+    event_key: Optional[str] = Field(default=None, index=True)
+    raw_kickoff_text: Optional[str] = None
+    kickoff_utc: Optional[datetime] = Field(default=None, index=True)
+    current_snapshot_id: Optional[int] = Field(default=None, index=True)
+    expires_at: Optional[datetime] = None
     source_url: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -51,6 +60,7 @@ class ApostaMarket(SQLModel, table=True):
     map_number: Optional[int] = None
     player: Optional[str] = None
     role: Optional[str] = None
+    source_market_id: Optional[str] = Field(default=None, index=True)
     is_mapped: bool = False
     source_status: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
@@ -62,7 +72,45 @@ class ApostaSelection(SQLModel, table=True):
     market_id: int = Field(foreign_key="apostamarket.id", index=True)
     selection_text: str
     selection_normalized: Optional[str] = None
+    source_outcome_id: Optional[str] = Field(default=None, index=True)
     odds_decimal: float
     implied_probability: Optional[float] = None
     is_active: bool = True
     captured_at: datetime = Field(default_factory=_now)
+
+
+class CaptureSnapshot(SQLModel, table=True):
+    """Immutable provider capture used to audit the active odds set."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source: str = Field(index=True)
+    started_at: datetime = Field(default_factory=_now)
+    finished_at: Optional[datetime] = None
+    status: str = Field(default="running", index=True)
+    raw_hash: str = Field(index=True)
+    row_count: int = 0
+    is_current: bool = Field(default=False, index=True)
+    error_message: Optional[str] = None
+
+
+class CanonicalMarket(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="apostaevent.id", index=True)
+    identity_key: str = Field(index=True)
+    source_market_id: Optional[str] = Field(default=None, index=True)
+    market_text: str
+    market_code: Optional[str] = None
+    line: Optional[float] = None
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class CanonicalOutcome(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    canonical_market_id: int = Field(foreign_key="canonicalmarket.id", index=True)
+    identity_key: str = Field(index=True)
+    source_outcome_id: Optional[str] = Field(default=None, index=True)
+    selection_text: str
+    selection_normalized: Optional[str] = None
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)

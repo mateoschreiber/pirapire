@@ -37,6 +37,10 @@ def _run_migrations() -> None:
 
     run_migrations(engine)
     integration_migrations()
+    from .services.aposta_snapshot import backfill_canonical_identity
+
+    with Session(engine) as session:
+        backfill_canonical_identity(session)
 
 
 def get_session() -> Iterator[Session]:

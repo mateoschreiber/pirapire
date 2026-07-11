@@ -36,28 +36,21 @@ def dashboard_calendar(session: Session = Depends(get_session), days: int = 7):
 
     events = {}
     for row in rows:
-        key = (
-            row.team_a
-            + "|"
-            + (row.team_b or "")
-            + "|"
-            + (row.competition or "")
-            + "|"
-            + (row.event_date_sort or "")
-        )
+        key = row.event_key or (row.team_a or "") + "|" + (row.team_b or "") + "|" + (row.competition or "") + "|" + (row.event_date_sort or "")
         if key not in events:
             events[key] = {
                 "team_a": row.team_a,
                 "team_b": row.team_b,
                 "competition": row.competition,
-                "event_date": row.event_date_sort,
+                "event_date": row.kickoff_utc or row.event_date_sort,
                 "event_date_display": event_time_display(
-                    row.event_date_sort, row.event_time_status
+                    row.kickoff_utc or row.event_date_sort, row.event_time_status
                 ),
                 "event_time_status": row.event_time_status,
                 "sport": row.sport,
                 "markets": 0,
                 "event_id": row.id,
+                "event_key": row.event_key,
             }
         events[key]["markets"] += 1
 

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi import HTTPException
+from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select, func
 
 from ..config import settings
@@ -13,6 +15,7 @@ from ..models_football import (
 )
 from ..models_history import ComboHistory, PredictionHistory
 from ..models_imports import ImportedOdds, ManualImportBatch
+from ..models_aposta import ApostaEvent
 from ..models_lol import LolChampion, LolPatch
 from ..models_markets import MarketCatalog
 from ..models_sources import SourceRun
@@ -93,28 +96,21 @@ def dashboard(request: Request):
         ).all()
         events_dict = {}
         for r in rows:
-            k = (
-                (r.team_a or "")
-                + "|"
-                + (r.team_b or "")
-                + "|"
-                + (r.competition or "")
-                + "|"
-                + (r.event_date_sort or "")
-            )
+            k = r.event_key or (r.team_a or "") + "|" + (r.team_b or "") + "|" + (r.competition or "") + "|" + (r.event_date_sort or "")
             if k not in events_dict:
                 events_dict[k] = {
                     "team_a": r.team_a,
                     "team_b": r.team_b,
                     "competition": r.competition,
-                    "event_date": r.event_date_sort,
+                    "event_date": r.kickoff_utc or r.event_date_sort,
                     "event_date_py": datetime_utils.event_time_display(
-                        r.event_date_sort, r.event_time_status
+                        r.kickoff_utc or r.event_date_sort, r.event_time_status
                     ),
                     "event_time_status": r.event_time_status,
                     "sport": r.sport,
                     "markets": 0,
                     "event_id": r.id,
+                    "event_key": r.event_key,
                 }
             events_dict[k]["markets"] += 1
         events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[
@@ -133,28 +129,21 @@ def dashboard(request: Request):
             .order_by(ImportedOdds.event_date_sort.desc())
             .limit(3)
         ).all():
-            k_exp = (
-                (r.team_a or "")
-                + "|"
-                + (r.team_b or "")
-                + "|"
-                + (r.competition or "")
-                + "|"
-                + (r.event_date_sort or "")
-            )
+            k_exp = r.event_key or (r.team_a or "") + "|" + (r.team_b or "") + "|" + (r.competition or "") + "|" + (r.event_date_sort or "")
             if k_exp not in events_dict:
                 events_dict[k_exp] = {
                     "team_a": r.team_a,
                     "team_b": r.team_b,
                     "competition": r.competition,
-                    "event_date": r.event_date_sort,
+                    "event_date": r.kickoff_utc or r.event_date_sort,
                     "event_date_py": datetime_utils.event_time_display(
-                        r.event_date_sort, r.event_time_status
+                        r.kickoff_utc or r.event_date_sort, r.event_time_status
                     ),
                     "event_time_status": r.event_time_status,
                     "sport": r.sport,
                     "markets": 0,
                     "event_id": r.id,
+                    "event_key": r.event_key,
                     "expired": True,
                 }
                 events_dict[k_exp]["markets"] += 1
@@ -305,42 +294,33 @@ def recommendations_page(request: Request):
     return render(request, "recommendations.html", "recommendations")
 
 
-@router.get("/events/{event_id}", response_class=HTMLResponse)
-def event_detail_page(request: Request, event_id: int):
-    from ..models_imports import ImportedOdds
-    from ..database import engine
-
+@router.get("/events/{event_key}", response_class=HTMLResponse)
+def event_detail_page(request: Request, event_key: str):
     with Session(engine) as session:
-        odd = session.exec(
-            select(ImportedOdds)
-            .where(
-                ImportedOdds.id == event_id,
-                ImportedOdds.source_name == "aposta_la",
-                ImportedOdds.is_current,
-            )
-            .limit(1)
-        ).first()
-        if not odd:
-            from fastapi.responses import RedirectResponse
-
-            return RedirectResponse("/", status_code=302)
+        if event_key.isdigit():
+            rows = session.exec(select(ImportedOdds).where(ImportedOdds.id == int(event_key))).all()
+            keys = {row.event_key for row in rows if row.event_key}
+            if not keys:
+                raise HTTPException(status_code=404, detail="Legacy event id not found")
+            if len(keys) != 1:
+                raise HTTPException(status_code=409, detail="Legacy event id resolves ambiguously")
+            return RedirectResponse(f"/events/{keys.pop()}", status_code=308)
+        canonical = session.exec(select(ApostaEvent).where(ApostaEvent.event_key == event_key)).first()
+        if canonical is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+        odds = session.exec(select(ImportedOdds).where(ImportedOdds.event_key == event_key, ImportedOdds.is_current)).all()
+        if not odds:
+            raise HTTPException(status_code=404, detail="Event has no active odds")
+        odd = odds[0]
         event = {
-            "team_a": odd.team_a,
-            "team_b": odd.team_b,
-            "competition": odd.competition,
-            "sport": odd.sport,
-            "event_date": odd.event_date_sort,
-            "event_date_display": datetime_utils.event_time_display(
-                odd.event_date_sort, odd.event_time_status
-            ),
-            "total_odds": session.exec(
-                select(func.count())
-                .select_from(ImportedOdds)
-                .where(
-                    ImportedOdds.id == event_id,
-                    ImportedOdds.is_current,
-                )
-            ).one(),
-            "market_count": 0,
+            "event_key": event_key,
+            "team_a": canonical.team_a,
+            "team_b": canonical.team_b,
+            "competition": canonical.competition,
+            "sport": canonical.sport,
+            "event_date": canonical.kickoff_utc,
+            "event_date_display": datetime_utils.event_time_display(canonical.kickoff_utc, odd.event_time_status),
+            "total_odds": len(odds),
+            "market_count": len({o.canonical_market_id for o in odds}),
         }
     return render(request, "event_detail.html", "dashboard", event=event)

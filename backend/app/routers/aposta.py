@@ -137,7 +137,7 @@ def options(sport: str | None = None, competition: str | None = None, event: str
             continue
         if market and market.lower() not in (odd.market_text or '').lower():
             continue
-        out.append({'id': odd.id, 'sport': odd.sport, 'competition': odd.competition, 'event_date': odd.event_date, 'event': label, 'team_a': odd.team_a, 'team_b': odd.team_b, 'market_text': odd.market_text, 'market_code': odd.market_code, 'line': odd.line, 'selection': odd.selection, 'odds_decimal': odd.odds_decimal, 'bookmaker': odd.bookmaker, 'batch_id': odd.batch_id, 'is_current': odd.is_current})
+        out.append({'id': odd.id, 'event_key': odd.event_key, 'sport': odd.sport, 'competition': odd.competition, 'event_date': odd.event_date, 'event': label, 'team_a': odd.team_a, 'team_b': odd.team_b, 'market_text': odd.market_text, 'market_code': odd.market_code, 'line': odd.line, 'selection': odd.selection, 'odds_decimal': odd.odds_decimal, 'bookmaker': odd.bookmaker, 'batch_id': odd.batch_id, 'is_current': odd.is_current})
         if len(out) >= limit:
             break
     return out

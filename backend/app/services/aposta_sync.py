@@ -10,16 +10,17 @@ from urllib.request import Request, urlopen
 from sqlmodel import Session, select
 
 from ..config import settings
-from ..models_aposta import ApostaEvent, ApostaMarket, ApostaSelection, ApostaSyncRun
+from ..models_aposta import ApostaEvent, ApostaMarket, ApostaSelection, ApostaSyncRun, CaptureSnapshot
 from ..models_imports import ImportedOdds, ManualImportBatch
 from . import aposta_html_parser
 from . import aposta_lol_parser
 from . import aposta_snapshot_parser
 from .aposta_snapshot import current_odds as snapshot_current_odds
 from .aposta_snapshot import expired_odds as snapshot_expired_odds
-from .aposta_snapshot import mark_expired, set_current_batch
+from .aposta_snapshot import activate_snapshots, expire_absent_events, mark_expired
 from .event_matcher import match_and_store
 from .market_mapper import map_market
+from .event_identity import upsert_event, upsert_market_outcome, utc_datetime
 
 
 def now():
@@ -158,7 +159,7 @@ def normalized_key(row: dict, batch_id: int) -> str:
 
 
 def store_row(
-    session: Session, batch: ManualImportBatch, row: dict
+    session: Session, batch: ManualImportBatch, row: dict, snapshot: CaptureSnapshot
 ) -> tuple[ImportedOdds, bool]:
     market_id, market_code = map_market(session, row["sport"], row["market_text"])
     if not market_code:
@@ -172,6 +173,9 @@ def store_row(
         except ValueError:
             event_date = None
     mapping_status = "mapped" if market_id or market_code else "unmapped"
+    event = upsert_event(session, row, snapshot.id)
+    market, outcome = upsert_market_outcome(session, event, row)
+    kickoff = utc_datetime(event_date)
     odd = ImportedOdds(
         batch_id=batch.id,
         sport=row["sport"],
@@ -196,6 +200,17 @@ def store_row(
         event_date_raw=row.get("event_date_raw"),
         event_time_status=row.get("event_time_status") or "unconfirmed",
         market_mapping_status=mapping_status,
+        source_event_id=row.get("source_event_id"),
+        event_key=event.event_key,
+        raw_kickoff_text=row.get("raw_kickoff_text") or row.get("event_date_raw"),
+        kickoff_utc=kickoff,
+        source_market_id=row.get("source_market_id"),
+        source_outcome_id=row.get("source_outcome_id"),
+        capture_snapshot_id=snapshot.id,
+        snapshot_id=snapshot.id,
+        canonical_event_id=event.id,
+        canonical_market_id=market.id,
+        canonical_outcome_id=outcome.id,
     )
     session.add(odd)
     session.commit()
@@ -206,68 +221,35 @@ def store_row(
 def mirror_aposta_tables(
     session: Session, odds: list[ImportedOdds], run: ApostaSyncRun
 ) -> None:
+    """Compatibility mirror; canonical ApostaEvent is upserted by event_key."""
     for sel in session.exec(select(ApostaSelection)).all():
         sel.is_active = False
         session.add(sel)
     session.commit()
-    event_cache = {}
     market_cache = {}
     for odd in odds:
-        event_key = "|".join(
-            [
-                odd.sport or "",
-                odd.competition or "",
-                odd.team_a or "",
-                odd.team_b or "",
-                str(odd.event_date or ""),
-            ]
-        )
-        event = event_cache.get(event_key)
+        event = session.get(ApostaEvent, odd.canonical_event_id)
         if event is None:
-            event = ApostaEvent(
-                sport=odd.sport,
-                competition=odd.competition,
-                team_a=odd.team_a,
-                team_b=odd.team_b,
-                event_name=" vs ".join([p for p in [odd.team_a, odd.team_b] if p]),
-                start_time=odd.event_date,
-                external_id=f"run-{run.id}-{len(event_cache) + 1}",
-                status="active",
-            )
-            session.add(event)
-            session.commit()
-            session.refresh(event)
-            event_cache[event_key] = event
-        market_key = (
-            event_key + "|" + (odd.market_text or "") + "|" + str(odd.line or "")
-        )
+            continue
+        market_key = (event.id, odd.canonical_market_id)
         market = market_cache.get(market_key)
         if market is None:
             market = ApostaMarket(
-                event_id=event.id,
-                market_text=odd.market_text,
-                market_id=odd.market_id,
-                market_code=odd.market_code,
-                line=odd.line,
-                is_mapped=odd.market_id is not None,
-                source_status="current",
+                event_id=event.id, market_text=odd.market_text, market_id=odd.market_id,
+                market_code=odd.market_code, line=odd.line, is_mapped=odd.market_id is not None,
+                source_market_id=odd.source_market_id, source_status="current",
             )
             session.add(market)
             session.commit()
             session.refresh(market)
             market_cache[market_key] = market
-        session.add(
-            ApostaSelection(
-                market_id=market.id,
-                selection_text=odd.selection or "",
-                selection_normalized=odd.selection,
-                odds_decimal=odd.odds_decimal,
-                implied_probability=1.0 / odd.odds_decimal
-                if odd.odds_decimal
-                else None,
-                is_active=True,
-            )
-        )
+        session.add(ApostaSelection(
+            market_id=market.id, selection_text=odd.selection or "",
+            selection_normalized=odd.selection, source_outcome_id=odd.source_outcome_id,
+            odds_decimal=odd.odds_decimal,
+            implied_probability=1.0 / odd.odds_decimal if odd.odds_decimal else None,
+            is_active=True,
+        ))
     session.commit()
 
 
@@ -359,18 +341,36 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
         failed_files = []
         success_files = []
 
+        completed_snapshots = []
+        snapshot_event_keys: dict[str, set[str]] = {}
         for name, text, file_path in sources:
+            source = "kambi" if "kambi" in name.lower() else "aposta_la"
+            raw_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            snapshot = CaptureSnapshot(source=source, raw_hash=raw_hash, status="running")
+            session.add(snapshot)
+            session.commit()
+            session.refresh(snapshot)
             try:
                 rows, errors = parse_source(name, text)
                 warnings.extend(errors[:20])
                 parsed_rows += len(rows)
+                seen = snapshot_event_keys.setdefault(source, set())
                 for row in rows:
-                    odd, ok = store_row(session, batch, row)
+                    row.setdefault("source", source)
+                    # Aposta HTML has no native id; Kambi rows already carry one.
+                    odd, ok = store_row(session, batch, row, snapshot)
+                    seen.add(odd.event_key)
                     imported.append(odd)
                     if ok:
                         mapped += 1
                     else:
                         unmapped += 1
+                snapshot.row_count = len(rows)
+                snapshot.status = "success" if not errors else "partial"
+                snapshot.finished_at = now()
+                session.add(snapshot)
+                session.commit()
+                completed_snapshots.append(snapshot.id)
                 if file_path and file_path.exists():
                     try:
                         dest = archive_dir / file_path.name
@@ -379,6 +379,11 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
                     except Exception:
                         pass
             except Exception as e:
+                snapshot.status = "error"
+                snapshot.error_message = str(e)
+                snapshot.finished_at = now()
+                session.add(snapshot)
+                session.commit()
                 failed_files.append(name)
                 warnings.append(f"Error processing {name}: {e}")
                 if file_path and file_path.exists():
@@ -409,7 +414,11 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
         batch.finished_at = now()
         session.add(batch)
 
-        set_current_batch(session, batch.id)
+        activate_snapshots(session, completed_snapshots)
+        for source, seen_keys in snapshot_event_keys.items():
+            active_id = next((sid for sid in completed_snapshots if session.get(CaptureSnapshot, sid).source == source), None)
+            if active_id:
+                expire_absent_events(session, source, active_id, seen_keys)
 
         match_result = run_event_matching_on_batch(session, batch.id)
 

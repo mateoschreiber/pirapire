@@ -68,3 +68,16 @@ class ImportedOdds(SQLModel, table=True):
     event_date_sort: Optional[str] = None
     event_date_raw: Optional[str] = None
     event_time_status: str = "unconfirmed"
+
+
+    # Canonical capture graph. Old batch/id fields remain for compatibility.
+    source_event_id: Optional[str] = Field(default=None, index=True)
+    event_key: Optional[str] = Field(default=None, index=True)
+    raw_kickoff_text: Optional[str] = None
+    kickoff_utc: Optional[datetime] = Field(default=None, index=True)
+    source_market_id: Optional[str] = Field(default=None, index=True)
+    source_outcome_id: Optional[str] = Field(default=None, index=True)
+    capture_snapshot_id: Optional[int] = Field(default=None, index=True)
+    canonical_event_id: Optional[int] = Field(default=None, index=True)
+    canonical_market_id: Optional[int] = Field(default=None, index=True)
+    canonical_outcome_id: Optional[int] = Field(default=None, index=True)

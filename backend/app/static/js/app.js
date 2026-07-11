@@ -928,7 +928,7 @@ var Pirapire = (function () {
         var meta = (e.competition || "Sin competición") + " · " + d + " · " + (e.markets || 0) + " mercados";
         var card = document.createElement("a");
         card.className = "event-card";
-        card.href = "/events/" + (e.event_id || "");
+        card.href = "/events/" + (e.event_key || e.event_id || "");
         card.setAttribute("aria-label", teams + "; " + meta);
         var sport = document.createElement("div");
         sport.className = "event-sport";

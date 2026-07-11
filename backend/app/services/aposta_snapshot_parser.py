@@ -76,6 +76,8 @@ def normalize_row(row: dict[str, Any]) -> tuple[dict[str, Any] | None, str | Non
         'sport': sport,
         'competition': str(get_value(row, 'competition') or '').strip() or None,
         'event_date': safe_date(get_value(row, 'event_date')),
+        'event_date_raw': str(get_value(row, 'event_date') or '').strip() or None,
+        'raw_kickoff_text': str(get_value(row, 'event_date') or '').strip() or None,
         'team_a': team_a,
         'team_b': team_b,
         'market_text': market_text,

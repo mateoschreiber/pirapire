@@ -152,6 +152,11 @@ def parse_kambi_to_rows(lol_data, fetch_details=True):
                         "odds_decimal": odds_decimal,
                         "bookmaker": "Aposta.LA",
                         "source_url": f"kambi:event:{event_id}",
+                        "source": "kambi",
+                        "source_event_id": str(event_id),
+                        "source_market_id": str(bo.get("id") or criterion.get("id") or "") or None,
+                        "source_outcome_id": str(outcome.get("id") or "") or None,
+                        "raw_kickoff_text": start or None,
                     }
                 )
     return rows
