@@ -30,7 +30,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", function() {
   var eventId = window.location.pathname.split("/").pop();
-  fetch("/events/" + eventId).then(r => r.json()).then(function(event) {
+  fetch("/api/events/" + eventId).then(r => r.json()).then(function(event) {
     document.title = event.team_a + " vs " + event.team_b;
     var h = "";
     event.markets.forEach(function(m) {

@@ -257,30 +257,12 @@ def event_detail_page(request: Request, event_id: int):
             "competition": odd.competition,
             "sport": odd.sport,
             "event_date": odd.event_date_sort,
-            "total_odds": 0, "market_count": 0,
-        }
-    return render(request, "event_detail.html", "dashboard", event=event)
-
-@router.get("/events/{event_id}", response_class=HTMLResponse)
-def event_detail_page(request: Request, event_id: int):
-    from ..models_imports import ImportedOdds
-    from ..database import engine
-    with Session(engine) as session:
-        odd = session.exec(
-            select(ImportedOdds).where(
-                ImportedOdds.matched_event_id == event_id,
-                ImportedOdds.source_name == "aposta_la",
-                ImportedOdds.is_current == True,
-            ).limit(1)
-        ).first()
-        if not odd:
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse("/", status_code=302)
-        event = {
-            "team_a": odd.team_a, "team_b": odd.team_b,
-            "competition": odd.competition,
-            "sport": odd.sport,
-            "event_date": odd.event_date_sort,
-            "total_odds": 0, "market_count": 0,
+            "total_odds": session.exec(
+                select(func.count()).select_from(ImportedOdds).where(
+                    ImportedOdds.id == event_id,
+                    ImportedOdds.is_current == True,
+                )
+            ).one(),
+            "market_count": 0,
         }
     return render(request, "event_detail.html", "dashboard", event=event)

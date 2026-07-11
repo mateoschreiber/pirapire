@@ -83,8 +83,6 @@ app.include_router(lol_history.router)
 app.include_router(dashboard.router)
 app.include_router(aposta.router)
 app.include_router(events.router)
-app.include_router(events.router)
-app.include_router(events.router)
 app.include_router(recommendations.router)
 
 app.mount('/static', StaticFiles(directory='app/static'), name='static')
