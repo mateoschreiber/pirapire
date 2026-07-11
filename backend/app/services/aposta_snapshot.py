@@ -209,7 +209,39 @@ def activate_snapshots(session: Session, snapshot_ids: list[int]) -> None:
                 odd.is_current = odd.capture_snapshot_id == active_id
                 odd.captured_at = now()
                 session.add(odd)
+    # Rows without a capture belong to the pre-snapshot legacy import. Once at
+    # least one current provider capture exists they are history, never current.
+    if by_source:
+        for odd in session.exec(select(ImportedOdds).where(
+            ImportedOdds.source_name == "aposta_la",
+            ImportedOdds.capture_snapshot_id.is_(None),
+            ImportedOdds.is_current,
+        )).all():
+            odd.is_current = False
+            session.add(odd)
     session.commit()
+
+
+def snapshot_invariant_violations(session: Session) -> dict[str, int]:
+    """Return invariant failures without mutating historical evidence."""
+    current_by_source = {}
+    for snap in session.exec(select(CaptureSnapshot).where(CaptureSnapshot.is_current)).all():
+        current_by_source[snap.source] = current_by_source.get(snap.source, 0) + 1
+    orphan_active = len(session.exec(select(ImportedOdds).where(
+        ImportedOdds.is_current, ImportedOdds.capture_snapshot_id.is_(None)
+    )).all())
+    inactive_snapshot_odds = 0
+    for odd in session.exec(select(ImportedOdds).where(
+        ImportedOdds.is_current, ImportedOdds.capture_snapshot_id.is_not(None)
+    )).all():
+        snap = session.get(CaptureSnapshot, odd.capture_snapshot_id)
+        if snap is None or not snap.is_current:
+            inactive_snapshot_odds += 1
+    return {
+        "duplicate_current_feeds": sum(max(0, count - 1) for count in current_by_source.values()),
+        "orphan_active_odds": orphan_active,
+        "inactive_snapshot_active_odds": inactive_snapshot_odds,
+    }
 
 
 def expire_absent_events(session: Session, source: str, active_snapshot_id: int, seen_keys: set[str]) -> int:

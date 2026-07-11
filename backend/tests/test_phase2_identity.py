@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from app.database import engine
 from app.models_aposta import CaptureSnapshot
 from app.models_imports import ImportedOdds, ManualImportBatch
-from app.services.aposta_snapshot import activate_snapshots, run_migrations
+from app.services.aposta_snapshot import activate_snapshots, run_migrations, snapshot_invariant_violations
 from app.services.event_identity import event_key_for, upsert_event
 from app.utils.datetime_utils import event_time_display
 
@@ -73,3 +73,8 @@ def test_timezone_single_formatter_for_kambi_utc():
 def test_phase2_migration_is_idempotent():
     run_migrations(engine)
     run_migrations(engine)
+
+
+def test_active_odds_obey_snapshot_invariant():
+    with Session(engine) as session:
+        assert snapshot_invariant_violations(session)["duplicate_current_feeds"] == 0
