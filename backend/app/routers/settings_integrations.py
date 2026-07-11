@@ -1,14 +1,20 @@
 """Authenticated integration credential administration API."""
 
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, SecretStr
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..config import settings
 from ..database import get_session
-from ..models_sources import IntegrationAudit, IntegrationCredential
+from ..models_sources import IntegrationAudit, IntegrationCredential, IntegrationProviderState
+from ..models_football import FootballEntityMetadata, FootballMatch, FootballPlayer, FootballTeam
+from ..models_imports import ImportedOdds
+from ..models_lol import LolChampion, LolGameHistory, LolPlayerGameStat, RiotMatchReference, RiotPlayerIdentity
 from ..services.config_auth import (
     COOKIE_NAME,
     check_rate_limit,
@@ -27,6 +33,7 @@ from ..services.secret_provider import (
     SecretProvider,
     SecretStoreError,
     audit,
+    decrypt_value,
     encrypt_value,
 )
 
@@ -40,6 +47,22 @@ class LoginPayload(BaseModel):
 
 class CredentialPayload(BaseModel):
     value: SecretStr
+    key_type: Literal["development", "personal"] | None = None
+    default_platform: str | None = None
+    regional_routes: list[str] | None = None
+
+
+class RiskAcceptancePayload(BaseModel):
+    reason: Literal["user_explicitly_accepted_known_credential"] = (
+        "user_explicitly_accepted_known_credential"
+    )
+
+
+RIOT_PLATFORMS = {
+    "br1", "eun1", "euw1", "jp1", "kr", "la1", "la2", "na1", "oc1", "ph2",
+    "ru", "sg2", "th2", "tr1", "tw2", "vn2",
+}
+RIOT_REGIONS = {"americas", "asia", "europe", "sea"}
 
 
 def _admin(request: Request):
@@ -59,6 +82,41 @@ def _credential_contract(provider_slug: str, credential_name: str) -> dict:
     if credential_name not in provider["secret_fields"]:
         raise HTTPException(status_code=404, detail="credential_not_found")
     return provider
+
+
+def _count(session: Session, model, *conditions) -> int:
+    query = select(func.count()).select_from(model)
+    if conditions:
+        query = query.where(*conditions)
+    return int(session.exec(query).one())
+
+
+def _coverage(session: Session, slug: str) -> dict:
+    if slug == "football_data_org":
+        return {
+            "teams": _count(session, FootballTeam, FootballTeam.source_name == slug),
+            "matches": _count(session, FootballMatch, FootballMatch.source_name == slug),
+            "players": _count(session, FootballPlayer, FootballPlayer.source_name == slug),
+        }
+    if slug == "thesportsdb":
+        return {"metadata": _count(session, FootballEntityMetadata, FootballEntityMetadata.source_name == slug)}
+    if slug == "riot_api":
+        return {
+            "confirmed_identities": _count(session, RiotPlayerIdentity, RiotPlayerIdentity.confirmed.is_(True)),
+            "personal_matches": _count(session, RiotMatchReference),
+        }
+    if slug == "leaguepedia":
+        return {
+            "pro_games": _count(session, LolGameHistory, LolGameHistory.source_name == "leaguepedia"),
+            "player_rows": _count(session, LolPlayerGameStat, LolPlayerGameStat.source_name == "leaguepedia"),
+        }
+    if slug == "riot_datadragon":
+        return {"champions": _count(session, LolChampion, LolChampion.source_name == "riot_datadragon")}
+    if slug == "oracles_elixir":
+        return {"pro_games": _count(session, LolGameHistory, LolGameHistory.source_name == "oracles_elixir")}
+    if slug == "aposta_kambi":
+        return {"odds_rows": _count(session, ImportedOdds, ImportedOdds.source_name == "aposta_la")}
+    return {}
 
 
 @router.get("/auth/bootstrap")
@@ -108,6 +166,20 @@ def list_integrations(
 ) -> dict:
     providers = []
     for item in public_catalog():
+        item["coverage"] = _coverage(session, item["slug"])
+        provider_state = session.exec(
+            select(IntegrationProviderState).where(
+                IntegrationProviderState.provider_slug == item["slug"]
+            )
+        ).first()
+        item["operational_state"] = {
+            "status": provider_state.status,
+            "last_error_code": provider_state.last_error_code,
+            "last_checked_at": provider_state.last_checked_at,
+            "last_success_at": provider_state.last_success_at,
+            "request_count": provider_state.request_count,
+            "records_processed": provider_state.records_processed,
+        } if provider_state else None
         credentials = []
         for name in item["credential_names"]:
             row = session.exec(
@@ -150,6 +222,16 @@ def list_integrations(
                     "latest_test_error_code": latest_test.detail_code
                     if latest_test
                     else None,
+                    "risk_accepted": bool(
+                        row and row.test_status == "active_accepted_risk"
+                    ),
+                    "accepted_risk_at": row.accepted_risk_at if row else None,
+                    "key_type": row.key_type if row else None,
+                    "default_platform": row.default_platform if row else None,
+                    "regional_routes": json.loads(row.regional_routes)
+                    if row and row.regional_routes
+                    else [],
+                    "expires_at": row.expires_at if row else None,
                 }
             )
         item["credentials"] = credentials
@@ -184,7 +266,7 @@ def test_integration(
     if not result["ok"]:
         status_code = (
             422
-            if result["error_code"] in {"invalid_candidate", "invalid_credential"}
+            if result["error_code"] in {"invalid_candidate", "invalid_credential", "invalid_key", "expired_key", "forbidden"}
             else 502
         )
         raise HTTPException(status_code=status_code, detail=result["error_code"])
@@ -217,7 +299,7 @@ def put_credential(
         session.commit()
         status_code = (
             422
-            if result["error_code"] in {"invalid_candidate", "invalid_credential"}
+            if result["error_code"] in {"invalid_candidate", "invalid_credential", "invalid_key", "expired_key", "forbidden"}
             else 502
         )
         raise HTTPException(status_code=status_code, detail=result["error_code"])
@@ -243,6 +325,24 @@ def put_credential(
     row.tested_at = now
     row.test_status = "success"
     row.last_error_code = None
+    row.accepted_risk_at = None
+    row.accepted_by = None
+    row.accepted_reason = None
+    if provider_slug == "riot_api":
+        key_type = payload.key_type or "development"
+        platform = payload.default_platform or "la2"
+        routes = payload.regional_routes or ["americas"]
+        if platform not in RIOT_PLATFORMS or not routes or not set(routes) <= RIOT_REGIONS:
+            raise HTTPException(status_code=400, detail="invalid_riot_metadata")
+        row.key_type = key_type
+        row.default_platform = platform
+        row.regional_routes = json.dumps(sorted(set(routes)))
+        row.expires_at = now + timedelta(hours=24) if key_type == "development" else None
+    else:
+        row.key_type = None
+        row.default_platform = None
+        row.regional_routes = None
+        row.expires_at = None
     session.add(row)
     audit(session, provider_slug, operation, "success", admin.actor)
     session.commit()
@@ -253,6 +353,67 @@ def put_credential(
         "last4": row.last4,
         "tested_at": row.tested_at,
         "test_status": row.test_status,
+    }
+
+
+@router.post(
+    "/integrations/{provider_slug}/credentials/{credential_name}/accept-risk"
+)
+def accept_credential_risk(
+    provider_slug: str,
+    credential_name: str,
+    payload: RiskAcceptancePayload,
+    request: Request,
+    session: Session = Depends(get_session),
+    admin=Depends(_admin),
+) -> dict:
+    """Activate an existing encrypted override after explicit administrator consent."""
+    require_csrf(request, admin)
+    check_rate_limit(request, "integration-test", settings.config_test_rate_limit)
+    _credential_contract(provider_slug, credential_name)
+    if provider_slug != "football_data_org":
+        raise HTTPException(status_code=409, detail="risk_acceptance_not_supported")
+    row = session.exec(
+        select(IntegrationCredential).where(
+            IntegrationCredential.provider_slug == provider_slug,
+            IntegrationCredential.credential_name == credential_name,
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="ui_override_not_found")
+    try:
+        candidate = decrypt_value(row.encrypted_value)
+    except SecretStoreError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    result = test_candidate(provider_slug, credential_name, candidate)
+    candidate = ""
+    if not result["ok"]:
+        audit(
+            session,
+            provider_slug,
+            "accept_risk",
+            "failed",
+            admin.actor,
+            result["error_code"],
+        )
+        session.commit()
+        raise HTTPException(status_code=422, detail=result["error_code"])
+    now = datetime.now(UTC)
+    row.test_status = "active_accepted_risk"
+    row.tested_at = now
+    row.updated_at = now
+    row.last_error_code = None
+    row.accepted_risk_at = now
+    row.accepted_by = admin.actor
+    row.accepted_reason = payload.reason
+    session.add(row)
+    audit(session, provider_slug, "accept_risk", "success", admin.actor, "explicit_user_decision")
+    session.commit()
+    return {
+        "configured": True,
+        "source": "ui",
+        "status": "active_accepted_risk",
+        "accepted_risk_at": row.accepted_risk_at,
     }
 
 

@@ -18,8 +18,20 @@ class Settings(BaseSettings):
     football_data_request_delay_seconds: float = 7.0
     football_data_max_competitions_per_run: int = 3
     football_data_respect_retry_after: bool = True
+    football_data_cache_ttl_seconds: int = 300
+    football_data_sync_wc_squads: bool = True
     riot_api_key: str = ""
     thesportsdb_api_key: str = ""
+    thesportsdb_free_key: str = "123"
+    thesportsdb_request_delay_seconds: float = 2.0
+    thesportsdb_cache_ttl_seconds: int = 900
+    thesportsdb_max_entities_per_run: int = 5
+    riot_default_platform: str = "la2"
+    riot_default_region: str = "americas"
+    riot_request_delay_seconds: float = 1.25
+    riot_cache_ttl_seconds: int = 300
+    riot_max_identities_per_run: int = 5
+    riot_matches_per_identity: int = 5
     riot_esports_access: str = ""
     leaguepedia_user_agent: str = "PirapireLocal/1.0"
 
@@ -97,7 +109,6 @@ class Settings(BaseSettings):
     config_session_ttl_seconds: int = 1800
     config_login_rate_limit: int = 5
     config_test_rate_limit: int = 10
-    football_sync_ui_bootstrap_required: bool = True
     model_config = SettingsConfigDict(
         env_file=os.getenv("PIRAPIRE_ENV_FILE", ".env"),
         extra="ignore",

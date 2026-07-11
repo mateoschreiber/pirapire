@@ -1006,10 +1006,17 @@ var Pirapire = (function () {
     }
 
     function sourceLabel(source) {
-      return source === "ui" ? "Interfaz" : source === "env" ? "Entorno" : "No configurada";
+      if (source === "ui") return "Interfaz";
+      if (source === "env") return "Entorno";
+      if (source === "public_free") return "Clave pública Free v1";
+      return "No configurada";
     }
 
     function statusLabel(value) {
+      if (value === "active_accepted_risk") return "Activa — riesgo aceptado";
+      if (value === "expired") return "Expirada";
+      if (value === "quarantined") return "En cuarentena";
+      if (value === "public_free") return "Activa — clave pública Free v1";
       if (value === "success") return "Prueba correcta";
       if (value === "legacy_env") return "Pendiente de migración segura";
       if (value === "failed") return "Prueba fallida";
@@ -1034,14 +1041,27 @@ var Pirapire = (function () {
       card.dataset.provider = provider.slug;
       card.appendChild(makeText("h3", "", provider.name));
       card.appendChild(makeText("p", "muted", provider.description));
+      if (provider.data_role) card.appendChild(makeText("p", "integration-role", provider.data_role));
+      if (provider.mode) card.appendChild(makeText("span", "badge badge-muted", provider.mode));
+      if (provider.rate_limit) card.appendChild(makeText("p", "muted integration-limit", "Límite: " + provider.rate_limit));
+      var coverage = Object.keys(provider.coverage || {}).map(function (key) { return key + ": " + provider.coverage[key]; }).join(" · ");
+      if (coverage) card.appendChild(makeText("p", "muted integration-limit", "Cobertura: " + coverage));
+      if (provider.operational_state) {
+        card.appendChild(makeText("p", "muted integration-limit", "Job: " + provider.operational_state.status + " · requests: " + provider.operational_state.request_count + " · filas: " + provider.operational_state.records_processed));
+      }
+      if (provider.warning) card.appendChild(makeText("p", "flash flash-warning integration-warning", provider.warning));
       if (!provider.requires_key) {
         card.appendChild(makeText("span", "badge badge-ok", "No requiere API key"));
         return card;
       }
       var credential = provider.credentials[0];
+      if (credential.risk_accepted) {
+        card.appendChild(makeText("p", "flash flash-warning integration-warning", "Credencial activa por decisión explícita del administrador. Se mantiene cifrada y puede reemplazarse en cualquier momento."));
+      }
       var status = document.createElement("dl");
       status.className = "integration-status";
-      [["Fuente efectiva", sourceLabel(credential.source)], ["Estado", statusLabel(credential.latest_test_result || credential.test_status)], ["Última prueba", formatDate(credential.latest_test_at || credential.tested_at)], ["Último uso", formatDate(credential.last_used_at)], ["Último error", credential.latest_test_error_code || credential.error_code || "—"]].forEach(function (pair) {
+      var effectiveStatus = credential.risk_accepted ? "active_accepted_risk" : (credential.source === "public_free" ? "public_free" : credential.test_status);
+      [["Fuente efectiva", sourceLabel(credential.source)], ["Estado", statusLabel(effectiveStatus)], ["Última prueba", formatDate(credential.latest_test_at || credential.tested_at)], ["Último uso", formatDate(credential.last_used_at)], ["Expira", formatDate(credential.expires_at)], ["Último error", credential.error_code || credential.latest_test_error_code || "—"]].forEach(function (pair) {
         status.appendChild(makeText("dt", "", pair[0]));
         status.appendChild(makeText("dd", "", pair[1]));
       });
@@ -1056,6 +1076,33 @@ var Pirapire = (function () {
       input.setAttribute("aria-label", "Nueva credencial para " + provider.name);
       field.appendChild(input);
       card.appendChild(field);
+      var riotMetadata = null;
+      if (provider.slug === "riot_api") {
+        riotMetadata = {};
+        var keyType = document.createElement("select");
+        [["personal", "Personal (recomendada)"], ["development", "Development (24 horas)"]].forEach(function (option) {
+          var node = document.createElement("option");
+          node.value = option[0]; node.textContent = option[1]; keyType.appendChild(node);
+        });
+        keyType.value = credential.key_type || "personal";
+        var typeField = makeText("label", "form-field integration-secret", "Tipo de key");
+        typeField.appendChild(keyType); card.appendChild(typeField);
+        var platform = document.createElement("select");
+        ["la2", "la1", "br1", "na1", "euw1", "eun1", "kr", "jp1", "oc1"].forEach(function (value) {
+          var node = document.createElement("option"); node.value = value; node.textContent = value.toUpperCase(); platform.appendChild(node);
+        });
+        platform.value = credential.default_platform || "la2";
+        var platformField = makeText("label", "form-field integration-secret", "Plataforma predeterminada");
+        platformField.appendChild(platform); card.appendChild(platformField);
+        var region = document.createElement("select");
+        ["americas", "europe", "asia", "sea"].forEach(function (value) {
+          var node = document.createElement("option"); node.value = value; node.textContent = value; region.appendChild(node);
+        });
+        region.value = credential.regional_routes[0] || "americas";
+        var regionField = makeText("label", "form-field integration-secret", "Ruta regional");
+        regionField.appendChild(region); card.appendChild(regionField);
+        riotMetadata = {keyType:keyType, platform:platform, region:region};
+      }
       var actions = document.createElement("div");
       actions.className = "integration-actions";
       function button(label, className, handler) {
@@ -1075,7 +1122,13 @@ var Pirapire = (function () {
       button("Guardar nueva", "btn-primary", function () {
         if (!input.value || !window.confirm("¿Probar y reemplazar el override de " + provider.name + "?")) return;
         var candidate = input.value;
-        request("/api/settings/integrations/" + provider.slug + "/credentials/" + credential.name, {method:"PUT", body:JSON.stringify({value:candidate})})
+        var payload = {value:candidate};
+        if (riotMetadata) {
+          payload.key_type = riotMetadata.keyType.value;
+          payload.default_platform = riotMetadata.platform.value;
+          payload.regional_routes = [riotMetadata.region.value];
+        }
+        request("/api/settings/integrations/" + provider.slug + "/credentials/" + credential.name, {method:"PUT", body:JSON.stringify(payload)})
           .then(function () { integrationMessage("Credencial probada y guardada de forma cifrada.", "ok"); return loadIntegrations(); })
           .catch(function () { integrationMessage("No se guardó: la prueba del candidato falló.", "error"); })
           .finally(function () { candidate = ""; input.value = ""; });

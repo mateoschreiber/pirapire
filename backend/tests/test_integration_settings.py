@@ -2,6 +2,7 @@ import os
 import secrets
 import stat
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -348,3 +349,104 @@ def test_runtime_secret_files_are_outside_database_and_mode_0600():
     database_path = Path(settings.database_url.replace("sqlite:///", ""))
     master = Path(settings.integration_master_key_path).read_bytes().strip()
     assert master not in database_path.read_bytes()
+
+
+def test_explicit_risk_acceptance_activates_encrypted_override(admin_client, monkeypatch):
+    client, csrf = admin_client
+    candidate = secrets.token_urlsafe(30)
+    with Session(engine) as session:
+        session.add(
+            IntegrationCredential(
+                provider_slug="football_data_org",
+                credential_name="api_key",
+                encrypted_value=encrypt_value(candidate),
+                last4=candidate[-4:],
+                test_status="quarantined",
+            )
+        )
+        session.commit()
+    monkeypatch.setattr(
+        settings_integrations,
+        "test_candidate",
+        lambda *args: {"ok": True, "status": "success", "error_code": None},
+    )
+    response = client.post(
+        "/api/settings/integrations/football_data_org/credentials/api_key/accept-risk",
+        json={"reason": "user_explicitly_accepted_known_credential"},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert response.status_code == 200
+    assert candidate not in response.text
+    with Session(engine) as session:
+        row = session.exec(select(IntegrationCredential)).one()
+        assert row.test_status == "active_accepted_risk"
+        assert row.accepted_risk_at is not None
+        assert row.accepted_by
+        assert row.accepted_reason == "user_explicitly_accepted_known_credential"
+        value, source = SecretProvider.get_secret(
+            "football_data_org", "api_key", session=session
+        )
+        assert value == candidate
+        assert source == "ui"
+
+
+def test_riot_development_metadata_and_expiry_are_non_secret(admin_client, monkeypatch):
+    client, csrf = admin_client
+    candidate = secrets.token_urlsafe(30)
+    monkeypatch.setattr(
+        settings_integrations,
+        "test_candidate",
+        lambda *args: {"ok": True, "status": "success", "error_code": None},
+    )
+    response = client.put(
+        "/api/settings/integrations/riot_api/credentials/api_key",
+        json={
+            "value": candidate,
+            "key_type": "development",
+            "default_platform": "la2",
+            "regional_routes": ["americas"],
+        },
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert response.status_code == 200
+    assert candidate not in response.text
+    with Session(engine) as session:
+        row = session.exec(select(IntegrationCredential)).one()
+        assert row.key_type == "development"
+        assert row.default_platform == "la2"
+        assert row.expires_at is not None
+        assert row.expires_at > datetime.now(UTC).replace(tzinfo=None)
+
+
+def test_thesportsdb_free_v1_default_is_available_without_env(monkeypatch):
+    monkeypatch.setattr(settings, "thesportsdb_api_key", "")
+    value, source = SecretProvider.get_secret("thesportsdb", "api_key")
+    assert value
+    assert source == "public_free"
+
+
+def test_expired_riot_development_key_is_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "riot_api_key", "")
+    candidate = secrets.token_urlsafe(24)
+    with Session(engine) as session:
+        session.exec(delete(IntegrationCredential))
+        session.add(
+            IntegrationCredential(
+                provider_slug="riot_api",
+                credential_name="api_key",
+                encrypted_value=encrypt_value(candidate),
+                last4=candidate[-4:],
+                test_status="success",
+                key_type="development",
+                expires_at=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        session.commit()
+        value, source = SecretProvider.get_secret(
+            "riot_api", "api_key", session=session
+        )
+        assert value is None
+        assert source == "unconfigured"
+        row = session.exec(select(IntegrationCredential)).one()
+        assert row.test_status == "expired"
+        assert row.last_error_code == "expired_key"

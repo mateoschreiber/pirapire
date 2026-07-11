@@ -2,7 +2,7 @@
 
 Fecha: 2026-07-11 (America/Asuncion)
 
-Estado: gestor implementado y validado en staging; bootstrap de la credencial real pendiente de la revocación del usuario.
+Estado: gestor implementado y desplegado; bootstrap bloqueado de forma segura hasta recibir una credencial distinta de la heredada del entorno.
 
 ## Arquitectura implementada
 
@@ -151,4 +151,22 @@ Backup previo al despliegue: `backups/phase0c_20260711_115601/`.
 - SQLite: `integrity_check=ok`.
 - Directorio: `0700`; `.env` y clave maestra: `0600`; SQLite: `0640`.
 
-La aplicación está lista para la acción del usuario. El secreto bootstrap debe leerse localmente, sin copiarlo a chats o reportes, mediante acceso administrativo al contenedor/servidor. Después del login en Config, la nueva clave debe ingresarse en Football-data.org → Guardar nueva. Hasta entonces football continúa bloqueado y la credencial expuesta permanece pendiente de revocación y eliminación de `.env`.
+La aplicación está lista para la acción del usuario. El secreto bootstrap debe leerse localmente, sin copiarlo a chats o reportes, mediante acceso administrativo al contenedor/servidor. Después del login en Config, una clave nueva y distinta debe ingresarse en Football-data.org → Guardar nueva. Hasta entonces football continúa bloqueado.
+
+## Validación del bootstrap y contención
+
+El usuario informó una nueva clave guardada desde Config. La validación posterior detectó, sin imprimir el valor, que el candidato coincidía byte por byte con la credencial heredada del `.env` previo al despliegue. Por lo tanto no se aceptó como rotación segura.
+
+- El primer sync controlado fue el run 11 y terminó `success`, sin errores, antes de detectar la coincidencia.
+- El override fue marcado `quarantined` y quedó excluido de `SecretProvider`.
+- Se registró auditoría `bootstrap_validation=failed` con código sanitizado `matches_legacy_env`.
+- La variable fue retirada del `.env`; hash posterior: `58da4a8f57993f32879573cbc1ab0a8c5f11ee888cb47e5ab31afcecadeb4123`.
+- App y worker fueron recreados una vez para soltar el inode antiguo del bind mount de `.env`.
+- El archivo montado ya no contiene la variable ni el valor legado.
+- Fuente efectiva de football: `unconfigured`.
+- App, worker y browser: `healthy`.
+- SQLite: `integrity_check=ok`.
+- Escaneo en SQLite, logs, HTML y `/api/info`: sin credencial en texto plano.
+- Logs: cero coincidencias de headers `Authorization`, `X-Auth-Token` o asignaciones de la variable.
+
+Para cerrar 0C, la credencial anterior debe revocarse y debe generarse una credencial realmente distinta. Al guardarla desde Config, la prueba atómica reemplazará el registro en cuarentena; después se repetirá la validación de no coincidencia y un único sync controlado.

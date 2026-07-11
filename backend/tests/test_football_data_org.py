@@ -149,6 +149,15 @@ class _FakeClient(FootballDataOrgClient):
             "retry_after": None,
         }
 
+    def get_competition_teams(self, code):
+        return {
+            "ok": True,
+            "status": 200,
+            "data": {"teams": []},
+            "error": None,
+            "retry_after": None,
+        }
+
 
 def test_football_sync_partial_on_mixed_results(monkeypatch):
     monkeypatch.setattr(football_sync.settings, "football_data_api_key", "x")
@@ -160,28 +169,29 @@ def test_football_sync_partial_on_mixed_results(monkeypatch):
 
     with Session(engine) as session:
         run = source_runs.create_run(session, sport="football", source_slug=None)
-        result = football_sync.sync(session, run)
+        result = football_sync.sync(session, run, "football_data_org")
         assert result["status"] == "partial"
         assert result["inserted"] >= 1  # OK competition inserted at least one match
         refreshed = session.get(SourceRun, run.id)
         assert refreshed.error_count >= 1  # BAD competition logged an error
 
 
-def test_football_sync_is_blocked_until_tested_ui_credential(monkeypatch):
+def test_football_sync_accepts_active_ui_credential_without_bootstrap_block(monkeypatch):
+    monkeypatch.setattr(football_sync.settings, "football_data_competitions", "OK")
     monkeypatch.setattr(
-        football_sync.settings, "football_sync_ui_bootstrap_required", True
+        football_sync.settings, "football_data_max_competitions_per_run", 1
     )
+    monkeypatch.setattr(football_sync.settings, "football_data_sync_wc_squads", False)
+    monkeypatch.setattr(football_sync, "FootballDataOrgClient", _FakeClient)
     monkeypatch.setattr(
         football_sync.SecretProvider,
         "get_secret",
-        lambda *args, **kwargs: ("synthetic", "env"),
+        lambda *args, **kwargs: ("synthetic", "ui"),
     )
     with Session(engine) as session:
-        run = source_runs.create_run(session, sport="football", source_slug=None)
-        result = football_sync.sync(session, run)
-        assert result == {
-            "inserted": 0,
-            "updated": 0,
-            "skipped": 1,
-            "status": "partial",
-        }
+        run = source_runs.create_run(
+            session, sport="football", source_slug="football_data_org"
+        )
+        result = football_sync.sync(session, run, "football_data_org")
+        assert result["status"] == "success"
+        assert result["inserted"] + result["updated"] + result["skipped"] >= 1

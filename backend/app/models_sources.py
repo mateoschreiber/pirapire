@@ -105,6 +105,13 @@ class IntegrationCredential(SQLModel, table=True):
     test_status: str = "untested"
     last_used_at: Optional[datetime] = None
     last_error_code: Optional[str] = None
+    accepted_risk_at: Optional[datetime] = None
+    accepted_by: Optional[str] = None
+    accepted_reason: Optional[str] = None
+    key_type: Optional[str] = None
+    default_platform: Optional[str] = None
+    regional_routes: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 
 class IntegrationAudit(SQLModel, table=True):
@@ -115,3 +122,15 @@ class IntegrationAudit(SQLModel, table=True):
     result: str
     actor: str
     detail_code: Optional[str] = None
+
+
+class IntegrationProviderState(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider_slug: str = Field(index=True, unique=True)
+    status: str = "unconfigured"
+    last_error_code: Optional[str] = None
+    last_checked_at: Optional[datetime] = None
+    last_success_at: Optional[datetime] = None
+    request_count: int = 0
+    records_processed: int = 0
+    coverage_json: Optional[str] = None

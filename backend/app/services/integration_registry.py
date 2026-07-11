@@ -7,6 +7,10 @@ PROVIDERS = {
         "secret_fields": {"api_key": "API key"},
         "test_method": "football_data_org",
         "capabilities": ["fixtures", "results", "standings", "teams"],
+        "mode": "API v4 gratuita",
+        "rate_limit": "10 requests/minuto",
+        "data_role": "Fuente primaria de resultados, fixtures, selecciones y planteles.",
+        "warning": None,
     },
     "riot_api": {
         "name": "Riot API",
@@ -14,6 +18,10 @@ PROVIDERS = {
         "secret_fields": {"api_key": "API key"},
         "test_method": "riot_api",
         "capabilities": ["account_data", "summoner_data", "non_pro_match_data"],
+        "mode": "Development o Personal API Key",
+        "rate_limit": "Límites informados por Riot",
+        "data_role": "Identidades confirmadas y partidas personales verificables; no esports profesional.",
+        "warning": "Se recomienda Personal API Key. Development keys se consideran vencidas a las 24 horas.",
     },
     "thesportsdb": {
         "name": "TheSportsDB",
@@ -21,6 +29,11 @@ PROVIDERS = {
         "secret_fields": {"api_key": "API key"},
         "test_method": "thesportsdb",
         "capabilities": ["metadata", "teams", "events"],
+        "mode": "Free API v1",
+        "rate_limit": "30 requests/minuto",
+        "data_role": "Fallback de metadata; nunca odds ni resultados primarios.",
+        "warning": None,
+        "public_default_value": "123",
     },
     "aposta_kambi": {
         "name": "Aposta / Kambi",
@@ -28,6 +41,10 @@ PROVIDERS = {
         "secret_fields": {},
         "test_method": None,
         "capabilities": ["odds", "markets"],
+        "mode": "Público",
+        "rate_limit": None,
+        "data_role": "Eventos próximos, mercados y odds.",
+        "warning": None,
     },
     "leaguepedia": {
         "name": "Leaguepedia",
@@ -35,6 +52,10 @@ PROVIDERS = {
         "secret_fields": {},
         "test_method": None,
         "capabilities": ["schedule", "teams", "players", "history"],
+        "mode": "Cargo público",
+        "rate_limit": "Uso moderado con User-Agent",
+        "data_role": "Fuente primaria de series y jugadores profesionales LoL.",
+        "warning": None,
     },
     "riot_datadragon": {
         "name": "Data Dragon",
@@ -42,6 +63,10 @@ PROVIDERS = {
         "secret_fields": {},
         "test_method": None,
         "capabilities": ["patches", "champions", "items", "assets"],
+        "mode": "Público",
+        "rate_limit": None,
+        "data_role": "Datos estáticos oficiales de LoL.",
+        "warning": None,
     },
     "oracles_elixir": {
         "name": "Oracle's Elixir",
@@ -49,6 +74,10 @@ PROVIDERS = {
         "secret_fields": {},
         "test_method": None,
         "capabilities": ["historical_csv", "team_stats", "player_stats"],
+        "mode": "CSV público/manual",
+        "rate_limit": None,
+        "data_role": "Backfill de estadísticas profesionales LoL.",
+        "warning": None,
     },
 }
 
@@ -73,6 +102,10 @@ def public_catalog() -> list[dict]:
             "credential_names": list(item["secret_fields"]),
             "requires_key": bool(item["secret_fields"]),
             "capabilities": list(item["capabilities"]),
+            "mode": item.get("mode"),
+            "rate_limit": item.get("rate_limit"),
+            "data_role": item.get("data_role"),
+            "warning": item.get("warning"),
         }
         for slug, item in PROVIDERS.items()
     ]

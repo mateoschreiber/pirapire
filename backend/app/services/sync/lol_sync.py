@@ -13,7 +13,8 @@ from ...config import settings
 from ...models_lol import LolChampion, LolGameHistory, LolPatch, LolPlayerGameStat, LolTeamGameStat
 from ...models_sources import SourceRun
 from ...sources.lol.datadragon import RiotDataDragonClient
-from .. import raw_snapshots, source_runs
+from . import riot_sync
+from .. import provider_state, raw_snapshots, source_runs
 from ..lol_league_catalog import canonical_league
 
 
@@ -190,11 +191,16 @@ def _leaguepedia_player_rows_with_offset(offset=0):
         'where': where,
         'format': 'json',
         'limit': '500',
+        'offset': str(max(0, int(offset))),
     }
     url = settings.leaguepedia_base_url + '?' + urlencode(params)
     req = Request(url, headers={'User-Agent': settings.leaguepedia_user_agent})
     with urlopen(req, timeout=20) as res:
         return json.loads(res.read().decode('utf-8')), url
+
+
+def _leaguepedia_player_rows(offset=0):
+    return _leaguepedia_player_rows_with_offset(offset)
 
 
 def _safe_str(val):
@@ -276,6 +282,9 @@ def _run_leaguepedia_players(session, run: SourceRun):
     try:
         rows, url = _leaguepedia_player_rows(0)
     except Exception as exc:
+        provider_state.record(
+            session, "leaguepedia", "error", error_code="provider_unavailable"
+        )
         source_runs.log(session, run, 'warning', f'leaguepedia players cargo failed: {type(exc).__name__}: {exc}')
         return (0, 0, 0)
 
@@ -310,6 +319,9 @@ def _run_leaguepedia(session, run: SourceRun):
     try:
         rows, url = _leaguepedia_rows()
     except Exception as exc:
+        provider_state.record(
+            session, "leaguepedia", "error", error_code="provider_unavailable"
+        )
         source_runs.log(session, run, 'warning', f'leaguepedia cargo failed: {type(exc).__name__}: {exc}')
         return (0, 0, 0)
     raw_snapshots.save_snapshot(session, run.id, 'leaguepedia', 'lol', 'scoreboard_games', rows, external_id='recent-window')
@@ -324,15 +336,39 @@ def _run_leaguepedia(session, run: SourceRun):
     inserted += pi
     updated += pu
     skipped += ps
+    provider_state.record(
+        session,
+        "leaguepedia",
+        "success",
+        request_count=2,
+        records_processed=inserted + updated + skipped,
+        coverage={"scoreboard_rows": len(rows)},
+    )
     return inserted, updated, skipped
 
 
 def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict:
+    if only_slug == "riot_api":
+        return riot_sync.sync(session, run)
+    if only_slug == "leaguepedia":
+        inserted, updated, skipped = _run_leaguepedia(session, run)
+        status = source_runs.resolve_status(
+            inserted, updated, skipped, run.error_count or 0
+        )
+        return {
+            "inserted": inserted,
+            "updated": updated,
+            "skipped": skipped,
+            "status": status,
+        }
     inserted = updated = skipped = 0
     client = RiotDataDragonClient(settings.datadragon_base_url, settings.datadragon_locale)
 
     versions_resp = client.get_versions()
     if not versions_resp["ok"] or not versions_resp["data"]:
+        provider_state.record(
+            session, "riot_datadragon", "error", error_code="provider_unavailable"
+        )
         source_runs.log(session, run, "error", f"versions.json: {versions_resp.get('error')}")
         return {"inserted": 0, "updated": 0, "skipped": 0, "status": "error"}
 
@@ -349,6 +385,7 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
 
     used_locale = settings.datadragon_locale
     fallback_locale = False
+    champions = []
     champ_resp = client.get_champions(latest, used_locale)
     if not champ_resp["ok"] or not champ_resp["data"]:
         source_runs.log(
@@ -373,10 +410,26 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
     else:
         source_runs.log(session, run, "error", "champion.json failed on both locales")
 
-    i, u, s = _run_leaguepedia(session, run)
-    inserted += i
-    updated += u
-    skipped += s
+    provider_state.record(
+        session,
+        "riot_datadragon",
+        "success" if champ_resp.get("ok") else "error",
+        error_code=None if champ_resp.get("ok") else "provider_unavailable",
+        request_count=2 if not fallback_locale else 3,
+        records_processed=inserted + updated + skipped,
+        coverage={"champions": len(champions) if champ_resp.get("ok") else 0},
+    )
+
+    if only_slug is None:
+        i, u, s = _run_leaguepedia(session, run)
+        inserted += i
+        updated += u
+        skipped += s
+
+        riot = riot_sync.sync(session, run)
+        inserted += riot["inserted"]
+        updated += riot["updated"]
+        skipped += riot["skipped"]
 
     status = source_runs.resolve_status(inserted, updated, skipped, run.error_count or 0)
     return {"inserted": inserted, "updated": updated, "skipped": skipped, "status": status}

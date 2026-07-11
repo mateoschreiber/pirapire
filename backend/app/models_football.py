@@ -93,3 +93,19 @@ class FootballPlayer(SQLModel, table=True):
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
     updated_at: Optional[datetime] = None
+
+
+class FootballEntityMetadata(SQLModel, table=True):
+    """Provenance for metadata supplied by a lower-priority fallback."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    entity_type: str = Field(index=True)
+    internal_id: int = Field(index=True)
+    source_name: str = Field(index=True)
+    source_external_id: str = Field(index=True)
+    canonical_name: Optional[str] = None
+    aliases_json: Optional[str] = None
+    image_url: Optional[str] = None
+    sport: Optional[str] = None
+    fallback_used: bool = True
+    retrieved_at: datetime = Field(default_factory=_now)

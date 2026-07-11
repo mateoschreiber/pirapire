@@ -15,6 +15,7 @@ from ..database import engine
 from ..models_sources import IntegrationAudit, IntegrationCredential
 from .integration_registry import ENV_FALLBACKS, get_provider
 
+ACTIVE_STATUSES = ("success", "active_accepted_risk")
 
 class SecretStoreError(RuntimeError):
     pass
@@ -107,9 +108,20 @@ class SecretProvider:
                 select(IntegrationCredential).where(
                     IntegrationCredential.provider_slug == provider_slug,
                     IntegrationCredential.credential_name == credential_name,
-                    IntegrationCredential.test_status == "success",
+                    IntegrationCredential.test_status.in_(ACTIVE_STATUSES),
                 )
             ).first()
+            if row:
+                if row.expires_at is not None:
+                    expires_at = row.expires_at
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=UTC)
+                    if expires_at <= datetime.now(UTC):
+                        row.test_status = "expired"
+                        row.last_error_code = "expired_key"
+                        db.add(row)
+                        db.commit()
+                        row = None
             if row:
                 value = decrypt_value(row.encrypted_value)
                 if mark_used:
@@ -124,7 +136,12 @@ class SecretProvider:
                 if setting_name
                 else ""
             )
-            return (value, "env") if value else (None, "unconfigured")
+            if value:
+                return value, "env"
+            public_default = provider.get("public_default_value", "")
+            if public_default:
+                return public_default, "public_free"
+            return None, "unconfigured"
         finally:
             if owns_session:
                 db.close()
@@ -138,7 +155,7 @@ class SecretProvider:
                 select(IntegrationCredential.id).where(
                     IntegrationCredential.provider_slug == provider_slug,
                     IntegrationCredential.credential_name == credential_name,
-                    IntegrationCredential.test_status == "success",
+                    IntegrationCredential.test_status.in_(ACTIVE_STATUSES),
                 )
             ).first()
             is not None

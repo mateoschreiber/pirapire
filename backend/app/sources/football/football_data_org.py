@@ -5,6 +5,7 @@ Includes manual pacing between requests and a single retry that honours the
 """
 
 import time
+from urllib.parse import urlencode
 
 from ...services import http_client
 from ..base import parse_iso_datetime
@@ -24,6 +25,7 @@ class FootballDataOrgClient:
         log_callback=None,
         sleeper=None,
         requester=None,
+        cache_ttl_seconds: float = 300,
     ):
         self._api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -33,6 +35,9 @@ class FootballDataOrgClient:
         self._sleep = sleeper or time.sleep
         self._request_json = requester or http_client.request_json
         self._made_request = False
+        self.cache_ttl_seconds = max(0.0, float(cache_ttl_seconds))
+        self._cache: dict[str, tuple[float, dict]] = {}
+        self.request_count = 0
 
     def headers(self) -> dict:
         # The token is only placed in the request header; never logged.
@@ -43,11 +48,15 @@ class FootballDataOrgClient:
             self._log(level, message)
 
     def _do(self, url: str) -> dict:
+        cached = self._cache.get(url)
+        if cached and time.monotonic() - cached[0] < self.cache_ttl_seconds:
+            return cached[1]
         # Pace requests: wait before every request after the first one.
         if self.request_delay > 0 and self._made_request:
             self._log_msg("info", f"waiting {self.request_delay}s before next football-data.org request")
             self._sleep(self.request_delay)
         self._made_request = True
+        self.request_count += 1
 
         result = self._request_json(url, headers=self.headers())
 
@@ -62,17 +71,29 @@ class FootballDataOrgClient:
             if wait > 0:
                 self._sleep(wait)
             result = self._request_json(url, headers=self.headers())
+            self.request_count += 1
+        content_type = (result.get("content_type") or "").lower()
+        if result.get("ok") and content_type and "json" not in content_type:
+            result = {
+                "ok": False,
+                "status": result.get("status"),
+                "data": None,
+                "error": "provider_invalid_content_type",
+                "retry_after": None,
+            }
+        if result.get("ok"):
+            self._cache[url] = (time.monotonic(), result)
         return result
 
     def get_competition_matches(self, code, date_from=None, date_to=None) -> dict:
         url = f"{self.base_url}/competitions/{code}/matches"
-        params = []
+        params = {}
         if date_from:
-            params.append(f"dateFrom={date_from}")
+            params["dateFrom"] = date_from
         if date_to:
-            params.append(f"dateTo={date_to}")
+            params["dateTo"] = date_to
         if params:
-            url += "?" + "&".join(params)
+            url += "?" + urlencode(params)
         return self._do(url)
 
     def get_matches(self, date_from, date_to, competitions=None) -> dict:
@@ -83,6 +104,13 @@ class FootballDataOrgClient:
 
     def get_competition_standings(self, code) -> dict:
         return self._do(f"{self.base_url}/competitions/{code}/standings")
+
+    def get_team_matches(self, team_id, status="FINISHED", limit=10) -> dict:
+        params = urlencode({"status": status, "limit": max(1, min(int(limit), 100))})
+        return self._do(f"{self.base_url}/teams/{int(team_id)}/matches?{params}")
+
+    def get_competition_teams(self, code) -> dict:
+        return self._do(f"{self.base_url}/competitions/{code}/teams")
 
     @staticmethod
     def normalize_competition(raw: dict) -> dict:
@@ -97,12 +125,14 @@ class FootballDataOrgClient:
 
     @staticmethod
     def normalize_team(raw: dict) -> dict:
+        area = raw.get("area") or {}
         return {
             "id": raw.get("id"),
             "name": raw.get("name"),
             "shortName": raw.get("shortName"),
             "tla": raw.get("tla"),
             "crest": raw.get("crest"),
+            "country": area.get("name"),
         }
 
     @staticmethod

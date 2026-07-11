@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote, urlencode
+
 from ..config import settings
 from . import http_client
 
@@ -9,12 +11,21 @@ from . import http_client
 def _classify(result: dict) -> dict:
     status = result.get("status")
     error = result.get("error")
+    content_type = (result.get("content_type") or "").lower()
     if result.get("ok"):
+        if content_type and "json" not in content_type:
+            return {
+                "ok": False,
+                "status": "failed",
+                "error_code": "provider_invalid_response",
+            }
         return {"ok": True, "status": "success", "error_code": None}
-    if status in (401, 403):
-        code = "invalid_credential"
+    if status == 401:
+        code = "invalid_key"
+    elif status == 403:
+        code = "forbidden"
     elif status == 429:
-        code = "rate_limited"
+        code = "quota_exceeded"
     elif error == "timeout":
         code = "timeout"
     else:
@@ -36,8 +47,10 @@ def test_candidate(provider_slug: str, credential_name: str, value: str) -> dict
             headers={"X-Riot-Token": value},
         )
     elif provider_slug == "thesportsdb":
+        query = urlencode({"t": "Arsenal"})
         result = http_client.request_json(
-            f"https://www.thesportsdb.com/api/v1/json/{value}/searchteams.php?t=Arsenal"
+            "https://www.thesportsdb.com/api/v1/json/"
+            f"{quote(value, safe='')}/searchteams.php?{query}"
         )
     else:
         return {"ok": False, "status": "failed", "error_code": "provider_not_testable"}

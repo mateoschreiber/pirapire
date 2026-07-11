@@ -146,3 +146,33 @@ class LolDataCoverage(SQLModel, table=True):
     teams_count: int = 0
     players_count: int = 0
     last_imported_at: datetime = Field(default_factory=_now)
+
+
+class RiotPlayerIdentity(SQLModel, table=True):
+    """Explicitly confirmed bridge between an internal player and a Riot account."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(index=True)
+    game_name: str
+    tag_line: str
+    puuid: Optional[str] = Field(default=None, index=True)
+    platform: str = "la2"
+    valid_from: datetime = Field(default_factory=_now)
+    source: str = "confirmed_manual"
+    confirmed: bool = False
+    last_verified_at: Optional[datetime] = None
+
+
+class RiotMatchReference(SQLModel, table=True):
+    """Personal/verified Riot match reference, deliberately separate from esports."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    identity_id: int = Field(foreign_key="riotplayeridentity.id", index=True)
+    match_id: str = Field(index=True, unique=True)
+    queue_id: Optional[int] = None
+    game_type: Optional[str] = None
+    game_mode: Optional[str] = None
+    game_started_at: Optional[datetime] = None
+    source_name: str = "riot_match_v5"
+    match_scope: str = "personal_verified"
+    retrieved_at: datetime = Field(default_factory=_now)

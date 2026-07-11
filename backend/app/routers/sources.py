@@ -8,7 +8,7 @@ from ..models_sources import DataSource, SourceCapability, SourceRun
 from ..services import source_runs
 from ..services import source_registry as registry
 from ..services import source_resolver
-from ..services.sync import football_sync, lol_sync, sync_all
+from ..services.sync import football_sync, lol_sync, riot_sync, sync_all, thesportsdb_sync
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -143,6 +143,10 @@ def _run_sync(run_id: int, kind: str, only_slug: str | None = None) -> None:
                 result = football_sync.sync(session, run, only_slug)
             elif kind == "lol":
                 result = lol_sync.sync(session, run, only_slug)
+            elif kind == "thesportsdb":
+                result = thesportsdb_sync.sync(session, run)
+            elif kind == "riot":
+                result = riot_sync.sync(session, run)
             else:
                 result = sync_all.sync(session, run)
             source_runs.finalize(
@@ -184,6 +188,9 @@ _SLUG_KIND = {
     "football_data_org": ("football", "football"),
     "openligadb": ("football", "football"),
     "riot_datadragon": ("lol", "lol"),
+    "leaguepedia": ("lol", "lol"),
+    "thesportsdb": ("football", "thesportsdb"),
+    "riot_api": ("lol", "riot"),
 }
 
 

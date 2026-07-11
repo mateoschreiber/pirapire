@@ -12,14 +12,16 @@ from ...config import settings
 from ...models_football import (
     FootballCompetition,
     FootballMatch,
+    FootballPlayer,
     FootballStanding,
     FootballTeam,
 )
 from ...models_sources import SourceRun
 from ...sources.football.football_data_org import FootballDataOrgClient
 from ...sources.football.openligadb import OpenLigaDBClient
-from .. import raw_snapshots, source_runs
+from .. import provider_state, raw_snapshots, source_runs
 from ..secret_provider import SecretProvider
+from . import thesportsdb_sync
 
 
 def _window() -> tuple[str, str]:
@@ -41,6 +43,18 @@ def _upsert_team(session, team_raw, source_name, rank, fallback):
         )
     ).first()
     if existing is not None:
+        if rank >= (existing.source_rank or 0):
+            if not existing.short_name and team_raw.get("shortName"):
+                existing.short_name = team_raw["shortName"]
+            if not existing.tla and team_raw.get("tla"):
+                existing.tla = team_raw["tla"]
+            if not existing.crest_url and team_raw.get("crest"):
+                existing.crest_url = team_raw["crest"]
+            if not existing.country and team_raw.get("country"):
+                existing.country = team_raw["country"]
+            existing.retrieved_at = datetime.now(UTC)
+            session.add(existing)
+            session.commit()
         return existing.id
     team = FootballTeam(
         source_name=source_name,
@@ -49,6 +63,7 @@ def _upsert_team(session, team_raw, source_name, rank, fallback):
         short_name=team_raw.get("shortName"),
         tla=team_raw.get("tla"),
         crest_url=team_raw.get("crest"),
+        country=team_raw.get("country"),
         source_rank=rank,
         fallback_used=fallback,
     )
@@ -165,6 +180,80 @@ def _upsert_standing(session, row, comp_id, source_name, rank, fallback):
     return (0, 1, 0) if existing else (1, 0, 0)
 
 
+def _upsert_player(session, raw, team_id, team_name):
+    external_id = raw.get("id")
+    if external_id is None:
+        return (0, 0, 1)
+    source_key = f"football-data|player|{external_id}"
+    row = session.exec(
+        select(FootballPlayer).where(FootballPlayer.source_key == source_key)
+    ).first()
+    is_new = row is None
+    row = row or FootballPlayer(
+        source_name="football_data_org",
+        source_id=str(external_id),
+        name=raw.get("name") or "?",
+        source_key=source_key,
+    )
+    row.name = raw.get("name") or row.name
+    row.position = raw.get("position") or row.position
+    row.shirt_number = raw.get("shirtNumber")
+    row.date_of_birth = raw.get("dateOfBirth") or row.date_of_birth
+    row.nationality = raw.get("nationality") or row.nationality
+    row.team_id = team_id
+    row.team_name = team_name
+    row.updated_at = datetime.now(UTC)
+    session.add(row)
+    session.commit()
+    return (1, 0, 0) if is_new else (0, 1, 0)
+
+
+def _run_wc_teams_and_squads(session, run, client):
+    response = client.get_competition_teams("WC")
+    if not response.get("ok") or not isinstance(response.get("data"), dict):
+        source_runs.log(
+            session,
+            run,
+            "warning",
+            f"[WC] teams/squads unavailable status={response.get('status')}",
+        )
+        return (0, 0, 1)
+    data = response["data"]
+    raw_snapshots.save_snapshot(
+        session,
+        run.id,
+        client.slug,
+        "football",
+        "world_cup_teams_squads",
+        data,
+        external_id="WC",
+    )
+    inserted = updated = skipped = 0
+    for raw_team in data.get("teams") or []:
+        normalized = client.normalize_team(raw_team)
+        team_id = _upsert_team(
+            session, normalized, client.slug, client.rank, False
+        )
+        if team_id is None:
+            skipped += 1
+            continue
+        for player in raw_team.get("squad") or []:
+            i, u, s = _upsert_player(
+                session, player, team_id, normalized.get("name") or "?"
+            )
+            inserted += i
+            updated += u
+            skipped += s
+    source_runs.log(
+        session,
+        run,
+        "info",
+        f"[WC] teams={len(data.get('teams') or [])} players_inserted={inserted} "
+        f"players_updated={updated}",
+    )
+    return inserted, updated, skipped
+
+
 def _run_football_data_org(
     session, run: SourceRun, api_key: str
 ) -> tuple[int, int, int, bool]:
@@ -179,6 +268,7 @@ def _run_football_data_org(
         base_url=settings.football_data_base_url,
         request_delay=settings.football_data_request_delay_seconds,
         respect_retry_after=settings.football_data_respect_retry_after,
+        cache_ttl_seconds=settings.football_data_cache_ttl_seconds,
         log_callback=log_cb,
     )
     date_from, date_to = _window()
@@ -260,6 +350,25 @@ def _run_football_data_org(
         else:
             log_cb("info", f"[{code}] no matches in window; skipping standings")
 
+    if settings.football_data_sync_wc_squads:
+        i, u, s = _run_wc_teams_and_squads(session, run, client)
+        inserted += i
+        updated += u
+        skipped += s
+    log_cb(
+        "info",
+        f"football-data.org requests={client.request_count} inserted={inserted} "
+        f"updated={updated} skipped={skipped}",
+    )
+    provider_state.record(
+        session,
+        "football_data_org",
+        "success" if any_ok else "error",
+        error_code=None if any_ok else "provider_unavailable",
+        request_count=client.request_count,
+        records_processed=inserted + updated + skipped,
+        coverage={"competitions": len(competitions)},
+    )
     return inserted, updated, skipped, any_ok
 
 
@@ -314,15 +423,6 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
     api_key, secret_source = SecretProvider.get_secret(
         "football_data_org", "api_key", session=session, mark_used=True
     )
-    if settings.football_sync_ui_bootstrap_required and secret_source != "ui":
-        source_runs.log(
-            session,
-            run,
-            "warning",
-            "football sync blocked until a tested Config credential is active",
-        )
-        return {"inserted": 0, "updated": 0, "skipped": 1, "status": "partial"}
-
     use_primary = only_slug in (None, "football_data_org") and bool(api_key)
     if only_slug in (None, "football_data_org") and not api_key:
         source_runs.log(
@@ -344,6 +444,12 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
         inserted += i
         updated += u
         skipped += s
+
+    if only_slug is None:
+        metadata = thesportsdb_sync.sync(session, run)
+        inserted += metadata["inserted"]
+        updated += metadata["updated"]
+        skipped += metadata["skipped"]
 
     status = source_runs.resolve_status(
         inserted, updated, skipped, run.error_count or 0

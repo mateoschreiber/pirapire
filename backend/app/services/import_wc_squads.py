@@ -8,18 +8,15 @@ from sqlmodel import Session, select
 
 sys.path.insert(0, "/app")
 
-from app.config import settings
 from app.database import engine, init_db
 from app.models_football import FootballPlayer, FootballTeam
 from app.services.secret_provider import SecretProvider
 
 
 def import_wc_squads():
-    api_key, source = SecretProvider.get_secret(
+    api_key, _ = SecretProvider.get_secret(
         "football_data_org", "api_key", mark_used=True
     )
-    if settings.football_sync_ui_bootstrap_required and source != "ui":
-        raise RuntimeError("football_sync_blocked_pending_ui_credential")
     if not api_key:
         raise RuntimeError("football_data_api_key_not_configured")
 

@@ -366,6 +366,9 @@ input[type="file"] { padding: 0.4rem; border: 1px dashed var(--border); border-r
 .integration-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 .integration-actions .btn { min-height: 44px; }
 .integration-secret { margin-top: 0.75rem; }
+.integration-role { margin: 0.65rem 0; }
+.integration-limit { margin: 0.45rem 0; }
+.integration-warning { margin: 0.65rem 0; }
 .config-help { margin-bottom: 0; }
 @media (max-width: 640px) {
   .integration-grid { grid-template-columns: 1fr; }

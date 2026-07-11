@@ -33,8 +33,10 @@ def init_db() -> None:
 
 def _run_migrations() -> None:
     from .services.aposta_snapshot import run_migrations
+    from .services.integration_migrations import run_migrations as integration_migrations
 
     run_migrations(engine)
+    integration_migrations()
 
 
 def get_session() -> Iterator[Session]:
