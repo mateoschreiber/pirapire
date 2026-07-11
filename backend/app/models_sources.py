@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -84,3 +85,33 @@ class NormalizedEntityMap(SQLModel, table=True):
     normalized_name: Optional[str] = None
     confidence: float = 1.0
     created_at: datetime = Field(default_factory=_now)
+
+
+class IntegrationCredential(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_slug", "credential_name", name="uq_integration_credential"
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider_slug: str = Field(index=True)
+    credential_name: str
+    encrypted_value: str
+    last4: str
+    configured_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+    tested_at: Optional[datetime] = None
+    test_status: str = "untested"
+    last_used_at: Optional[datetime] = None
+    last_error_code: Optional[str] = None
+
+
+class IntegrationAudit(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider_slug: str = Field(index=True)
+    operation: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now, index=True)
+    result: str
+    actor: str
+    detail_code: Optional[str] = None

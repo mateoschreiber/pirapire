@@ -72,55 +72,122 @@ def dashboard(request: Request):
     from ..models_imports import ImportedOdds
     from ..models_recommendations import BetRecommendation, RecommendationRun
     from ..models_lol import LolPlayerGameStat
+
     counts = _dashboard_counts()
     with Session(engine) as session:
         # Get current Aposta odds count
-        aposta_count = session.exec(
-            select(func.count()).select_from(ImportedOdds).where(
-                ImportedOdds.source_name == "aposta_la",
-                ImportedOdds.is_current == True
-            )
-        ).one() or 0
-        
+        aposta_count = (
+            session.exec(
+                select(func.count())
+                .select_from(ImportedOdds)
+                .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current)
+            ).one()
+            or 0
+        )
+
         # Get upcoming + recently expired WC events
         rows = session.exec(
-            select(ImportedOdds).where(
-                ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current == True
-            ).order_by(ImportedOdds.event_date_sort)
+            select(ImportedOdds)
+            .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current)
+            .order_by(ImportedOdds.event_date_sort)
         ).all()
         events_dict = {}
         for r in rows:
-            k = (r.team_a or "") + "|" + (r.team_b or "") + "|" + (r.competition or "") + "|" + (r.event_date_sort or "")
+            k = (
+                (r.team_a or "")
+                + "|"
+                + (r.team_b or "")
+                + "|"
+                + (r.competition or "")
+                + "|"
+                + (r.event_date_sort or "")
+            )
             if k not in events_dict:
-                events_dict[k] = {"team_a": r.team_a, "team_b": r.team_b, "competition": r.competition, "event_date": r.event_date_sort, "sport": r.sport, "markets": 0, "event_id": r.id}
-            try:
-                ds = str(r.event_date_sort or "")
-                if 'T' in ds:
-                    events_dict[k]["event_date_py"] = ds[5:10].replace('-','/') + " " + ds[11:16] + " PY"
-                else:
-                    events_dict[k]["event_date_py"] = ds[:16]
-            except:
-                events_dict[k]["event_date_py"] = str(r.event_date_sort or "")[:16]
+                events_dict[k] = {
+                    "team_a": r.team_a,
+                    "team_b": r.team_b,
+                    "competition": r.competition,
+                    "event_date": r.event_date_sort,
+                    "event_date_py": datetime_utils.event_time_display(
+                        r.event_date_sort, r.event_time_status
+                    ),
+                    "event_time_status": r.event_time_status,
+                    "sport": r.sport,
+                    "markets": 0,
+                    "event_id": r.id,
+                }
             events_dict[k]["markets"] += 1
-        events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[:20]
+        events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[
+            :20
+        ]
         # Also include recently expired WC events
-        for r in session.exec(select(ImportedOdds).where(ImportedOdds.source_name == "aposta_la", ImportedOdds.sport == "football", ImportedOdds.team_a.in_(["España", "Argentina", "Noruega", "Suiza", "Bélgica", "Inglaterra"])).order_by(ImportedOdds.event_date_sort.desc()).limit(3)).all():
-            k_exp = (r.team_a or "") + "|" + (r.team_b or "") + "|" + (r.competition or "") + "|" + (r.event_date_sort or "")
+        for r in session.exec(
+            select(ImportedOdds)
+            .where(
+                ImportedOdds.source_name == "aposta_la",
+                ImportedOdds.sport == "football",
+                ImportedOdds.team_a.in_(
+                    ["España", "Argentina", "Noruega", "Suiza", "Bélgica", "Inglaterra"]
+                ),
+            )
+            .order_by(ImportedOdds.event_date_sort.desc())
+            .limit(3)
+        ).all():
+            k_exp = (
+                (r.team_a or "")
+                + "|"
+                + (r.team_b or "")
+                + "|"
+                + (r.competition or "")
+                + "|"
+                + (r.event_date_sort or "")
+            )
             if k_exp not in events_dict:
-                events_dict[k_exp] = {"team_a": r.team_a, "team_b": r.team_b, "competition": r.competition, "event_date": r.event_date_sort, "sport": r.sport, "markets": 0, "event_id": r.id, "expired": True}
+                events_dict[k_exp] = {
+                    "team_a": r.team_a,
+                    "team_b": r.team_b,
+                    "competition": r.competition,
+                    "event_date": r.event_date_sort,
+                    "event_date_py": datetime_utils.event_time_display(
+                        r.event_date_sort, r.event_time_status
+                    ),
+                    "event_time_status": r.event_time_status,
+                    "sport": r.sport,
+                    "markets": 0,
+                    "event_id": r.id,
+                    "expired": True,
+                }
                 events_dict[k_exp]["markets"] += 1
-        events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[:20]
-        
+        events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[
+            :20
+        ]
+
         # Get latest bets
-        latest_run = session.exec(select(RecommendationRun).order_by(RecommendationRun.id.desc())).first()
+        latest_run = session.exec(
+            select(RecommendationRun).order_by(RecommendationRun.id.desc())
+        ).first()
         bets = []
         if latest_run:
-            bets = session.exec(select(BetRecommendation).where(BetRecommendation.run_id == latest_run.id).limit(10)).all()
-        
+            bets = session.exec(
+                select(BetRecommendation)
+                .where(BetRecommendation.run_id == latest_run.id)
+                .limit(10)
+            ).all()
+
         # LoL player count
-        lol_players = session.exec(select(func.count(func.distinct(LolPlayerGameStat.player_name))).where(LolPlayerGameStat.player_name.isnot(None))).one() or 0
-    
-    return render(request, "dashboard.html", "dashboard",
+        lol_players = (
+            session.exec(
+                select(func.count(func.distinct(LolPlayerGameStat.player_name))).where(
+                    LolPlayerGameStat.player_name.isnot(None)
+                )
+            ).one()
+            or 0
+        )
+
+    return render(
+        request,
+        "dashboard.html",
+        "dashboard",
         counts=counts,
         aposta_odds=aposta_count,
         football_matches=counts.get("football_matches", 0),
@@ -237,30 +304,41 @@ def aposta_page(request: Request):
 def recommendations_page(request: Request):
     return render(request, "recommendations.html", "recommendations")
 
+
 @router.get("/events/{event_id}", response_class=HTMLResponse)
 def event_detail_page(request: Request, event_id: int):
     from ..models_imports import ImportedOdds
     from ..database import engine
+
     with Session(engine) as session:
         odd = session.exec(
-            select(ImportedOdds).where(
+            select(ImportedOdds)
+            .where(
                 ImportedOdds.id == event_id,
                 ImportedOdds.source_name == "aposta_la",
-                ImportedOdds.is_current == True,
-            ).limit(1)
+                ImportedOdds.is_current,
+            )
+            .limit(1)
         ).first()
         if not odd:
             from fastapi.responses import RedirectResponse
+
             return RedirectResponse("/", status_code=302)
         event = {
-            "team_a": odd.team_a, "team_b": odd.team_b,
+            "team_a": odd.team_a,
+            "team_b": odd.team_b,
             "competition": odd.competition,
             "sport": odd.sport,
             "event_date": odd.event_date_sort,
+            "event_date_display": datetime_utils.event_time_display(
+                odd.event_date_sort, odd.event_time_status
+            ),
             "total_odds": session.exec(
-                select(func.count()).select_from(ImportedOdds).where(
+                select(func.count())
+                .select_from(ImportedOdds)
+                .where(
                     ImportedOdds.id == event_id,
-                    ImportedOdds.is_current == True,
+                    ImportedOdds.is_current,
                 )
             ).one(),
             "market_count": 0,

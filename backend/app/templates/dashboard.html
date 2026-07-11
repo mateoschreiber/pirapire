@@ -21,11 +21,13 @@
   <div class="event-cards">
     {% if events %}
     {% for e in events %}
-    <div class="event-card" style="cursor:pointer" onclick="location.href='/events/{{ e.event_id }}'">
+    <a class="event-card" href="/events/{{ e.event_id }}" aria-label="{{ e.team_a or '?' }} vs {{ e.team_b or '?' }}; {{ e.competition or 'Sin competición' }}; {{ e.event_date_py or 'Horario pendiente de reconfirmación' }}; {{ e.markets }} mercados">
       <div class="event-sport">{{ 'L' if e.sport == 'lol' else 'F' }}</div>
-      <div class="event-teams">{{ e.team_a or '?' }} vs {{ e.team_b or '?' }}</div>
-      <div class="event-meta">{{ e.competition or '' }} &middot; {{ e.event_date_py or e.event_date or '' }} &middot; {{ e.markets }} mercados</div>
-    </div>
+      <div class="event-content">
+        <div class="event-teams">{{ e.team_a or '?' }} vs {{ e.team_b or '?' }}</div>
+        <div class="event-meta">{{ e.competition or '' }} &middot; {{ e.event_date_py or 'Horario pendiente de reconfirmación' }} &middot; {{ e.markets }} mercados</div>
+      </div>
+    </a>
     {% endfor %}
     {% else %}
     <p class="muted">No hay eventos proximos. Sincronizando datos...</p>

@@ -44,7 +44,9 @@ class ImportedOdds(SQLModel, table=True):
     team_a: Optional[str] = None
     team_b: Optional[str] = None
     market_text: str
-    market_id: Optional[int] = Field(default=None, foreign_key="marketcatalog.id", index=True)
+    market_id: Optional[int] = Field(
+        default=None, foreign_key="marketcatalog.id", index=True
+    )
     market_code: Optional[str] = None
     line: Optional[float] = None
     selection: Optional[str] = None
@@ -64,4 +66,5 @@ class ImportedOdds(SQLModel, table=True):
     captured_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     event_date_sort: Optional[str] = None
-
+    event_date_raw: Optional[str] = None
+    event_time_status: str = "unconfirmed"

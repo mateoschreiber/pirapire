@@ -19,6 +19,7 @@ from ...models_sources import SourceRun
 from ...sources.football.football_data_org import FootballDataOrgClient
 from ...sources.football.openligadb import OpenLigaDBClient
 from .. import raw_snapshots, source_runs
+from ..secret_provider import SecretProvider
 
 
 def _window() -> tuple[str, str]:
@@ -105,8 +106,12 @@ def _apply_match(match, nm, comp_id, home_id, away_id, rank, fallback):
 
 
 def _upsert_match(session, nm, comp_id, source_name, rank, fallback):
-    home_id = _upsert_team(session, nm.get("home_team") or {}, source_name, rank, fallback)
-    away_id = _upsert_team(session, nm.get("away_team") or {}, source_name, rank, fallback)
+    home_id = _upsert_team(
+        session, nm.get("home_team") or {}, source_name, rank, fallback
+    )
+    away_id = _upsert_team(
+        session, nm.get("away_team") or {}, source_name, rank, fallback
+    )
     ext = nm["source_external_id"]
     existing = session.exec(
         select(FootballMatch).where(
@@ -160,7 +165,9 @@ def _upsert_standing(session, row, comp_id, source_name, rank, fallback):
     return (0, 1, 0) if existing else (1, 0, 0)
 
 
-def _run_football_data_org(session, run: SourceRun) -> tuple[int, int, int, bool]:
+def _run_football_data_org(
+    session, run: SourceRun, api_key: str
+) -> tuple[int, int, int, bool]:
     inserted = updated = skipped = 0
     any_ok = False
 
@@ -168,7 +175,7 @@ def _run_football_data_org(session, run: SourceRun) -> tuple[int, int, int, bool
         source_runs.log(session, run, level, msg)
 
     client = FootballDataOrgClient(
-        api_key=settings.football_data_api_key,
+        api_key=api_key,
         base_url=settings.football_data_base_url,
         request_delay=settings.football_data_request_delay_seconds,
         respect_retry_after=settings.football_data_respect_retry_after,
@@ -179,10 +186,15 @@ def _run_football_data_org(session, run: SourceRun) -> tuple[int, int, int, bool
     competitions = settings.competitions_list
     max_comp = int(settings.football_data_max_competitions_per_run)
     if max_comp > 0 and len(competitions) > max_comp:
-        log_cb("info", f"limiting competitions to {max_comp} of {len(competitions)}: {competitions[:max_comp]}")
+        log_cb(
+            "info",
+            f"limiting competitions to {max_comp} of {len(competitions)}: {competitions[:max_comp]}",
+        )
         competitions = competitions[:max_comp]
 
-    log_cb("info", f"football-data.org window {date_from}..{date_to} comps={competitions}")
+    log_cb(
+        "info", f"football-data.org window {date_from}..{date_to} comps={competitions}"
+    )
 
     for code in competitions:
         resp = client.get_competition_matches(code, date_from, date_to)
@@ -202,12 +214,21 @@ def _run_football_data_org(session, run: SourceRun) -> tuple[int, int, int, bool
         comp_id = None
         if comp_raw:
             comp_id = _upsert_competition(
-                session, client.normalize_competition(comp_raw), client.slug, client.rank, False
+                session,
+                client.normalize_competition(comp_raw),
+                client.slug,
+                client.rank,
+                False,
             )
         match_count = len(data.get("matches", []))
         for m in data.get("matches", []):
             i, u, s = _upsert_match(
-                session, client.normalize_match(m), comp_id, client.slug, client.rank, False
+                session,
+                client.normalize_match(m),
+                comp_id,
+                client.slug,
+                client.rank,
+                False,
             )
             inserted += i
             updated += u
@@ -219,10 +240,18 @@ def _run_football_data_org(session, run: SourceRun) -> tuple[int, int, int, bool
             st = client.get_competition_standings(code)
             if st["ok"] and st["data"]:
                 raw_snapshots.save_snapshot(
-                    session, run.id, client.slug, "football", "standings", st["data"], external_id=code
+                    session,
+                    run.id,
+                    client.slug,
+                    "football",
+                    "standings",
+                    st["data"],
+                    external_id=code,
                 )
                 for row in client.normalize_standings(st["data"]):
-                    i, u, s = _upsert_standing(session, row, comp_id, client.slug, client.rank, False)
+                    i, u, s = _upsert_standing(
+                        session, row, comp_id, client.slug, client.rank, False
+                    )
                     inserted += i
                     updated += u
                     skipped += s
@@ -249,14 +278,24 @@ def _run_openligadb(session, run: SourceRun) -> tuple[int, int, int]:
     client = OpenLigaDBClient(settings.openligadb_base_url)
     resp = client.get_matches_by_league_season(shortcut, season)
     if not resp["ok"] or not resp["data"]:
-        source_runs.log(session, run, "error", f"openligadb fallback: {resp.get('error')}")
+        source_runs.log(
+            session, run, "error", f"openligadb fallback: {resp.get('error')}"
+        )
         return inserted, updated, skipped
     raw_snapshots.save_snapshot(
-        session, run.id, client.slug, "football", "matches", resp["data"],
+        session,
+        run.id,
+        client.slug,
+        "football",
+        "matches",
+        resp["data"],
         external_id=f"{shortcut}/{season}",
     )
     source_runs.log(
-        session, run, "info", f"openligadb fallback {shortcut}/{season}: {len(resp['data'])} matches"
+        session,
+        run,
+        "info",
+        f"openligadb fallback {shortcut}/{season}: {len(resp['data'])} matches",
     )
     for m in resp["data"]:
         i, u, s = _upsert_match(
@@ -272,14 +311,29 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
     inserted = updated = skipped = 0
     primary_ok = False
 
-    use_primary = only_slug in (None, "football_data_org") and bool(settings.football_data_api_key)
-    if only_slug in (None, "football_data_org") and not settings.football_data_api_key:
+    api_key, secret_source = SecretProvider.get_secret(
+        "football_data_org", "api_key", session=session, mark_used=True
+    )
+    if settings.football_sync_ui_bootstrap_required and secret_source != "ui":
         source_runs.log(
-            session, run, "warning", "FOOTBALL_DATA_API_KEY not set; using fallback if configured"
+            session,
+            run,
+            "warning",
+            "football sync blocked until a tested Config credential is active",
+        )
+        return {"inserted": 0, "updated": 0, "skipped": 1, "status": "partial"}
+
+    use_primary = only_slug in (None, "football_data_org") and bool(api_key)
+    if only_slug in (None, "football_data_org") and not api_key:
+        source_runs.log(
+            session,
+            run,
+            "warning",
+            "FOOTBALL_DATA_API_KEY not set; using fallback if configured",
         )
 
     if use_primary:
-        i, u, s, primary_ok = _run_football_data_org(session, run)
+        i, u, s, primary_ok = _run_football_data_org(session, run, api_key)
         inserted += i
         updated += u
         skipped += s
@@ -291,5 +345,12 @@ def sync(session: Session, run: SourceRun, only_slug: str | None = None) -> dict
         updated += u
         skipped += s
 
-    status = source_runs.resolve_status(inserted, updated, skipped, run.error_count or 0)
-    return {"inserted": inserted, "updated": updated, "skipped": skipped, "status": status}
+    status = source_runs.resolve_status(
+        inserted, updated, skipped, run.error_count or 0
+    )
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "skipped": skipped,
+        "status": status,
+    }

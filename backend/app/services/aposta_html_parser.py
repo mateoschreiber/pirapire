@@ -1,16 +1,25 @@
 """Parser for Aposta.LA server-rendered HTML pages."""
+
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from bs4 import BeautifulSoup
 
+from ..utils.datetime_utils import get_tz, now_local
 
-def _parse_aposta_datetime(day_text: str, time_text: str, ref_date: datetime | None = None) -> datetime | None:
+
+def _parse_aposta_datetime(
+    day_text: str, time_text: str, ref_date: datetime | None = None
+) -> datetime | None:
     if ref_date is None:
-        ref_date = datetime.utcnow()
+        ref_date = now_local()
+    elif ref_date.tzinfo is None:
+        ref_date = ref_date.replace(tzinfo=get_tz())
+    else:
+        ref_date = ref_date.astimezone(get_tz())
     day = day_text.strip().lower()
     time = time_text.strip().lower()
     full = f"{day} {time}"
@@ -33,13 +42,14 @@ def _parse_aposta_datetime(day_text: str, time_text: str, ref_date: datetime | N
         if dm:
             d, mo = int(dm.group(1)), int(dm.group(2))
             y = ref_date.year
-            dt = datetime(y, mo, d, hour, minute, 0)
+            dt = datetime(y, mo, d, hour, minute, 0, tzinfo=get_tz())
             if dt < ref_date - timedelta(days=7):
                 dt = dt.replace(year=y + 1)
-            return dt
+            return dt.astimezone(UTC)
         return None
 
-    return base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    local = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return local.astimezone(UTC)
 
 
 def _classify_market(text: str) -> tuple[str | None, str]:
@@ -93,10 +103,10 @@ def _normalize_selection(text: str) -> tuple[str, float | None]:
 
 def parse_aposta_html(html: str, source_url: str = "") -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
-    ref_date = datetime.utcnow()
+    ref_date = now_local()
 
     text = soup.get_text("\n")
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    lines = [item.strip() for item in text.split("\n") if item.strip()]
 
     competition = ""
     markets = []  # list of (display_name, internal_code)
@@ -107,8 +117,32 @@ def parse_aposta_html(html: str, source_url: str = "") -> list[dict[str, Any]]:
         line = lines[i]
 
         # Competition: "Internacional - Copa del Mundo" or similar
-        if re.search(r'[-–]\s+[\w]', line) and any(kw in line.lower() for kw in ['copa', 'liga', 'champions', 'mundial', 'serie', 'friendly', 'clausura', 'apertura', 'torneo', 'super', 'league', 'cup', 'primera', 'segunda', 'internacional', 'clubes']):
-            if len(line) < 150 and not re.match(r'^\d+[.,]\d{2}', line) and line.lower() not in ('más / menos', 'mas / menos'):
+        if re.search(r"[-–]\s+[\w]", line) and any(
+            kw in line.lower()
+            for kw in [
+                "copa",
+                "liga",
+                "champions",
+                "mundial",
+                "serie",
+                "friendly",
+                "clausura",
+                "apertura",
+                "torneo",
+                "super",
+                "league",
+                "cup",
+                "primera",
+                "segunda",
+                "internacional",
+                "clubes",
+            ]
+        ):
+            if (
+                len(line) < 150
+                and not re.match(r"^\d+[.,]\d{2}", line)
+                and line.lower() not in ("más / menos", "mas / menos")
+            ):
                 competition = line
                 markets = []
                 i += 1
@@ -131,7 +165,7 @@ def parse_aposta_html(html: str, source_url: str = "") -> list[dict[str, Any]]:
 
             time_line = lines[i]
             # Check next line is time (contains digits and h/H)
-            if re.search(r'\d{1,2}[h:]\d{0,2}', time_line, re.I):
+            if re.search(r"\d{1,2}[h:]\d{0,2}", time_line, re.I):
                 event_date = _parse_aposta_datetime(day_line, time_line, ref_date)
                 i += 1
                 if i >= len(lines) or not event_date:
@@ -158,9 +192,8 @@ def parse_aposta_html(html: str, source_url: str = "") -> list[dict[str, Any]]:
                 # Market 1 (match_winner): 3 pairs = 6 lines
                 # Market 2 (over_under): 2 pairs = 4 lines
                 total_expected = sum(
-                    3 if m[1] == "match_winner" else
-                    3 if m[1] == "double_chance" else
-                    2 for m in markets
+                    3 if m[1] == "match_winner" else 3 if m[1] == "double_chance" else 2
+                    for m in markets
                 )
 
                 collected_pairs = []
@@ -168,14 +201,23 @@ def parse_aposta_html(html: str, source_url: str = "") -> list[dict[str, Any]]:
                 while j < len(lines) and j < i + (total_expected * 2) + 10:
                     candidate = lines[j]
                     # Check if it's a new date line
-                    if candidate.lower() in ("hoy", "hoje", "mañana", "amanhã", "amanha"):
+                    if candidate.lower() in (
+                        "hoy",
+                        "hoje",
+                        "mañana",
+                        "amanhã",
+                        "amanha",
+                    ):
                         break
                     # Check if it's a new competition
-                    if re.search(r'[-–]\s+[\w]', candidate) and any(kw in candidate.lower() for kw in ['copa', 'liga', 'champions', 'mundial', 'serie']):
+                    if re.search(r"[-–]\s+[\w]", candidate) and any(
+                        kw in candidate.lower()
+                        for kw in ["copa", "liga", "champions", "mundial", "serie"]
+                    ):
                         if len(candidate) < 150:
                             break
                     # Check if it's an odds line
-                    if re.match(r'^\d+[.,]\d{2,3}$', candidate):
+                    if re.match(r"^\d+[.,]\d{2,3}$", candidate):
                         if j + 1 < len(lines):
                             odds_val = float(candidate.replace(",", "."))
                             sel_raw = lines[j + 1]
@@ -202,21 +244,25 @@ def parse_aposta_html(html: str, source_url: str = "") -> list[dict[str, Any]]:
                                 line_val = float(m.group(1).replace(",", "."))
 
                         if odds_decimal > 1.0:
-                            rows.append({
-                                "sport": "football",
-                                "competition": competition,
-                                "event_date": event_date.isoformat(),
-                                "team_a": team_a,
-                                "team_b": team_b,
-                                "market_text": mkt_display,
-                                "market_code": mkt_code,
-                                "line": line_val,
-                                "selection": selection,
-                                "selection_raw": sel_raw,
-                                "odds_decimal": odds_decimal,
-                                "bookmaker": "Aposta.LA",
-                                "source_url": source_url,
-                            })
+                            rows.append(
+                                {
+                                    "sport": "football",
+                                    "competition": competition,
+                                    "event_date": event_date.isoformat(),
+                                    "event_date_raw": f"{day_line} {time_line}",
+                                    "event_time_status": "confirmed_local_relative",
+                                    "team_a": team_a,
+                                    "team_b": team_b,
+                                    "market_text": mkt_display,
+                                    "market_code": mkt_code,
+                                    "line": line_val,
+                                    "selection": selection,
+                                    "selection_raw": sel_raw,
+                                    "odds_decimal": odds_decimal,
+                                    "bookmaker": "Aposta.LA",
+                                    "source_url": source_url,
+                                }
+                            )
 
                 i = j
                 continue

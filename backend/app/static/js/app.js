@@ -887,10 +887,7 @@ var Pirapire = (function () {
       }
       events.forEach(function(e) {
         var tr = document.createElement("tr");
-        var dateStr = e.event_date || "";
-        if (dateStr) {
-          try { var d = new Date(dateStr); if (!isNaN(d)) { dateStr = d.toLocaleDateString("es-PY", {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); } } catch(_) {}
-        }
+        var dateStr = e.event_date_display || "Horario pendiente de reconfirmación";
         appendCell(tr, dateStr);
         appendCell(tr, e.competition || "", "comp-cell");
         appendCell(tr, e.team_a || "", "team-cell");
@@ -924,15 +921,32 @@ var Pirapire = (function () {
     if (!c) return;
     apiGet("/dashboard/calendar?days=7").then(function(events) {
       if (!events || !events.length) { c.innerHTML = "<p class=muted>No hay eventos proximos</p>"; return; }
-      var h = "";
+      c.innerHTML = "";
       events.forEach(function(e) {
-        var d = e.event_date || "";
-        if (d) { var dt = new Date(d); if (!isNaN(dt.getTime())) d = dt.toISOString().slice(0,16).replace("T"," "); }
-        h += "<div class=event-card onclick=\"location.href='/events/' + (e.event_id || '')\" style=cursor:pointer><div class=event-sport>" + (e.sport === "lol" ? "L" : "F") + "</div>";
-        h += "<div class=event-teams>" + (e.team_a||"?") + " vs " + (e.team_b||"?") + "</div>";
-        h += "<div class=event-meta>" + (e.competition||"") + " - " + d + " - " + (e.markets||0) + " mercados</div></div>";
+        var d = e.event_date_display || "Horario pendiente de reconfirmación";
+        var teams = (e.team_a || "?") + " vs " + (e.team_b || "?");
+        var meta = (e.competition || "Sin competición") + " · " + d + " · " + (e.markets || 0) + " mercados";
+        var card = document.createElement("a");
+        card.className = "event-card";
+        card.href = "/events/" + (e.event_id || "");
+        card.setAttribute("aria-label", teams + "; " + meta);
+        var sport = document.createElement("div");
+        sport.className = "event-sport";
+        sport.textContent = e.sport === "lol" ? "L" : "F";
+        var content = document.createElement("div");
+        content.className = "event-content";
+        var teamNames = document.createElement("div");
+        teamNames.className = "event-teams";
+        teamNames.textContent = teams;
+        var metadata = document.createElement("div");
+        metadata.className = "event-meta";
+        metadata.textContent = meta;
+        content.appendChild(teamNames);
+        content.appendChild(metadata);
+        card.appendChild(sport);
+        card.appendChild(content);
+        c.appendChild(card);
       });
-      c.innerHTML = h;
     }).catch(function(e) { console.log("Events error:", e); c.innerHTML = "<p class=muted>Error cargando eventos</p>"; });
   }
 
@@ -952,7 +966,169 @@ var Pirapire = (function () {
     }).catch(function(e) { console.log("Bets error:", e); c.innerHTML = "<p class=muted>Error cargando recomendaciones</p>"; });
   }
 
-  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initAposta: initAposta, runRecommendations: runRecommendations, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState, loadCalendar: loadCalendar, initDashboardV3: initDashboardV3, loadBestBets: loadBestBets, loadUpcomingEvents: loadUpcomingEvents };
+  function initIntegrationSettings() {
+    var loginCard = document.getElementById("config-login-card");
+    var section = document.getElementById("integrations-section");
+    var form = document.getElementById("config-login-form");
+    var logout = document.getElementById("config-logout");
+    var csrfToken = "";
+    var loginToken = "";
+
+    if (!loginCard || !section || !form) return;
+
+    function integrationMessage(text, kind) {
+      var el = document.getElementById("integration-message");
+      el.textContent = text;
+      el.className = "flash flash-" + (kind || "ok");
+      el.removeAttribute("hidden");
+    }
+
+    function loginMessage(text) {
+      var el = document.getElementById("config-login-message");
+      el.textContent = text;
+      el.className = "flash flash-error";
+      el.removeAttribute("hidden");
+    }
+
+    function request(url, options) {
+      options = options || {};
+      options.headers = options.headers || {};
+      if (csrfToken && options.method && options.method !== "GET") {
+        options.headers["X-CSRF-Token"] = csrfToken;
+      }
+      if (options.body) options.headers["Content-Type"] = "application/json";
+      return fetch(url, options).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (body) {
+          if (!response.ok) throw new Error(body.detail || "request_failed");
+          return body;
+        });
+      });
+    }
+
+    function sourceLabel(source) {
+      return source === "ui" ? "Interfaz" : source === "env" ? "Entorno" : "No configurada";
+    }
+
+    function statusLabel(value) {
+      if (value === "success") return "Prueba correcta";
+      if (value === "legacy_env") return "Pendiente de migración segura";
+      if (value === "failed") return "Prueba fallida";
+      return "Sin probar";
+    }
+
+    function formatDate(value) {
+      if (!value) return "—";
+      try { return new Date(value).toLocaleString("es-PY"); } catch (_) { return "—"; }
+    }
+
+    function makeText(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = text;
+      return node;
+    }
+
+    function renderProvider(provider) {
+      var card = document.createElement("article");
+      card.className = "integration-card";
+      card.dataset.provider = provider.slug;
+      card.appendChild(makeText("h3", "", provider.name));
+      card.appendChild(makeText("p", "muted", provider.description));
+      if (!provider.requires_key) {
+        card.appendChild(makeText("span", "badge badge-ok", "No requiere API key"));
+        return card;
+      }
+      var credential = provider.credentials[0];
+      var status = document.createElement("dl");
+      status.className = "integration-status";
+      [["Fuente efectiva", sourceLabel(credential.source)], ["Estado", statusLabel(credential.latest_test_result || credential.test_status)], ["Última prueba", formatDate(credential.latest_test_at || credential.tested_at)], ["Último uso", formatDate(credential.last_used_at)], ["Último error", credential.latest_test_error_code || credential.error_code || "—"]].forEach(function (pair) {
+        status.appendChild(makeText("dt", "", pair[0]));
+        status.appendChild(makeText("dd", "", pair[1]));
+      });
+      card.appendChild(status);
+      var field = document.createElement("label");
+      field.className = "form-field integration-secret";
+      field.appendChild(makeText("span", "", "Nueva API key"));
+      var input = document.createElement("input");
+      input.type = "password";
+      input.autocomplete = "new-password";
+      input.placeholder = credential.configured && credential.last4 ? "Configurada ••••" + credential.last4 : "No configurada";
+      input.setAttribute("aria-label", "Nueva credencial para " + provider.name);
+      field.appendChild(input);
+      card.appendChild(field);
+      var actions = document.createElement("div");
+      actions.className = "integration-actions";
+      function button(label, className, handler) {
+        var btn = makeText("button", "btn " + className, label);
+        btn.type = "button";
+        btn.addEventListener("click", handler);
+        actions.appendChild(btn);
+      }
+      button("Probar", "btn-secondary", function () {
+        if (!input.value) return integrationMessage("Ingresa un candidato para probar.", "error");
+        var candidate = input.value;
+        request("/api/settings/integrations/" + provider.slug + "/test", {method:"POST", body:JSON.stringify({value:candidate})})
+          .then(function () { integrationMessage("Prueba correcta. El candidato aún no fue guardado.", "ok"); })
+          .catch(function () { integrationMessage("La prueba falló. La credencial vigente no cambió.", "error"); })
+          .finally(function () { candidate = ""; input.value = ""; });
+      });
+      button("Guardar nueva", "btn-primary", function () {
+        if (!input.value || !window.confirm("¿Probar y reemplazar el override de " + provider.name + "?")) return;
+        var candidate = input.value;
+        request("/api/settings/integrations/" + provider.slug + "/credentials/" + credential.name, {method:"PUT", body:JSON.stringify({value:candidate})})
+          .then(function () { integrationMessage("Credencial probada y guardada de forma cifrada.", "ok"); return loadIntegrations(); })
+          .catch(function () { integrationMessage("No se guardó: la prueba del candidato falló.", "error"); })
+          .finally(function () { candidate = ""; input.value = ""; });
+      });
+      if (credential.source === "ui") {
+        button("Eliminar override", "btn-danger", function () {
+          if (!window.confirm("¿Eliminar el override? Puede volver al fallback de entorno.")) return;
+          request("/api/settings/integrations/" + provider.slug + "/credentials/" + credential.name, {method:"DELETE"})
+            .then(function () { integrationMessage("Override eliminado.", "ok"); return loadIntegrations(); })
+            .catch(function () { integrationMessage("No se pudo eliminar el override.", "error"); });
+        });
+      }
+      card.appendChild(actions);
+      return card;
+    }
+
+    function loadIntegrations() {
+      return request("/api/settings/integrations", {method:"GET"}).then(function (data) {
+        var cards = document.getElementById("integration-cards");
+        cards.innerHTML = "";
+        data.providers.forEach(function (provider) { cards.appendChild(renderProvider(provider)); });
+      });
+    }
+
+    function showAuthenticated(token) {
+      csrfToken = token;
+      loginCard.setAttribute("hidden", "");
+      section.removeAttribute("hidden");
+      return loadIntegrations();
+    }
+
+    request("/api/settings/auth/status", {method:"GET"})
+      .then(function (data) {
+        if (data.authenticated) return showAuthenticated(data.csrf_token);
+        return request("/api/settings/auth/bootstrap", {method:"GET"}).then(function (bootstrap) { loginToken = bootstrap.csrf_token; });
+      })
+      .catch(function () { loginMessage("No se pudo iniciar el módulo de integraciones."); });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var password = document.getElementById("config-admin-password");
+      var candidate = password.value;
+      request("/api/settings/auth/login", {method:"POST", body:JSON.stringify({password:candidate, csrf_token:loginToken})})
+        .then(function (data) { password.value = ""; candidate = ""; return showAuthenticated(data.csrf_token); })
+        .catch(function () { password.value = ""; candidate = ""; loginMessage("Acceso administrativo rechazado."); });
+    });
+
+    logout.addEventListener("click", function () {
+      request("/api/settings/auth/logout", {method:"POST"}).finally(function () { window.location.reload(); });
+    });
+  }
+
+  return { showMessage: showMessage, apiGet: apiGet, apiPost: apiPost, renderTable: renderTable, initTopClock: initTopClock, initDashboard: initDashboard, initSports: initSports, initTeams: initTeams, initMatches: initMatches, initOdds: initOdds, initCombo: initCombo, initTheme: initTheme, applyTheme: applyTheme, toggleTheme: toggleTheme, syncSource: syncSource, recalcRanking: recalcRanking, loadSourceRuns: loadSourceRuns, initSourceRuns: initSourceRuns, initDataFootball: initDataFootball, initDataLol: initDataLol, initMarkets: initMarkets, reseedMarkets: reseedMarkets, initImports: initImports, initHistory: initHistory, loadHistory: loadHistory, settlePrediction: settlePrediction, settleCombo: settleCombo, syncAposta: syncAposta, syncApostaAndRecommend: syncApostaAndRecommend, loadApostaRuns: loadApostaRuns, loadApostaOptions: loadApostaOptions, loadUnmappedMarkets: loadUnmappedMarkets, initIntegrationSettings: initIntegrationSettings, loadRecBets: loadRecBets, loadRecCombos: loadRecCombos, saveRecToHistory: saveRecToHistory, saveComboRecToHistory: saveComboRecToHistory, initDashboardRecs: initDashboardRecs, initRecommendations: initRecommendations, initDashboardV2: initDashboardV2, refreshAll: refreshAll, loadDashboardState: loadDashboardState, loadCalendar: loadCalendar, initDashboardV3: initDashboardV3, loadBestBets: loadBestBets, loadUpcomingEvents: loadUpcomingEvents };
 
   document.addEventListener("DOMContentLoaded", function() {
     try { initTopClock(); initTheme(); } catch(e) {}

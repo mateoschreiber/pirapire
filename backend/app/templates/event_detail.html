@@ -9,7 +9,7 @@
   <div class="event-header">
     <span class="badge">{{ event.sport }}</span>
     <strong>{{ event.competition }}</strong>
-    <span class="muted">{{ event.event_date }}</span>
+    <span class="muted">{{ event.event_date_display }}</span>
     <span>{{ event.total_odds }} cuotas &middot; {{ event.market_count }} mercados</span>
   </div>
 </section>
@@ -35,14 +35,17 @@ document.addEventListener("DOMContentLoaded", function() {
     var h = "";
     event.markets.forEach(function(m) {
       h += '<div class="market-group">';
-      h += '<div class="market-title">' + (m.market_text || m.market_code) + (m.line ? " (" + m.line + ")" : "") + ' <span class="muted">overround ' + m.overround_pct + '%</span></div>';
+      h += '<div class="market-title">' + (m.market_text || m.market_code) + (m.line ? " (" + m.line + ")" : "");
+      if (m.no_vig_available) h += ' <span class="muted">overround ' + m.overround_pct + '%</span>';
+      else h += ' <span class="muted">' + m.no_vig_status + '</span>';
+      h += '</div>';
       h += '<div class="market-selections">';
       m.selections.forEach(function(s) {
         h += '<div class="selection-row">';
         h += '<span class="sel-name">' + (s.selection_raw || s.selection) + '</span>';
         h += '<span class="sel-odds">' + s.odds_decimal.toFixed(2) + '</span>';
         h += '<span class="sel-implied">' + s.implied_pct + '%</span>';
-        if (s.no_vig_probability) h += '<span class="sel-novig">(' + s.no_vig_pct + '% sin margen)</span>';
+        if (s.no_vig_probability !== null) h += '<span class="sel-novig">(' + s.no_vig_pct + '% sin margen)</span>';
         h += '</div>';
       });
       h += '</div></div>';

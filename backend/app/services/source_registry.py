@@ -5,8 +5,6 @@ tables and (b) resolve which source to use for a given sport + data_type.
 Nothing here performs network access; it only describes the sources.
 """
 
-import os
-
 FOOTBALL_SOURCES = [
     {
         "name": "football-data.org",
@@ -96,7 +94,14 @@ LOL_SOURCES = [
         "base_url": "https://ddragon.leagueoflegends.com",
         "description": "Fuente oficial para datos estaticos.",
         "reliability_notes": "Datos estaticos (parches, campeones, items).",
-        "use_for": ["patches", "champions", "items", "summoner_spells", "runes", "assets"],
+        "use_for": [
+            "patches",
+            "champions",
+            "items",
+            "summoner_spells",
+            "runes",
+            "assets",
+        ],
         "supports_live": False,
         "supports_history": False,
         "supports_manual_import": False,
@@ -209,7 +214,20 @@ def source_status(src: dict) -> str:
     """One of: enabled, disabled_missing_env, disabled_reference_only."""
     requires_env = src.get("requires_env")
     if requires_env:
-        return "enabled" if os.environ.get(requires_env) else "disabled_missing_env"
+        provider_map = {
+            "football_data_org": "football_data_org",
+            "riot_api": "riot_api",
+        }
+        provider_slug = provider_map.get(src["slug"])
+        if provider_slug:
+            from .secret_provider import SecretProvider, SecretStoreError
+
+            try:
+                value, _ = SecretProvider.get_secret(provider_slug, "api_key")
+            except SecretStoreError:
+                value = None
+            return "enabled" if value else "disabled_missing_env"
+        return "disabled_missing_env"
     return "enabled" if src.get("enabled_by_default") else "disabled_reference_only"
 
 

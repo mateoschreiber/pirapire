@@ -67,6 +67,15 @@ def test_root_references_app_js():
     assert "/static/js/app.js" in html
 
 
+def test_dashboard_event_cards_are_keyboard_accessible_links():
+    html = client.get("/").text
+    if 'class="event-card"' not in html:
+        return
+    assert '<a class="event-card"' in html
+    assert "aria-label=" in html
+    assert "onclick=" not in html
+
+
 def test_root_has_theme_persistence_bootstrap():
     html = client.get("/").text
     assert "pirapire.theme" in html
