@@ -252,7 +252,7 @@ def test_integration(
     check_rate_limit(request, "integration-test", settings.config_test_rate_limit)
     _credential_contract(provider_slug, credential_name)
     result = test_candidate(
-        provider_slug, credential_name, payload.value.get_secret_value()
+        provider_slug, credential_name, payload.value.get_secret_value().strip()
     )
     audit(
         session,
@@ -285,7 +285,7 @@ def put_credential(
     require_csrf(request, admin)
     check_rate_limit(request, "integration-test", settings.config_test_rate_limit)
     _credential_contract(provider_slug, credential_name)
-    candidate = payload.value.get_secret_value()
+    candidate = payload.value.get_secret_value().strip()
     result = test_candidate(provider_slug, credential_name, candidate)
     if not result["ok"]:
         audit(

@@ -8,7 +8,7 @@ from ..config import settings
 from . import http_client
 
 
-def _classify(result: dict) -> dict:
+def _classify(result: dict, require_api_sports_status: bool = False) -> dict:
     status = result.get("status")
     error = result.get("error")
     content_type = (result.get("content_type") or "").lower()
@@ -19,6 +19,10 @@ def _classify(result: dict) -> dict:
                 "status": "failed",
                 "error_code": "provider_invalid_response",
             }
+        if require_api_sports_status:
+            data = result.get("data")
+            if not isinstance(data, dict) or data.get("errors"):
+                return {"ok": False, "status": "failed", "error_code": "invalid_response"}
         return {"ok": True, "status": "success", "error_code": None}
     if status == 401:
         code = "invalid_key"
@@ -34,6 +38,7 @@ def _classify(result: dict) -> dict:
 
 
 def test_candidate(provider_slug: str, credential_name: str, value: str) -> dict:
+    value = value.strip() if isinstance(value, str) else ""
     if credential_name != "api_key" or not value:
         return {"ok": False, "status": "failed", "error_code": "invalid_candidate"}
     if provider_slug == "football_data_org":
@@ -41,6 +46,12 @@ def test_candidate(provider_slug: str, credential_name: str, value: str) -> dict
             f"{settings.football_data_base_url.rstrip('/')}/competitions/WC",
             headers={"X-Auth-Token": value},
         )
+    elif provider_slug == "api_football":
+        result = http_client.request_json(
+            f"{settings.api_football_base_url.rstrip('/')}/status",
+            headers={"x-apisports-key": value},
+        )
+        return _classify(result, require_api_sports_status=True)
     elif provider_slug == "riot_api":
         result = http_client.request_json(
             "https://na1.api.riotgames.com/lol/status/v4/platform-data",
