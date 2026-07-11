@@ -2,7 +2,7 @@
 
 Fecha: 2026-07-11 (America/Asuncion)
 
-Estado: implementación validada en staging; despliegue y sincronizaciones controladas pendientes.
+Estado: implementado, desplegado y validado; football activo con riesgo aceptado, TheSportsDB operativo y Riot preparado pero no configurado.
 
 ## Decisión de riesgo
 
@@ -77,4 +77,63 @@ Prioridad aplicada:
 
 ## Evidencia de despliegue
 
-Se completará después del build y de las sincronizaciones controladas.
+### Build y migración
+
+- Commit técnico: `338b7804ccbe56cfd851aa68fe13258bb08011f5`.
+- Imagen única app/worker: `sha256:d3094a402be2042d38e8088fa013032639e1309951296315c3b64413265068d6`.
+- `BUILD_COMMIT` observado dentro del contenedor: coincide con el commit técnico.
+- Migraciones: columnas y cuatro tablas nuevas presentes.
+- SQLite posterior: `integrity_check=ok`.
+- Volúmenes preservados.
+
+### Estado por proveedor
+
+| Proveedor | Estado | Fuente | Cobertura | Último job |
+|---|---|---|---|---|
+| Football-data.org | `active_accepted_risk` | `ui` | 84 equipos, 1.249 jugadores, 105 partidos | success; 8 requests observados |
+| TheSportsDB | success, Free v1 | `ui` | 3 registros de metadata fallback | success; 5 requests observados |
+| Leaguepedia | success, primaria esports | sin clave | 504 juegos pro, 3.610 filas de jugadores | success; 2 requests lógicos |
+| Riot API | unconfigured | unconfigured | 0 identidades confirmadas, 0 matches personales | omitido sin fallo global |
+| Data Dragon | success | sin clave | 173 campeones | success; 2 requests |
+
+La credencial Football-data.org fue probada desde el override cifrado y activada por el endpoint administrativo como `active_accepted_risk`. `accepted_risk_at`, `accepted_by` y el motivo fijo quedaron registrados sin valor secreto. El archivo `.env` y el bind mount activo no contienen la variable ni la credencial.
+
+### Sincronizaciones controladas
+
+- Football run 12: `success`, 1.249 insertados, 0 actualizados, 7 omitidos, 0 errores.
+- Football run 15: `success`, 0 insertados, 1.249 actualizados, 7 omitidos, 0 errores.
+- Idempotencia football: antes y después permanecieron 84 equipos, 1.249 jugadores con 1.249 claves únicas, y 105 partidos con 105 IDs únicos.
+- `get_team_matches(..., FINISHED, 10)`: HTTP 200, 3 resultados y límite respetado.
+- TheSportsDB run 13: `success`, 2 metadatos insertados, 2 equipos enriquecidos, 3 omitidos.
+- TheSportsDB run 16: `success`, 1 metadato insertado, 1 equipo enriquecido, 4 omitidos; 3 metadatos totales y 3 claves de procedencia únicas.
+- Leaguepedia run 14: `success`, 3.610 insertados, 1.083 actualizados, 0 errores.
+- Data Dragon run 17: `success`, 173 actualizados, 0 errores.
+- Riot no se ejecutó: no hay key ni PUUID confirmado. Esta omisión no afectó las demás fuentes.
+
+No se observaron 429 durante los syncs reales. Football aplicó espera de 7 segundos y TheSportsDB espera mínima de 2 segundos. Los tests simulan 429 y verifican `Retry-After`; 401/403 no se reintentan.
+
+### Seguridad
+
+- Escaneo de la credencial efectiva: ausente en SQLite en claro, `.env`, logs de archivo, HTML de Config, respuesta de integraciones y `/api/info`.
+- Logs de contenedores: cero coincidencias de `Authorization`, `X-Auth-Token`, `X-Riot-Token` o asignaciones de la variable.
+- `docker inspect`: cero asignaciones residuales de football-data.org.
+- GET administrativo no devuelve `encrypted_value` ni valores descifrados.
+- TheSportsDB no usa v2 ni se registra como fuente de odds.
+- Riot mantiene las partidas `personal_verified` separadas de Leaguepedia.
+
+### UI y checks finales
+
+- Config: 7 cards fijas; Football muestra “Activa — riesgo aceptado”.
+- TheSportsDB muestra Free API v1 y 30 requests/minuto.
+- Riot muestra tipo, plataforma, ruta, expiración y estado no configurado.
+- Tres inputs secretos vacíos; ningún valor precargado.
+- Light/dark sin overflow a 375, 768, 1366 y 1920 px; cero `pageerror`.
+- Capturas en `docs/phase0d-captures/`.
+- `pytest`: 173 passed, 5 skipped, 0 failed.
+- `ruff` sobre archivos tocados: correcto.
+- `compileall`: correcto.
+- `node --check`: correcto.
+- `git diff --check`: correcto.
+- App: healthy.
+- Worker: healthy, misma imagen que app.
+- Browser: healthy.
