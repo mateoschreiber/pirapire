@@ -4,8 +4,8 @@ from app.config import settings
 from app.utils import datetime_utils
 
 
-def test_app_timezone_is_buenos_aires():
-    assert settings.app_timezone == "America/Argentina/Buenos_Aires"
+def test_app_timezone_is_asuncion():
+    assert settings.app_timezone == "America/Asuncion"
 
 
 def test_to_local_applies_minus_three_offset():

@@ -5,7 +5,10 @@
 
 services:
   pirapire_app:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
     image: pirapire_app
     container_name: ${PIRAPIRE_CONTAINER_NAME:-pirapire_app}
     env_file:

@@ -58,6 +58,7 @@ code { background: var(--surface-2); padding: 0.1rem 0.35rem; border-radius: 5px
 
 .sidebar {
   width: 232px;
+  max-width: 280px;
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
   display: flex;
@@ -363,38 +364,3 @@ input[type="file"] { padding: 0.4rem; border: 1px dashed var(--border); border-r
   .selection-row { flex-wrap: wrap; }
   .sel-odds, .sel-implied, .sel-novig { min-width: auto; }
 }
-
-/* Match detail */
-.market-group { margin-bottom: 1.5rem; border-bottom: 1px solid var(--border, #ddd); padding-bottom: 1rem; }
-.market-title { font-weight: 700; margin-bottom: 0.5rem; font-size: 1.05rem; }
-.selection-row { display: flex; gap: 1rem; padding: 0.35rem 0; align-items: center; border-bottom: 1px solid #f0f0f0; }
-.selection-row:last-child { border-bottom: none; }
-.sel-name { flex: 1; }
-.sel-odds { font-weight: 700; min-width: 60px; text-align: right; }
-.sel-implied { min-width: 55px; text-align: right; color: #666; }
-.sel-novig { min-width: 120px; text-align: right; color: #888; font-size: 0.85rem; }
-.event-header { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-@media (max-width: 768px) {
-  .selection-row { flex-wrap: wrap; }
-  .sel-odds, .sel-implied, .sel-novig { min-width: auto; }
-}
-
-/* Match detail */
-.market-group { margin-bottom: 1.5rem; border-bottom: 1px solid var(--border, #ddd); padding-bottom: 1rem; }
-.market-title { font-weight: 700; margin-bottom: 0.5rem; font-size: 1.05rem; }
-.selection-row { display: flex; gap: 1rem; padding: 0.35rem 0; align-items: center; border-bottom: 1px solid #f0f0f0; }
-.selection-row:last-child { border-bottom: none; }
-.sel-name { flex: 1; }
-.sel-odds { font-weight: 700; min-width: 60px; text-align: right; }
-.sel-implied { min-width: 55px; text-align: right; color: #666; }
-.sel-novig { min-width: 120px; text-align: right; color: #888; font-size: 0.85rem; }
-.event-header { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-@media (max-width: 768px) {
-  .selection-row { flex-wrap: wrap; }
-  .sel-odds, .sel-implied, .sel-novig { min-width: auto; }
-}
-.main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 1.5rem; }
-.page-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
-.page-header h1 { margin: 0; font-size: 1.4rem; }
-.menu-toggle { display: none; cursor: pointer; font-size: 1.5rem; }
-@media (max-width: 768px) { .menu-toggle { display: block; } .sidebar { position: fixed; z-index: 40; left: 0; top: 0; height: 100vh; transform: translateX(-100%); transition: transform 0.2s; } .nav-toggle:checked ~ .layout .sidebar { transform: translateX(0); } .main-content { padding: 1rem; } }

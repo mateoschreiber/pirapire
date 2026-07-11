@@ -19,7 +19,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}?v={{ build_commit }}">
 </head>
 <body>
   <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden>
@@ -28,6 +28,7 @@
       <div class="brand">
         <span class="brand-dot"></span>
         <span class="brand-name">{{ app_name }}</span>
+        <button id="themeToggle" class="btn btn-ghost" style="color:var(--sidebar-text);font-size:1.1rem;padding:0.2rem 0.5rem;margin-left:auto" onclick="Pirapire.toggleTheme()" aria-label="Toggle theme">☾</button>
       </div>
       <nav class="nav">
         <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Inicio</a>
@@ -36,17 +37,20 @@
         <a class="nav-link {% if active_page == 'teams' %}active{% endif %}" href="/teams/ui">Equipos</a>
         <a class="nav-link {% if active_page == 'history' %}active{% endif %}" href="/history/ui">Historial</a>
         <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings/ui">Config</a>
-        <div id="flash" class="flash" hidden></div>
-        {% block content %}{% endblock %}
-      </main>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div id="flash" class="flash" hidden></div>
+      {% block content %}{% endblock %}
 
       <footer class="footer">
         {{ app_name }} · Sistema analítico. No automatiza apuestas reales.
       </footer>
-    </div>
+    </main>
   </div>
 
-  <script src="{{ url_for('static', path='/js/app.js') }}"></script>
+  <script src="{{ url_for('static', path='/js/app.js') }}?v={{ build_commit }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

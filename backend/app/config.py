@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     recommender_only_positive_ev: bool = False
     recommender_min_match_confidence: float = 0.70
     recommender_include_stale_odds: bool = False
-
+    build_commit: str = "unknown"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

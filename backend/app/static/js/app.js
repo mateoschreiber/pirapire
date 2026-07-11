@@ -907,7 +907,6 @@ var Pirapire = (function () {
     loadDashboardV3State();
     loadUpcomingEvents();
     loadBestBets();
-    setInterval(function() { loadDashboardV3State(); loadUpcomingEvents(); loadBestBets(); }, 300000);
   }
 
   function loadDashboardV3State() {
@@ -929,7 +928,7 @@ var Pirapire = (function () {
       events.forEach(function(e) {
         var d = e.event_date || "";
         if (d) { var dt = new Date(d); if (!isNaN(dt.getTime())) d = dt.toISOString().slice(0,16).replace("T"," "); }
-        h += "<div class=event-card onclick="location.href='/events/' + (e.event_id || '')" style=cursor:pointer><div class=event-sport>" + (e.sport === "lol" ? "L" : "F") + "</div>";
+        h += "<div class=event-card onclick=\"location.href='/events/' + (e.event_id || '')\" style=cursor:pointer><div class=event-sport>" + (e.sport === "lol" ? "L" : "F") + "</div>";
         h += "<div class=event-teams>" + (e.team_a||"?") + " vs " + (e.team_b||"?") + "</div>";
         h += "<div class=event-meta>" + (e.competition||"") + " - " + d + " - " + (e.markets||0) + " mercados</div></div>";
       });

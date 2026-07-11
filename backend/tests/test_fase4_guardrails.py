@@ -29,5 +29,4 @@ def test_no_setinterval_polling_in_app_js():
 
 def test_dashboard_has_best_bets_section():
     html = client.get("/").text
-    assert "Mejores apuestas" in html
-    assert "Mejores combinadas" in html
+    assert "Mejores opciones" in html

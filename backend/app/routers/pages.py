@@ -30,6 +30,7 @@ def render(request: Request, template: str, active_page: str, **extra):
         "app_name": settings.app_name,
         "app_env": settings.app_env,
         "database_url": settings.database_url,
+        "build_commit": settings.build_commit,
         "tz_name": settings.app_timezone,
         "tz_offset": datetime_utils.offset_str(),
     }
