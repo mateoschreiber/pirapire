@@ -1,6 +1,7 @@
-import logging, os, sys, signal
+import logging
+import signal
+import sys
 sys.path.insert(0, '/app')
-from app.config import settings
 from app.database import engine, init_db
 from sqlmodel import Session
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -27,9 +28,18 @@ def run_wc_squad_sync():
     try:
         from app.services.import_wc_squads import import_wc_squads
         n = import_wc_squads()
-        import logging; logging.getLogger('pirapire.worker').info('WC squads: %s players', n)
+        logging.getLogger('pirapire.worker').info('WC squads: %s players', n)
     except Exception as e:
-        import logging; logging.getLogger('pirapire.worker').warning('WC squads sync error: %s', e)
+        logging.getLogger('pirapire.worker').warning('WC squads sync error: %s', e)
+
+
+def run_historical_ingestion():
+    from app.services.historical_ingestion import run
+    with Session(engine) as session:
+        try:
+            logger.info("Historical ingestion: %s", run(session))
+        except Exception as e:
+            logger.warning("Historical ingestion error: %s", e)
 
 
 def run_sports_sync():
@@ -47,6 +57,7 @@ if __name__ == '__main__':
     scheduler = BackgroundScheduler()
     scheduler.add_job(run_aposta_sync, IntervalTrigger(minutes=12), id='aposta', coalesce=True, max_instances=1)
     scheduler.add_job(run_sports_sync, IntervalTrigger(hours=4), id='sports', coalesce=True, max_instances=1)
+    scheduler.add_job(run_historical_ingestion, IntervalTrigger(hours=1), id='historical-ingestion', coalesce=True, max_instances=1)
     scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=24), id='wc_squads', coalesce=True, max_instances=1)
     scheduler.start()
     logger.info('Scheduler: Aposta 12min, Sports 4h')

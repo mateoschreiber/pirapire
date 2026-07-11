@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     # External data sources (all optional; empty means "not configured").
     football_data_api_key: str = ""
+    api_football_api_key: str = ""
+    api_football_base_url: str = "https://v3.football.api-sports.io"
     football_data_base_url: str = "https://api.football-data.org/v4"
     football_data_competitions: str = "WC,CL,PL,BL1,SA,PD,FL1"
     football_data_request_delay_seconds: float = 7.0

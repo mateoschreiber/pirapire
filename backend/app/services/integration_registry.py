@@ -12,6 +12,17 @@ PROVIDERS = {
         "data_role": "Fuente primaria de resultados, fixtures, selecciones y planteles.",
         "warning": None,
     },
+    "api_football": {
+        "name": "API-Football",
+        "description": "Fixtures y estadísticas detalladas opcionales de fútbol.",
+        "secret_fields": {"api_key": "API key"},
+        "test_method": "api_football",
+        "capabilities": ["fixtures", "statistics", "events", "players"],
+        "mode": "Opcional/configurable",
+        "rate_limit": "Según plan configurado",
+        "data_role": "Detalle de fixtures; nunca simula cobertura sin clave.",
+        "warning": None,
+    },
     "riot_api": {
         "name": "Riot API",
         "description": "API de cuentas y partidas no profesionales de Riot.",
@@ -83,6 +94,7 @@ PROVIDERS = {
 
 ENV_FALLBACKS = {
     ("football_data_org", "api_key"): "football_data_api_key",
+    ("api_football", "api_key"): "api_football_api_key",
     ("riot_api", "api_key"): "riot_api_key",
     ("thesportsdb", "api_key"): "thesportsdb_api_key",
 }
