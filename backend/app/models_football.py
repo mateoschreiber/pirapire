@@ -126,6 +126,7 @@ class FootballFixtureStat(SQLModel, table=True):
     team_name: Optional[str] = None
     opponent_name: Optional[str] = None
     competition_name: Optional[str] = None
+    match_type: Optional[str] = None
     season: Optional[str] = None
     kickoff_utc: Optional[datetime] = Field(default=None, index=True)
     match_status: Optional[str] = None
@@ -143,6 +144,7 @@ class FootballFixtureStat(SQLModel, table=True):
     red_cards: Optional[int] = None
     penalties_scored: Optional[int] = None
     penalties_missed: Optional[int] = None
+    penalties_awarded: Optional[int] = None
     stats_present: bool = False
     events_present: bool = False
     source_external_id: Optional[str] = Field(default=None, index=True)

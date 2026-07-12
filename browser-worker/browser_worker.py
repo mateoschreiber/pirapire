@@ -10,6 +10,82 @@ ALLOWED_HOSTS = {'aposta.la', 'api.aposta.la', 'www.aposta.la'}
 # Public, CAPTCHA-free pages only; never private/undocumented endpoints.
 RENDER_ALLOWED_HOSTS = {'www.thesportsdb.com', 'thesportsdb.com'}
 
+# Phase 4B4: SofaScore public team page fallback. A real browser views the
+# public page and reads its own publicly-shown match data (no CAPTCHA, no
+# login, no bypass, one page at a time).
+SOFASCORE_ALLOWED = {'www.sofascore.com'}
+
+_SOFA_JS = r"""async (args) => {
+  const teamId = args[0], maxEvents = args[1];
+  const base = 'https://api.sofascore.com/api/v1';
+  const jget = async (u) => {
+    try { const r = await fetch(u, {headers:{accept:'application/json'}});
+      if(!r.ok) return {__status:r.status};
+      return await r.json(); } catch(e){ return {__err:String(e)}; }
+  };
+  const last = await jget(base+'/team/'+teamId+'/events/last/0');
+  if(!last || !last.events) return {ok:false, status:last && last.__status, events:[]};
+  let evs = last.events.filter(e => e.status && e.status.type === 'finished');
+  evs = evs.slice(-maxEvents);
+  const out = [];
+  for (const e of evs) {
+    const item = {
+      id: e.id, ts: e.startTimestamp,
+      home: e.homeTeam && e.homeTeam.name, away: e.awayTeam && e.awayTeam.name,
+      home_id: e.homeTeam && e.homeTeam.id, away_id: e.awayTeam && e.awayTeam.id,
+      hs: (e.homeScore && e.homeScore.current != null) ? e.homeScore.current : null,
+      as: (e.awayScore && e.awayScore.current != null) ? e.awayScore.current : null,
+      ht_hs: (e.homeScore && e.homeScore.period1 != null) ? e.homeScore.period1 : null,
+      ht_as: (e.awayScore && e.awayScore.period1 != null) ? e.awayScore.period1 : null,
+      status: e.status && e.status.type,
+      tournament: e.tournament && e.tournament.name,
+      category: e.tournament && e.tournament.category && e.tournament.category.name
+    };
+    const st = await jget(base+'/event/'+e.id+'/statistics');
+    const teamStats = {home:{}, away:{}};
+    if (st && st.statistics) {
+      const all = st.statistics.find(p => p.period === 'ALL');
+      if (all) { for (const g of (all.groups||[])) { for (const it of (g.statisticsItems||[])) {
+        teamStats.home[it.name] = it.homeValue; teamStats.away[it.name] = it.awayValue;
+      }}}
+    }
+    item.stats = teamStats;
+    const inc = await jget(base+'/event/'+e.id+'/incidents');
+    const pen = {home:{awarded:0,scored:0,missed:0}, away:{awarded:0,scored:0,missed:0}};
+    let shootout = false;
+    if (inc && inc.incidents) {
+      for (const i of inc.incidents) {
+        if (i.incidentType === 'penaltyShootout') { shootout = true; continue; }
+        const k = i.isHome ? 'home' : 'away';
+        if (i.incidentType === 'inGamePenalty') {
+          pen[k].awarded += 1;
+          if (i.incidentClass === 'missed' || i.incidentClass === 'saved') pen[k].missed += 1;
+        }
+        if (i.incidentType === 'goal' && i.incidentClass === 'penalty') pen[k].scored += 1;
+      }
+    }
+    item.penalties = pen; item.had_shootout = shootout;
+    const lu = await jget(base+'/event/'+e.id+'/lineups');
+    const players = {home:[], away:[]};
+    for (const side of ['home','away']) {
+      if (lu && lu[side] && lu[side].players) {
+        for (const pl of lu[side].players) {
+          const s = pl.statistics || {};
+          if (s.fouls != null || s.totalShots != null) {
+            players[side].push({name: pl.player && pl.player.name, id: pl.player && pl.player.id,
+              fouls: (s.fouls != null ? s.fouls : null),
+              shots: (s.totalShots != null ? s.totalShots : null)});
+          }
+        }
+      }
+    }
+    item.players = players;
+    item.lineups_available = (players.home.length + players.away.length) > 0;
+    out.push(item);
+  }
+  return {ok:true, total_last: last.events.length, events: out};
+}"""
+
 app = FastAPI(title='Pirapire Browser Worker', docs_url=None, redoc_url=None)
 
 _browser = None
@@ -219,6 +295,70 @@ async def render(url: str = Query(...), timeout: int = Query(30000)):
         return JSONResponse({'url': url, 'html': html, 'length': len(html)})
     except Exception as e:
         return JSONResponse({'url': url, 'error': str(e), 'html': None}, status_code=502)
+    finally:
+        await context.close()
+
+@app.get('/sofascore-search')
+async def sofascore_search(q: str = Query(...)):
+    """Resolve a football team name to its public SofaScore id (first exact
+    national match). One rendered page, read-only."""
+    browser = await _get_browser()
+    context = await browser.new_context(
+        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+        viewport={'width': 1920, 'height': 1080},
+        locale='en-US',
+    )
+    page = await context.new_page()
+    try:
+        await page.goto('https://www.sofascore.com/', wait_until='domcontentloaded', timeout=45000)
+        await page.wait_for_timeout(2500)
+        js = """async (q) => {
+          const r = await fetch('https://api.sofascore.com/api/v1/search/all?q='+encodeURIComponent(q)+'&page=0',{headers:{accept:'application/json'}});
+          let b=null; try{b=await r.json();}catch(e){}
+          if(!b || !b.results) return null;
+          const nq = q.toLowerCase();
+          let exact=null, first=null;
+          for(const res of b.results){
+            if(res.type==='team' && res.entity && res.entity.sport && res.entity.sport.name==='Football'){
+              const ent={id:res.entity.id, name:res.entity.name, national:!!res.entity.national};
+              if(first===null) first=ent;
+              if(res.entity.name && res.entity.name.toLowerCase()===nq && res.entity.national){ exact=ent; break; }
+            }
+          }
+          return exact || first;
+        }"""
+        data = await page.evaluate(js, q)
+        return JSONResponse({'q': q, 'ok': data is not None, 'data': data})
+    except Exception as e:
+        return JSONResponse({'q': q, 'ok': False, 'error': str(e)}, status_code=502)
+    finally:
+        await context.close()
+
+
+@app.get('/sofascore-team')
+async def sofascore_team(team_id: int = Query(...), max_events: int = Query(12)):
+    """Render the public SofaScore team page and read its publicly shown match data.
+
+    A real browser views the public team page (no CAPTCHA, login or bypass) and
+    from that same origin reads the last finished events plus each event's public
+    statistics, incidents (regulation penalties only) and per-player fouls.
+    One page at a time.
+    """
+    browser = await _get_browser()
+    context = await browser.new_context(
+        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+        viewport={'width': 1920, 'height': 1080},
+        locale='en-US',
+    )
+    page = await context.new_page()
+    try:
+        await page.goto(f'https://www.sofascore.com/team/football/x/{int(team_id)}',
+                        wait_until='domcontentloaded', timeout=45000)
+        await page.wait_for_timeout(3500)
+        data = await page.evaluate(_SOFA_JS, [int(team_id), int(max_events)])
+        return JSONResponse({'team_id': team_id, 'ok': bool(data and data.get('ok')), 'data': data})
+    except Exception as e:
+        return JSONResponse({'team_id': team_id, 'ok': False, 'error': str(e)}, status_code=502)
     finally:
         await context.close()
 

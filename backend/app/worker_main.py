@@ -42,6 +42,17 @@ def run_historical_ingestion():
             logger.warning("Historical ingestion error: %s", e)
 
 
+def run_fresh_football():
+    from app.services.fresh_football import run as ff_run
+    with Session(engine) as session:
+        try:
+            res = ff_run(session)
+            logger.info("Fresh football: status=%s teams=%s", res.get("status"),
+                        {k: v.get("eligible") for k, v in (res.get("teams") or {}).items()})
+        except Exception as e:
+            logger.warning("Fresh football error: %s", e)
+
+
 def run_sports_sync():
     from app.services.live_source_sync import sync_if_stale
     with Session(engine) as session:
@@ -58,6 +69,7 @@ if __name__ == '__main__':
     scheduler.add_job(run_aposta_sync, IntervalTrigger(minutes=12), id='aposta', coalesce=True, max_instances=1)
     scheduler.add_job(run_sports_sync, IntervalTrigger(hours=4), id='sports', coalesce=True, max_instances=1)
     scheduler.add_job(run_historical_ingestion, IntervalTrigger(hours=1), id='historical-ingestion', coalesce=True, max_instances=1)
+    scheduler.add_job(run_fresh_football, IntervalTrigger(hours=1), id='fresh-football', coalesce=True, max_instances=1)
     scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=24), id='wc_squads', coalesce=True, max_instances=1)
     scheduler.start()
     logger.info('Scheduler: Aposta 12min, Sports 4h')

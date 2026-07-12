@@ -49,6 +49,7 @@ def run_migrations() -> None:
         }
         _add_columns(conn, "footballfixturestat", _quality)
         _add_columns(conn, "footballfixturestat", {"candidate_last_n": "INTEGER DEFAULT 0"})
+        _add_columns(conn, "footballfixturestat", {"penalties_awarded": "INTEGER", "match_type": "TEXT"})
         _add_columns(
             conn,
             "footballfixtureplayerstat",
