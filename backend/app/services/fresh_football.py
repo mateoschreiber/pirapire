@@ -507,6 +507,13 @@ def run(session: Session, worker_url: str | None = None) -> dict:
 
     _fix_stale_eligibility(session)
 
+    # Phase 4B41: rebuild strict per-event history windows (data-only).
+    try:
+        from .event_history_window import build_windows
+        build_windows(session)
+    except Exception as exc:  # noqa: BLE001
+        logs.append(("warning", f"event window rebuild failed: {type(exc).__name__}: {exc}"))
+
     for level, msg in logs:
         source_runs.log(session, run_row, level, msg)
 

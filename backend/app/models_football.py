@@ -188,3 +188,25 @@ class FootballFixturePlayerStat(SQLModel, table=True):
     freshness_class: Optional[str] = Field(default=None, index=True)
     eligible_for_last_n: bool = False
     fetched_at: datetime = Field(default_factory=_now)
+
+
+class EventTeamHistoryWindow(SQLModel, table=True):
+    """Per-event, per-team strict history window (Phase 4B41).
+
+    Each row is one of the 10 FINISHED fixtures used for a given Aposta event
+    and team, with kickoff_utc strictly before the event kickoff (cutoff_utc).
+    The anchor fixture (the event's own match) is never included here.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_key: str = Field(index=True)
+    team: str = Field(index=True)
+    fixture_source_id: str = Field(index=True)
+    rank: int = Field(index=True)
+    cutoff_utc: datetime
+    opponent: Optional[str] = None
+    kickoff_utc: Optional[datetime] = Field(default=None, index=True)
+    provider: str = "fresh_football"
+    source_key: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
