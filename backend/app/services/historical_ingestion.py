@@ -18,7 +18,7 @@ from ..models_football import (
     FootballFixtureStat,
 )
 from ..models_imports import ImportedOdds
-from ..models_lol import LolGameHistory, LolSeries
+from ..models_lol import LolGameHistory, LolPlayerGameStat, LolSeries, LolTeamGameStat
 from ..models_sources import IntegrationProviderState, SourceRun
 from ..sources.football.api_football import ApiFootballClient
 from ..sources.football.thesportsdb import TheSportsDBClient
@@ -582,18 +582,25 @@ def _football_freshness(session, participants, log) -> dict:
             key=lambda x: (x[0] is not None, x[0] or datetime.min.replace(tzinfo=UTC)),
             reverse=True,
         )
-        eligible_fids = {fid for _, fid, _ in eligible_sorted[:FOOTBALL_FIXTURES_PER_TEAM]}
+        # candidate window = the 10 most recent before kickoff (best available).
+        candidate_fids = {fid for _, fid, _ in eligible_sorted[:FOOTBALL_FIXTURES_PER_TEAM]}
         stale_count = 0
         eligible_count = 0
+        candidate_count = 0
         for k, fid, frows in dated:
-            is_eligible = fid in eligible_fids
+            in_candidate = fid in candidate_fids
             # Staleness: a newer real match exists than this row's kickoff.
             is_stale = (
                 recent_real is not None and k is not None and k < recent_real
                 and (recent_real - k).days > 30
             )
+            # A stale row is NEVER eligible for calculations, only a candidate.
+            is_eligible = in_candidate and not is_stale
             for r in frows:
                 changed = False
+                if r.candidate_last_n != in_candidate:
+                    r.candidate_last_n = in_candidate
+                    changed = True
                 if r.eligible_for_last_n != is_eligible:
                     r.eligible_for_last_n = is_eligible
                     changed = True
@@ -605,15 +612,18 @@ def _football_freshness(session, participants, log) -> dict:
                     session.add(r)
             if is_eligible:
                 eligible_count += 1
+            if in_candidate:
+                candidate_count += 1
             if is_stale:
                 stale_count += 1
         session.commit()
         report[participant] = {
             "fixtures": len(by_fixture),
-            "eligible_last_10": min(eligible_count, FOOTBALL_FIXTURES_PER_TEAM),
+            "candidate_last_10": min(candidate_count, FOOTBALL_FIXTURES_PER_TEAM),
+            "eligible_last_10": eligible_count,
             "stale": stale_count,
             "most_recent_real": recent_real.isoformat() if recent_real else None,
-            "eligible_dates": [str(x[0]) for x in eligible_sorted[:FOOTBALL_FIXTURES_PER_TEAM]],
+            "candidate_dates": [str(x[0]) for x in eligible_sorted[:FOOTBALL_FIXTURES_PER_TEAM]],
         }
     return report
 
@@ -709,6 +719,183 @@ def _group_series(rows: list[dict]) -> dict[str, list[dict]]:
     return grouped
 
 
+def _cargo_get(tables: str, fields: str, where: str, log, order_by: str | None = None, limit: int = 100):
+    """Generic single Cargo query. Returns (rows|None, status).
+
+    status is "success", "error" or ("rate_limited", retry_after) for 429s and
+    ratelimited/non-JSON bodies. Never retries in a loop.
+    """
+    from urllib.error import HTTPError
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    params = {"tables": tables, "fields": fields, "where": where, "format": "json", "limit": str(limit)}
+    if order_by:
+        params["order_by"] = order_by
+    url = settings.leaguepedia_base_url + "?" + urlencode(params)
+    req = Request(url, headers={"User-Agent": settings.leaguepedia_user_agent})
+    try:
+        with urlopen(req, timeout=25) as res:
+            body = res.read().decode("utf-8", "replace")
+    except HTTPError as exc:
+        if exc.code == 429:
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            return None, ("rate_limited", retry_after)
+        log("warning", f"leaguepedia cargo HTTP {exc.code}; no retry")
+        return None, "error"
+    except Exception as exc:  # noqa: BLE001
+        log("warning", f"leaguepedia cargo unavailable: {type(exc).__name__}")
+        return None, "error"
+    try:
+        rows = json.loads(body)
+    except (ValueError, json.JSONDecodeError):
+        return None, ("rate_limited", None)
+    if isinstance(rows, dict) and rows.get("error"):
+        return None, ("rate_limited", None)
+    if not isinstance(rows, list):
+        return None, "error"
+    return rows, "success"
+
+
+SG_MAP_FIELDS = (
+    "SG.MatchId,SG.GameId,SG.N_GameInMatch,SG.DateTime_UTC,SG.Tournament,SG.OverviewPage,"
+    "SG.Team1,SG.Team2,SG.Winner,SG.WinTeam,SG.LossTeam,SG.Gamelength_Number,"
+    "SG.Team1Kills,SG.Team2Kills,SG.Team1Towers,SG.Team2Towers,"
+    "SG.Team1Inhibitors,SG.Team2Inhibitors,SG.Team1Dragons,SG.Team2Dragons,"
+    "SG.Team1Barons,SG.Team2Barons,SG.Patch"
+)
+SP_FIELDS = "SP.GameId,SP.Name,SP.Link,SP.Team,SP.Role,SP.Champion,SP.Kills,SP.Deaths,SP.Assists,SP.CS,SP.Gold"
+MAP_SOURCE = "leaguepedia_map"
+
+
+def _gamelength_seconds(value):
+    n = value
+    try:
+        minutes = float(n)
+    except (TypeError, ValueError):
+        return None
+    return int(round(minutes * 60))
+
+
+def _upsert_map_game(session, m, now) -> tuple[bool, bool, bool]:
+    """Persist one map to LolGameHistory + two LolTeamGameStat rows.
+
+    Returns (game_new, team_rows_new_any, had_result).
+    """
+    mid = str(m.get("MatchId") or "").strip()
+    gid = str(m.get("GameId") or "").strip()
+    if not mid or not gid:
+        return (False, False, False)
+    date_dt = _parse_dt(str(m.get("DateTime UTC") or "").replace(" ", "T"))
+    date_iso = date_dt.isoformat() if date_dt else None
+    team1 = m.get("Team1")
+    team2 = m.get("Team2")
+    win_team = m.get("WinTeam")
+    winner_num = _to_int(m.get("Winner"))
+    winner_team = win_team or (team1 if winner_num == 1 else (team2 if winner_num == 2 else None))
+    length_s = _gamelength_seconds(m.get("Gamelength Number"))
+    t1_kills = _to_int(m.get("Team1Kills"))
+    t2_kills = _to_int(m.get("Team2Kills"))
+
+    skey = f"{MAP_SOURCE}|{gid}"
+    game = session.exec(
+        select(LolGameHistory).where(
+            LolGameHistory.source_name == MAP_SOURCE,
+            LolGameHistory.source_game_id == gid,
+        )
+    ).first()
+    game_new = game is None
+    game = game or LolGameHistory(source_name=MAP_SOURCE, source_game_id=gid, source_key=skey)
+    game.year = date_dt.year if date_dt else None
+    game.league = m.get("OverviewPage")
+    game.date = date_iso
+    game.patch = m.get("Patch")
+    game.game_number = _to_int(m.get("N GameInMatch"))
+    game.n_game_in_match = _to_int(m.get("N GameInMatch"))
+    game.match_id = mid
+    game.game_length_seconds = length_s
+    game.blue_team = team1
+    game.red_team = team2
+    game.winner_team = winner_team
+    game.updated_at = now
+    session.add(game)
+    session.commit()
+    session.refresh(game)
+
+    team_new = False
+    sides = (
+        ("blue", team1, team2, t1_kills, t2_kills, _to_int(m.get("Team1Towers")), _to_int(m.get("Team1Inhibitors")), _to_int(m.get("Team1Dragons")), _to_int(m.get("Team1Barons"))),
+        ("red", team2, team1, t2_kills, t1_kills, _to_int(m.get("Team2Towers")), _to_int(m.get("Team2Inhibitors")), _to_int(m.get("Team2Dragons")), _to_int(m.get("Team2Barons"))),
+    )
+    for side, team, opp, kills, opp_kills, towers, inhibs, dragons, barons in sides:
+        tkey = f"{MAP_SOURCE}|{gid}|{team}"
+        stat = session.exec(
+            select(LolTeamGameStat).where(LolTeamGameStat.source_key == tkey)
+        ).first()
+        if stat is None:
+            team_new = True
+        stat = stat or LolTeamGameStat(source_name=MAP_SOURCE, source_game_id=gid, team_name=team, source_key=tkey)
+        stat.game_id = game.id
+        stat.year = date_dt.year if date_dt else None
+        stat.league = m.get("OverviewPage")
+        stat.date = date_iso
+        stat.patch = m.get("Patch")
+        stat.team_name = team
+        stat.opponent_name = opp
+        stat.side = side
+        stat.result = 1 if (winner_team and team == winner_team) else (0 if winner_team else None)
+        stat.team_kills = kills
+        stat.team_deaths = opp_kills  # deaths == opponent kills (Leaguepedia has no team deaths field)
+        stat.towers = towers
+        stat.inhibitors = inhibs
+        stat.dragons = dragons
+        stat.barons = barons
+        stat.game_length_seconds = length_s
+        session.add(stat)
+    session.commit()
+    return (game_new, team_new, winner_team is not None)
+
+
+def _upsert_map_players(session, gid, players, now) -> int:
+    inserted = 0
+    for p in players:
+        pname = (p.get("Name") or "").strip()
+        team = (p.get("Team") or "").strip()
+        if not pname or not team:
+            continue
+        role = (p.get("Role") or "").strip().lower()
+        pkey = f"{MAP_SOURCE}|{gid}|{pname}|{team}"
+        existing = session.exec(
+            select(LolPlayerGameStat).where(LolPlayerGameStat.source_key == pkey)
+        ).first()
+        if existing is not None:
+            continue
+        game = session.exec(
+            select(LolGameHistory).where(
+                LolGameHistory.source_name == MAP_SOURCE,
+                LolGameHistory.source_game_id == gid,
+            )
+        ).first()
+        session.add(LolPlayerGameStat(
+            source_name=MAP_SOURCE,
+            source_game_id=gid,
+            game_id=game.id if game else None,
+            team_name=team,
+            player_name=pname,
+            role=role,
+            champion=p.get("Champion"),
+            kills=_to_int(p.get("Kills")),
+            deaths=_to_int(p.get("Deaths")),
+            assists=_to_int(p.get("Assists")),
+            cs=_to_int(p.get("CS")),
+            gold=_to_int(p.get("Gold")),
+            source_key=pkey,
+        ))
+        inserted += 1
+    session.commit()
+    return inserted
+
+
 def _upsert_series(session, mid, maps, now, source_url) -> bool:
     first = maps[0]
     skey = "leaguepedia|" + mid
@@ -768,7 +955,7 @@ def _kickoff_for_lol_team(session, team_name):
 
 
 def _mark_last_n_series(session, team_name, source_names, kickoff, now) -> dict:
-    """Flag the last SERIES_LAST_N series (by date, before kickoff) for a team."""
+    """Flag the last SERIES_LAST_N complete series (by date, before kickoff)."""
     norm_names = {_norm(n) for n in source_names} | {_norm(team_name)}
     candidates = session.exec(
         select(LolSeries).where(LolSeries.source_name == "leaguepedia")
@@ -781,7 +968,9 @@ def _mark_last_n_series(session, team_name, source_names, kickoff, now) -> dict:
                 continue  # only series strictly before kickoff
             mine.append((sdate, s))
     mine.sort(key=lambda x: (x[0] is not None, x[0] or datetime.min.replace(tzinfo=UTC)), reverse=True)
-    selected = mine[:SERIES_LAST_N]
+    # Only 'complete' series may be selected for the window.
+    complete = [(d, s) for d, s in mine if s.series_status == "complete"]
+    selected = complete[:SERIES_LAST_N]
     selected_ids = {s.id for _, s in selected}
     for _, s in mine:
         want = s.id in selected_ids
@@ -792,9 +981,120 @@ def _mark_last_n_series(session, team_name, source_names, kickoff, now) -> dict:
     return {
         "team": team_name,
         "total_series": len(mine),
+        "complete_series": len(complete),
         "eligible": len(selected),
+        "selected_match_ids": [s.match_id for _, s in selected],
         "dates": [str(s.date) for _, s in selected],
     }
+
+
+def _ingest_series_maps(session, series_list, log, state, rate_limit_cb) -> dict:
+    """Fetch map facts + players for the given series' GameIds.
+
+    Sequential, small batches, cache-aware (skips GameIds already stored). On
+    429 persists cooldown and returns; never retries in a loop.
+    """
+    import time as _time
+
+    now = datetime.now(UTC)
+    q = chr(34)
+    maps_new = team_rows_new = players_new = 0
+    games_queried = 0
+    batch_delay = getattr(settings, "leaguepedia_request_delay_seconds", 2.0)
+    for srow in series_list:
+        try:
+            want_gids = set(json.loads(srow.game_ids_json or "[]"))
+        except (ValueError, TypeError):
+            want_gids = set()
+        # Cache: only fetch maps that are not already stored with map facts.
+        stored = set(session.exec(
+            select(LolGameHistory.source_game_id).where(
+                LolGameHistory.source_name == MAP_SOURCE,
+                LolGameHistory.match_id == srow.match_id,
+            )
+        ).all())
+        missing = sorted(want_gids - stored)
+        if not missing:
+            continue
+        # ScoreboardGames map facts for the whole match (small: <=7 games).
+        _time.sleep(batch_delay)
+        where = f"SG.MatchId={q}{srow.match_id.replace(q, '')}{q}"
+        rows, status = _cargo_get("ScoreboardGames=SG", SG_MAP_FIELDS, where, log,
+                                  order_by="SG.N_GameInMatch ASC", limit=20)
+        games_queried += 1
+        if rows is None:
+            if isinstance(status, tuple) and status[0] == "rate_limited":
+                rate_limit_cb("429 on map facts", status[1])
+                return {"maps_new": maps_new, "team_rows_new": team_rows_new,
+                        "players_new": players_new, "games_queried": games_queried, "rate_limited": True}
+            log("warning", f"map facts failed for {srow.match_id}; continuing")
+            continue
+        for m in rows:
+            g_new, t_new, _ = _upsert_map_game(session, m, now)
+            maps_new += 1 if g_new else 0
+            team_rows_new += 1 if t_new else 0
+        # Refresh the authoritative published GameId list + count from the map
+        # query (the discovery query may have truncated).
+        published_gids = sorted({str(m.get("GameId")) for m in rows if m.get("GameId")})
+        if published_gids:
+            srow.game_ids_json = json.dumps(published_gids)
+            srow.n_games = len(published_gids)
+            session.add(srow)
+            session.commit()
+        # ScoreboardPlayers in small GameId batches.
+        gids = [str(m.get("GameId")) for m in rows if m.get("GameId")]
+        for i in range(0, len(gids), 3):
+            batch = gids[i:i + 3]
+            clause = " OR ".join(f"SP.GameId={q}{g.replace(q, '')}{q}" for g in batch)
+            _time.sleep(batch_delay)
+            prows, pstatus = _cargo_get("ScoreboardPlayers=SP", SP_FIELDS, f"({clause})", log,
+                                        order_by="SP.GameId ASC", limit=60)
+            games_queried += 1
+            if prows is None:
+                if isinstance(pstatus, tuple) and pstatus[0] == "rate_limited":
+                    rate_limit_cb("429 on players", pstatus[1])
+                    return {"maps_new": maps_new, "team_rows_new": team_rows_new,
+                            "players_new": players_new, "games_queried": games_queried, "rate_limited": True}
+                continue
+            by_gid: dict[str, list] = {}
+            for pr in prows:
+                by_gid.setdefault(str(pr.get("GameId")), []).append(pr)
+            for g, plist in by_gid.items():
+                players_new += _upsert_map_players(session, g, plist, now)
+    return {"maps_new": maps_new, "team_rows_new": team_rows_new,
+            "players_new": players_new, "games_queried": games_queried, "rate_limited": False}
+
+
+def _update_series_status(session, srow) -> str:
+    """Set series_status to complete/partial. Complete = a final result exists
+    and every published GameId has map facts stored."""
+    try:
+        want_gids = set(json.loads(srow.game_ids_json or "[]"))
+    except (ValueError, TypeError):
+        want_gids = set()
+    stored = set(session.exec(
+        select(LolGameHistory.source_game_id).where(
+            LolGameHistory.source_name == MAP_SOURCE,
+            LolGameHistory.match_id == srow.match_id,
+        )
+    ).all())
+    has_result = False
+    if want_gids and want_gids <= stored:
+        # Every published map is stored; a series result is implied when each
+        # stored map has a winner.
+        winners = session.exec(
+            select(LolGameHistory.winner_team).where(
+                LolGameHistory.source_name == MAP_SOURCE,
+                LolGameHistory.match_id == srow.match_id,
+            )
+        ).all()
+        has_result = all(winners) and len(winners) > 0
+    status = "complete" if (want_gids and want_gids <= stored and has_result) else "partial"
+    if srow.series_status != status:
+        srow.series_status = status
+        session.add(srow)
+        session.commit()
+    return status
 
 
 def _ingest_leaguepedia(session, run, participants, log) -> dict:
@@ -851,21 +1151,52 @@ def _ingest_leaguepedia(session, run, participants, log) -> dict:
             if _upsert_series(session, mid, maps, now, LEAGUEPEDIA_BASE):
                 series_new += 1
 
-    # Compute last-5 eligibility per participant, ordered by series date < kickoff.
+    # Candidate window per participant: the most recent SERIES_LAST_N series by
+    # date, strictly before kickoff. These are the only series whose maps we
+    # fetch (bounded work).
+    candidate_series: dict[int, "LolSeries"] = {}
+    for name in sorted(participants):
+        kickoff = _kickoff_for_lol_team(session, name)
+        norm_names = {_norm(n) for n in resolution.get(name, [name])} | {_norm(name)}
+        mine = []
+        for s in session.exec(select(LolSeries).where(LolSeries.source_name == "leaguepedia")).all():
+            if {_norm(s.team1), _norm(s.team2)} & norm_names:
+                sdate = _parse_dt(str(s.date or "").replace(" ", "T"))
+                if kickoff is not None and sdate is not None and sdate >= kickoff:
+                    continue
+                mine.append((sdate, s))
+        mine.sort(key=lambda x: (x[0] is not None, x[0] or datetime.min.replace(tzinfo=UTC)), reverse=True)
+        for _, s in mine[:SERIES_LAST_N]:
+            candidate_series[s.id] = s
+
+    # Ingest map facts + players for the candidate series (sequential, cached).
+    map_stats = _ingest_series_maps(session, list(candidate_series.values()), log, state, _rate_limit)
+    for srow in candidate_series.values():
+        _update_series_status(session, srow)
+
+    # Now flag exactly the last SERIES_LAST_N *complete* series per team.
     team_reports = {}
     for name in sorted(participants):
         kickoff = _kickoff_for_lol_team(session, name)
         team_reports[name] = _mark_last_n_series(session, name, resolution.get(name, [name]), kickoff, now)
 
-    state.next_retry_at = None
+    if not map_stats.get("rate_limited"):
+        state.next_retry_at = None
     provider_state.record(
         session, "leaguepedia", "success",
-        request_count=requests,
-        records_processed=series_new,
-        coverage={"series_new": series_new, "teams": {k: v["eligible"] for k, v in team_reports.items()}},
+        request_count=requests + map_stats.get("games_queried", 0),
+        records_processed=series_new + map_stats.get("maps_new", 0),
+        coverage={
+            "series_new": series_new,
+            "maps_new": map_stats.get("maps_new", 0),
+            "team_map_rows_new": map_stats.get("team_rows_new", 0),
+            "player_map_rows_new": map_stats.get("players_new", 0),
+            "teams": {k: v["eligible"] for k, v in team_reports.items()},
+        },
     )
-    log("info", f"leaguepedia series_new={series_new} teams={ {k: v['eligible'] for k, v in team_reports.items()} }")
-    return {"status": "success", "series": series_new, "teams": team_reports}
+    log("info", f"leaguepedia series_new={series_new} maps_new={map_stats.get('maps_new')} "
+                f"players_new={map_stats.get('players_new')} teams={ {k: v['eligible'] for k, v in team_reports.items()} }")
+    return {"status": "success", "series": series_new, "maps": map_stats, "teams": team_reports}
 
 
 # --------------------------------------------------------------------------
@@ -922,7 +1253,7 @@ def run(session: Session) -> dict:
     lol_status = "success" if lp.get("status") in ("success", "gated") else "partial"
     source_runs.finalize(
         session, lol_run, lol_status,
-        message=f"leaguepedia={lp.get('status')}; series_new={lp.get('series')}",
+        message=f"leaguepedia={lp.get('status')}; series_new={lp.get('series')}; maps={ (lp.get('maps') or {}).get('maps_new') }",
         inserted=lp.get("series", 0),
     )
 
@@ -937,6 +1268,7 @@ def run(session: Session) -> dict:
         "football_freshness": freshness,
         "leaguepedia": lp.get("status"),
         "leaguepedia_series": lp.get("series", 0),
+        "leaguepedia_maps": lp.get("maps", {}),
         "leaguepedia_teams": lp.get("teams", {}),
         "at": datetime.now(UTC).isoformat(),
     }

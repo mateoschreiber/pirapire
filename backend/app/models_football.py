@@ -155,6 +155,9 @@ class FootballFixtureStat(SQLModel, table=True):
     data_as_of: Optional[datetime] = None
     freshness_class: Optional[str] = Field(default=None, index=True)
     eligible_for_last_n: bool = False
+    # candidate_last_n marks rows that belonged to the best available window
+    # even if not eligible now (e.g. stale). Never presented as current window.
+    candidate_last_n: bool = False
     fetched_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

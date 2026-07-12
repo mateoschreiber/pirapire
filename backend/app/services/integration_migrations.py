@@ -48,6 +48,7 @@ def run_migrations() -> None:
             "eligible_for_last_n": "INTEGER DEFAULT 0",
         }
         _add_columns(conn, "footballfixturestat", _quality)
+        _add_columns(conn, "footballfixturestat", {"candidate_last_n": "INTEGER DEFAULT 0"})
         _add_columns(
             conn,
             "footballfixtureplayerstat",
@@ -59,7 +60,7 @@ def run_migrations() -> None:
                 "eligible_for_last_n": "INTEGER DEFAULT 0",
             },
         )
-        _add_columns(conn, "lolseries", {**_quality, "game_ids_json": "TEXT"})
+        _add_columns(conn, "lolseries", {**_quality, "game_ids_json": "TEXT", "series_status": "TEXT"})
         conn.commit()
     finally:
         conn.close()

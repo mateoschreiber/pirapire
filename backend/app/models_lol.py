@@ -102,6 +102,9 @@ class LolSeries(SQLModel, table=True):
     n_games: Optional[int] = None
     game_ids_json: Optional[str] = None
     source_key: str = Field(index=True)
+    # series_status: 'complete' when result + all published maps are present,
+    # otherwise 'partial'. Only 'complete' series may be picked for the window.
+    series_status: Optional[str] = Field(default=None, index=True)
     # Phase 4B2 data-quality fields.
     source: Optional[str] = Field(default=None, index=True)
     source_url: Optional[str] = None

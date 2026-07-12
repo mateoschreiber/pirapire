@@ -8,7 +8,7 @@ Classifies each field for a team's eligible window as one of:
 """
 from __future__ import annotations
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from ..models_football import FootballFixturePlayerStat, FootballFixtureStat
 from ..models_lol import LolSeries
@@ -79,6 +79,8 @@ def can_compute_player_leader(session: Session, team_name: str) -> bool:
 def classify_lol_team(session: Session, team_name: str) -> dict:
     from .lol_team_aliases import normalize_text
 
+    from ..models_lol import LolGameHistory, LolPlayerGameStat, LolTeamGameStat
+
     norm = normalize_text(team_name)
     series = session.exec(
         select(LolSeries).where(
@@ -86,8 +88,41 @@ def classify_lol_team(session: Session, team_name: str) -> dict:
         )
     ).all()
     mine = [s for s in series if norm in (normalize_text(s.team1), normalize_text(s.team2))]
+    maps = team_map_rows = player_map_rows = 0
+    for s in mine:
+        maps += session.exec(
+            select(func.count()).select_from(LolGameHistory).where(
+                LolGameHistory.source_name == "leaguepedia_map",
+                LolGameHistory.match_id == s.match_id,
+            )
+        ).one()
+        team_map_rows += session.exec(
+            select(func.count()).select_from(LolTeamGameStat).where(
+                LolTeamGameStat.source_name == "leaguepedia_map",
+                LolTeamGameStat.source_game_id.in_(
+                    select(LolGameHistory.source_game_id).where(
+                        LolGameHistory.source_name == "leaguepedia_map",
+                        LolGameHistory.match_id == s.match_id,
+                    )
+                ),
+            )
+        ).one()
+        player_map_rows += session.exec(
+            select(func.count()).select_from(LolPlayerGameStat).where(
+                LolPlayerGameStat.source_name == "leaguepedia_map",
+                LolPlayerGameStat.source_game_id.in_(
+                    select(LolGameHistory.source_game_id).where(
+                        LolGameHistory.source_name == "leaguepedia_map",
+                        LolGameHistory.match_id == s.match_id,
+                    )
+                ),
+            )
+        ).one()
     return {
         "eligible_series": len(mine),
         "series_class": "complete" if len(mine) >= 5 else ("partial" if mine else "absent"),
         "match_ids": [s.match_id for s in mine],
+        "maps": maps,
+        "team_map_rows": team_map_rows,
+        "player_map_rows": player_map_rows,
     }
