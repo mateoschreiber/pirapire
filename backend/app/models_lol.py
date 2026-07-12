@@ -100,7 +100,16 @@ class LolSeries(SQLModel, table=True):
     team2: Optional[str] = Field(default=None, index=True)
     date: Optional[str] = None
     n_games: Optional[int] = None
+    game_ids_json: Optional[str] = None
     source_key: str = Field(index=True)
+    # Phase 4B2 data-quality fields.
+    source: Optional[str] = Field(default=None, index=True)
+    source_url: Optional[str] = None
+    source_id: Optional[str] = Field(default=None, index=True)
+    observed_at: Optional[datetime] = None
+    data_as_of: Optional[datetime] = None
+    freshness_class: Optional[str] = Field(default=None, index=True)
+    eligible_for_last_n: bool = False
     fetched_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

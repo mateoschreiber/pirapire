@@ -38,6 +38,28 @@ def run_migrations() -> None:
             "lolgamehistory",
             {"match_id": "TEXT", "n_game_in_match": "INTEGER"},
         )
+        _quality = {
+            "source": "TEXT",
+            "source_url": "TEXT",
+            "source_id": "TEXT",
+            "observed_at": "TIMESTAMP",
+            "data_as_of": "TIMESTAMP",
+            "freshness_class": "TEXT",
+            "eligible_for_last_n": "INTEGER DEFAULT 0",
+        }
+        _add_columns(conn, "footballfixturestat", _quality)
+        _add_columns(
+            conn,
+            "footballfixtureplayerstat",
+            {
+                "source": "TEXT",
+                "source_id": "TEXT",
+                "observed_at": "TIMESTAMP",
+                "freshness_class": "TEXT",
+                "eligible_for_last_n": "INTEGER DEFAULT 0",
+            },
+        )
+        _add_columns(conn, "lolseries", {**_quality, "game_ids_json": "TEXT"})
         conn.commit()
     finally:
         conn.close()

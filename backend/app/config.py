@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     leaguepedia_base_url: str = "https://lol.fandom.com/wiki/Special:CargoExport"
     leaguepedia_import_lookback_days: int = 21
     leaguepedia_import_lookahead_days: int = 14
+    leaguepedia_request_delay_seconds: float = 2.0
 
     # LoL historical competitive data
     lol_history_enabled: bool = True

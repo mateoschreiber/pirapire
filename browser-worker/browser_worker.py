@@ -6,6 +6,10 @@ from urllib.parse import urlparse
 
 ALLOWED_HOSTS = {'aposta.la', 'api.aposta.la', 'www.aposta.la'}
 
+# Phase 4B2: public, visible football pages allowed for the render fallback.
+# Public, CAPTCHA-free pages only; never private/undocumented endpoints.
+RENDER_ALLOWED_HOSTS = {'www.thesportsdb.com', 'thesportsdb.com'}
+
 app = FastAPI(title='Pirapire Browser Worker', docs_url=None, redoc_url=None)
 
 _browser = None
@@ -188,6 +192,33 @@ async def snapshot(target: str = Query(...), timeout: int = Query(60000)):
         return PlainTextResponse(html, media_type='text/html') if target != 'aposta_lol' else JSONResponse(result)
     except Exception as e:
         return JSONResponse({'error': str(e), 'xhr': xhr_data[:30]}, status_code=500)
+    finally:
+        await context.close()
+
+@app.get('/render')
+async def render(url: str = Query(...), timeout: int = Query(30000)):
+    """Render a single public, allowlisted page and return its HTML.
+
+    Probe mode: read-only, sequential, no CAPTCHA solving, no login, and no
+    loop retries. One navigation per call.
+    """
+    p = urlparse(url)
+    if p.scheme not in ('http', 'https') or p.hostname not in RENDER_ALLOWED_HOSTS:
+        raise HTTPException(403, f'Host not allowed: {url}')
+    browser = await _get_browser()
+    context = await browser.new_context(
+        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+        viewport={'width': 1920, 'height': 1080},
+        locale='es-PY',
+    )
+    page = await context.new_page()
+    try:
+        await page.goto(url, wait_until='domcontentloaded', timeout=min(timeout, 45000))
+        await page.wait_for_timeout(3000)
+        html = await page.content()
+        return JSONResponse({'url': url, 'html': html, 'length': len(html)})
+    except Exception as e:
+        return JSONResponse({'url': url, 'error': str(e), 'html': None}, status_code=502)
     finally:
         await context.close()
 

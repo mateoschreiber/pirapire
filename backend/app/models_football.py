@@ -147,6 +147,14 @@ class FootballFixtureStat(SQLModel, table=True):
     events_present: bool = False
     source_external_id: Optional[str] = Field(default=None, index=True)
     source_key: str = Field(index=True)
+    # Phase 4B2 data-quality fields.
+    source: Optional[str] = Field(default=None, index=True)
+    source_url: Optional[str] = None
+    source_id: Optional[str] = Field(default=None, index=True)
+    observed_at: Optional[datetime] = None
+    data_as_of: Optional[datetime] = None
+    freshness_class: Optional[str] = Field(default=None, index=True)
+    eligible_for_last_n: bool = False
     fetched_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
@@ -169,4 +177,9 @@ class FootballFixturePlayerStat(SQLModel, table=True):
     penalties_scored: Optional[int] = None
     penalties_missed: Optional[int] = None
     source_key: str = Field(index=True)
+    source: Optional[str] = Field(default=None, index=True)
+    source_id: Optional[str] = Field(default=None, index=True)
+    observed_at: Optional[datetime] = None
+    freshness_class: Optional[str] = Field(default=None, index=True)
+    eligible_for_last_n: bool = False
     fetched_at: datetime = Field(default_factory=_now)

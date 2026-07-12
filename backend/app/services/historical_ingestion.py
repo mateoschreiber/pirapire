@@ -162,9 +162,12 @@ def _parse_dt(value):
         return None
     text = str(value).replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(text)
+        dt = datetime.fromisoformat(text)
     except ValueError:
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
 
 
 def _team_stats_from_response(stats_resp: list) -> dict[int, dict]:
@@ -374,6 +377,12 @@ def _ingest_api_football(session, run, participants, log) -> dict:
                     "ht_goals_against": _to_int(hta),
                     "result": result,
                     "source_external_id": str(fid),
+                    "source": "api_football",
+                    "source_url": f"{settings.api_football_base_url.rstrip('/')}/fixtures?id={fid}",
+                    "source_id": str(fid),
+                    "observed_at": datetime.now(UTC),
+                    "data_as_of": kickoff,
+                    "freshness_class": "historical_fallback",
                 })
             session.commit()
             fixtures_seen += 1
@@ -487,6 +496,129 @@ def _ingest_thesportsdb(session, run, participants, log) -> dict:
 
 
 # --------------------------------------------------------------------------
+# Football freshness (staleness marking + last-N eligibility)
+# --------------------------------------------------------------------------
+
+def _kickoff_for_football_team(session, team_name):
+    row = session.exec(
+        select(ImportedOdds.kickoff_utc)
+        .where(ImportedOdds.is_current, ImportedOdds.sport == "football")
+        .where((ImportedOdds.team_a == team_name) | (ImportedOdds.team_b == team_name))
+    ).first()
+    if row is None:
+        return None
+    kickoff = row[0] if isinstance(row, tuple) else row
+    if kickoff is not None and kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=UTC)
+    return kickoff
+
+
+def _most_recent_real_match_date(session, participant, log) -> datetime | None:
+    """Use TheSportsDB eventslast to find the most recent real match date.
+
+    This is a freshness signal only: a more recent published match proves that
+    the API-Football 2022-2024 rows are historical fallback (stale).
+    """
+    api_key, _ = SecretProvider.get_secret("thesportsdb", "api_key", session=session)
+    if not api_key:
+        api_key = settings.thesportsdb_free_key
+    client = TheSportsDBClient(api_key, request_delay=settings.thesportsdb_request_delay_seconds,
+                               cache_ttl_seconds=settings.thesportsdb_cache_ttl_seconds, log_callback=log)
+    search_name = THESPORTSDB_TEAM_NAMES.get(participant, participant)
+    res = client.search_teams(search_name)
+    team_id = None
+    if res.get("ok"):
+        for t in (res.get("data") or {}).get("teams") or []:
+            if (t.get("strSport") or "").lower() in ("soccer", "football") and _norm(t.get("strTeam")) == _norm(search_name):
+                team_id = t.get("idTeam")
+                break
+    if not team_id:
+        return None
+    last = client.events_last(team_id)
+    if not last.get("ok"):
+        return None
+    best = None
+    for ev in (last.get("data") or {}).get("results") or []:
+        dt = _parse_dt((ev.get("strTimestamp") or ev.get("dateEvent") or "").replace(" ", "T"))
+        if dt is not None and (best is None or dt > best):
+            best = dt
+    return best
+
+
+def _football_freshness(session, participants, log) -> dict:
+    """Mark staleness and last-10 eligibility for API-Football fixture rows.
+
+    - eligible_for_last_n: exactly the 10 most recent FINISHED rows (by kickoff)
+      for the team, strictly before the Aposta event kickoff.
+    - historical_fallback_stale: rows whose kickoff is older than a more recent
+      real match proven by another source (TheSportsDB eventslast).
+    """
+    report = {}
+    for participant in sorted(participants):
+        recent_real = _most_recent_real_match_date(session, participant, log)
+        kickoff = _kickoff_for_football_team(session, participant)
+        # Rows for this participant (either side).
+        rows = session.exec(
+            select(FootballFixtureStat).where(
+                FootballFixtureStat.provider == "api_football",
+                (FootballFixtureStat.team_name == participant) | (FootballFixtureStat.opponent_name == participant),
+            )
+        ).all()
+        # Deduplicate to one perspective per fixture for ordering.
+        by_fixture = {}
+        for r in rows:
+            by_fixture.setdefault(r.fixture_id, []).append(r)
+        dated = []
+        for fid, frows in by_fixture.items():
+            k = frows[0].kickoff_utc
+            if k is not None and k.tzinfo is None:
+                k = k.replace(tzinfo=UTC)
+            dated.append((k, fid, frows))
+        # Order most recent first; only fixtures strictly before the event kickoff.
+        def _before(k):
+            return kickoff is None or (k is not None and k < kickoff)
+        eligible_sorted = sorted(
+            [d for d in dated if _before(d[0])],
+            key=lambda x: (x[0] is not None, x[0] or datetime.min.replace(tzinfo=UTC)),
+            reverse=True,
+        )
+        eligible_fids = {fid for _, fid, _ in eligible_sorted[:FOOTBALL_FIXTURES_PER_TEAM]}
+        stale_count = 0
+        eligible_count = 0
+        for k, fid, frows in dated:
+            is_eligible = fid in eligible_fids
+            # Staleness: a newer real match exists than this row's kickoff.
+            is_stale = (
+                recent_real is not None and k is not None and k < recent_real
+                and (recent_real - k).days > 30
+            )
+            for r in frows:
+                changed = False
+                if r.eligible_for_last_n != is_eligible:
+                    r.eligible_for_last_n = is_eligible
+                    changed = True
+                new_class = "historical_fallback_stale" if is_stale else "historical_fallback"
+                if r.freshness_class != new_class:
+                    r.freshness_class = new_class
+                    changed = True
+                if changed:
+                    session.add(r)
+            if is_eligible:
+                eligible_count += 1
+            if is_stale:
+                stale_count += 1
+        session.commit()
+        report[participant] = {
+            "fixtures": len(by_fixture),
+            "eligible_last_10": min(eligible_count, FOOTBALL_FIXTURES_PER_TEAM),
+            "stale": stale_count,
+            "most_recent_real": recent_real.isoformat() if recent_real else None,
+            "eligible_dates": [str(x[0]) for x in eligible_sorted[:FOOTBALL_FIXTURES_PER_TEAM]],
+        }
+    return report
+
+
+# --------------------------------------------------------------------------
 # Leaguepedia (gated single query; no retry on 429)
 # --------------------------------------------------------------------------
 
@@ -509,8 +641,166 @@ def _set_cursor(session, slug, cursor: dict) -> None:
     session.commit()
 
 
+LEAGUEPEDIA_BASE = "https://lol.fandom.com/wiki/Special:CargoExport"
+SERIES_LAST_N = 5
+
+
+def _leaguepedia_query(team_names: list[str], log):
+    """One paginated Cargo call for a set of team names, DESC by date.
+
+    Searches Team1 OR Team2 across all registered names, without a league
+    filter or a short time window. Returns (rows|None, status).
+    """
+    from urllib.error import HTTPError
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    q = chr(34)
+    clauses = []
+    for name in team_names:
+        safe = name.replace(q, "")
+        clauses.append(f"SG.Team1={q}{safe}{q}")
+        clauses.append(f"SG.Team2={q}{safe}{q}")
+    if not clauses:
+        return [], "success"
+    where = "(" + " OR ".join(clauses) + ")"
+    params = {
+        "tables": "ScoreboardGames=SG",
+        "fields": "SG.MatchId,SG.GameId,SG.N_GameInMatch,SG.DateTime_UTC,SG.Team1,SG.Team2,SG.Winner,SG.OverviewPage",
+        "where": where,
+        "order_by": "SG.DateTime_UTC DESC",
+        "format": "json",
+        "limit": "100",
+    }
+    url = settings.leaguepedia_base_url + "?" + urlencode(params)
+    req = Request(url, headers={"User-Agent": settings.leaguepedia_user_agent})
+    try:
+        with urlopen(req, timeout=25) as res:
+            body = res.read().decode("utf-8", "replace")
+    except HTTPError as exc:
+        if exc.code == 429:
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            return None, ("rate_limited", retry_after)
+        log("warning", f"leaguepedia HTTP {exc.code}; no retry")
+        return None, "error"
+    except Exception as exc:  # noqa: BLE001
+        log("warning", f"leaguepedia unavailable: {type(exc).__name__}")
+        return None, "error"
+    try:
+        rows = json.loads(body)
+    except (ValueError, json.JSONDecodeError):
+        return None, ("rate_limited", None)
+    if isinstance(rows, dict) and rows.get("error"):
+        return None, ("rate_limited", None)
+    if not isinstance(rows, list):
+        log("warning", "leaguepedia unexpected structure; no retry")
+        return None, "error"
+    return rows, "success"
+
+
+def _group_series(rows: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        mid = str(row.get("MatchId") or "").strip()
+        gid = str(row.get("GameId") or "").strip()
+        if not mid or not gid:  # a series requires MatchId AND at least one GameId
+            continue
+        grouped.setdefault(mid, []).append(row)
+    return grouped
+
+
+def _upsert_series(session, mid, maps, now, source_url) -> bool:
+    first = maps[0]
+    skey = "leaguepedia|" + mid
+    srow = session.exec(select(LolSeries).where(LolSeries.source_key == skey)).first()
+    is_new = srow is None
+    srow = srow or LolSeries(source_name="leaguepedia", match_id=mid, source_key=skey)
+    srow.overview_page = first.get("OverviewPage")
+    srow.tournament = first.get("OverviewPage")
+    srow.team1 = first.get("Team1")
+    srow.team2 = first.get("Team2")
+    srow.date = str(first.get("DateTime UTC") or "")
+    srow.n_games = len(maps)
+    srow.game_ids_json = json.dumps(sorted({str(m.get("GameId")) for m in maps if m.get("GameId")}))
+    srow.source = "leaguepedia"
+    srow.source_url = source_url
+    srow.source_id = mid
+    srow.observed_at = now
+    srow.data_as_of = _parse_dt(str(first.get("DateTime UTC") or "").replace(" ", "T"))
+    srow.freshness_class = "fresh"
+    srow.updated_at = now
+    if is_new:
+        srow.fetched_at = now
+    session.add(srow)
+    session.commit()
+    # link existing maps to the confirmed MatchId
+    for m in maps:
+        gid = str(m.get("GameId") or "").strip()
+        if not gid:
+            continue
+        game = session.exec(
+            select(LolGameHistory).where(
+                LolGameHistory.source_name == "leaguepedia",
+                LolGameHistory.source_game_id == gid,
+            )
+        ).first()
+        if game is not None:
+            game.match_id = mid
+            game.n_game_in_match = _to_int(m.get("N GameInMatch") or m.get("N_GameInMatch"))
+            game.updated_at = now
+            session.add(game)
+    session.commit()
+    return is_new
+
+
+def _kickoff_for_lol_team(session, team_name):
+    row = session.exec(
+        select(ImportedOdds.kickoff_utc)
+        .where(ImportedOdds.is_current, ImportedOdds.sport == "lol")
+        .where((ImportedOdds.team_a == team_name) | (ImportedOdds.team_b == team_name))
+    ).first()
+    if row is None:
+        return None
+    kickoff = row[0] if isinstance(row, tuple) else row
+    if kickoff is not None and kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=UTC)
+    return kickoff
+
+
+def _mark_last_n_series(session, team_name, source_names, kickoff, now) -> dict:
+    """Flag the last SERIES_LAST_N series (by date, before kickoff) for a team."""
+    norm_names = {_norm(n) for n in source_names} | {_norm(team_name)}
+    candidates = session.exec(
+        select(LolSeries).where(LolSeries.source_name == "leaguepedia")
+    ).all()
+    mine = []
+    for s in candidates:
+        if {_norm(s.team1), _norm(s.team2)} & norm_names:
+            sdate = _parse_dt(str(s.date or "").replace(" ", "T"))
+            if kickoff is not None and sdate is not None and sdate >= kickoff:
+                continue  # only series strictly before kickoff
+            mine.append((sdate, s))
+    mine.sort(key=lambda x: (x[0] is not None, x[0] or datetime.min.replace(tzinfo=UTC)), reverse=True)
+    selected = mine[:SERIES_LAST_N]
+    selected_ids = {s.id for _, s in selected}
+    for _, s in mine:
+        want = s.id in selected_ids
+        if s.eligible_for_last_n != want:
+            s.eligible_for_last_n = want
+            session.add(s)
+    session.commit()
+    return {
+        "team": team_name,
+        "total_series": len(mine),
+        "eligible": len(selected),
+        "dates": [str(s.date) for _, s in selected],
+    }
+
+
 def _ingest_leaguepedia(session, run, participants, log) -> dict:
     from datetime import timedelta
+
+    from .lol_team_aliases import leaguepedia_query_names, seed_leaguepedia_aliases
 
     state = _get_state(session, "leaguepedia")
     now = datetime.now(UTC)
@@ -520,116 +810,62 @@ def _ingest_leaguepedia(session, run, participants, log) -> dict:
             nra = nra.replace(tzinfo=UTC)
         if nra > now:
             log("info", f"leaguepedia gated until {nra.isoformat()}; skipped")
-            return {"status": "gated", "series": 0, "maps_linked": 0, "next_retry_at": nra.isoformat()}
+            return {"status": "gated", "series": 0, "teams": {}, "next_retry_at": nra.isoformat()}
 
-    from urllib.error import HTTPError
-    from urllib.parse import urlencode
-    from urllib.request import Request, urlopen
+    seed_leaguepedia_aliases(session)
 
-    start = (now - timedelta(days=settings.leaguepedia_import_lookback_days)).strftime("%Y-%m-%d %H:%M:%S")
-    end = (now + timedelta(days=settings.leaguepedia_import_lookahead_days)).strftime("%Y-%m-%d %H:%M:%S")
-    q = chr(34)
-    where = "SG.DateTime_UTC >= " + q + start + q + " AND SG.DateTime_UTC <= " + q + end + q
-    params = {
-        "tables": "ScoreboardGames=SG",
-        "fields": "SG.MatchId,SG.GameId,SG.N_GameInMatch,SG.DateTime_UTC,SG.Team1,SG.Team2,SG.Winner,SG.OverviewPage",
-        "where": where,
-        "format": "json",
-        "limit": "200",
-    }
-    url = settings.leaguepedia_base_url + "?" + urlencode(params)
-    req = Request(url, headers={"User-Agent": settings.leaguepedia_user_agent})
-
-    def _rate_limit(reason: str):
-        state.next_retry_at = now + timedelta(hours=6)
+    def _rate_limit(reason, retry_after=None):
+        try:
+            cooldown = float(retry_after) if retry_after else 6 * 3600
+        except (TypeError, ValueError):
+            cooldown = 6 * 3600
+        state.next_retry_at = now + timedelta(seconds=cooldown)
         state.status = "rate_limited"
         state.last_error_code = "quota_exceeded"
         state.last_checked_at = now
         session.add(state)
         session.commit()
-        log("warning", f"leaguepedia {reason}; next_retry_at set +6h; no retry")
-        return {"status": "rate_limited", "series": 0, "maps_linked": 0, "next_retry_at": state.next_retry_at.isoformat()}
+        log("warning", f"leaguepedia {reason}; next_retry_at={state.next_retry_at.isoformat()}; no retry")
+        return {"status": "rate_limited", "series": 0, "teams": {}, "next_retry_at": state.next_retry_at.isoformat()}
 
-    try:
-        with urlopen(req, timeout=25) as res:
-            body = res.read().decode("utf-8", "replace")
-    except HTTPError as exc:
-        if exc.code == 429:
-            return _rate_limit("HTTP 429")
-        log("warning", f"leaguepedia HTTP {exc.code}; no retry")
-        return {"status": "error", "series": 0, "maps_linked": 0}
-    except Exception as exc:  # noqa: BLE001
-        log("warning", f"leaguepedia unavailable: {type(exc).__name__}")
-        return {"status": "error", "series": 0, "maps_linked": 0}
-
-    try:
-        rows = json.loads(body)
-    except (ValueError, json.JSONDecodeError):
-        return _rate_limit("non-JSON response (ratelimited)")
-    if isinstance(rows, dict) and rows.get("error"):
-        return _rate_limit("cargo error (ratelimited)")
-    if not isinstance(rows, list):
-        log("warning", "leaguepedia unexpected structure; no retry")
-        return {"status": "error", "series": 0, "maps_linked": 0}
-
-    part_norm = {_norm(p) for p in participants}
+    # One sequential, rate-limited query per participant within this window.
+    # Each participant is searched by all of its registered Leaguepedia names in
+    # Team1 OR Team2, ordered DESC. Stops immediately on the first 429.
     series_new = 0
-    maps_linked = 0
-    grouped: dict[str, list[dict]] = {}
-    for row in rows:
-        mid = str(row.get("MatchId") or "").strip()
-        if not mid:
+    resolution: dict[str, list[str]] = {}
+    requests = 0
+    import time as _time
+    for idx, name in enumerate(sorted(participants)):
+        names = leaguepedia_query_names(session, name) or [name]
+        resolution[name] = names
+        if idx > 0:
+            _time.sleep(getattr(settings, "leaguepedia_request_delay_seconds", 2.0))
+        rows, status = _leaguepedia_query(names, log)
+        requests += 1
+        if rows is None:
+            if isinstance(status, tuple) and status[0] == "rate_limited":
+                return _rate_limit("429/ratelimited", status[1])
+            log("warning", f"leaguepedia query failed for {name}; continuing")
             continue
-        if part_norm and not ({_norm(row.get("Team1")), _norm(row.get("Team2"))} & part_norm):
-            continue
-        grouped.setdefault(mid, []).append(row)
+        for mid, maps in _group_series(rows).items():
+            if _upsert_series(session, mid, maps, now, LEAGUEPEDIA_BASE):
+                series_new += 1
 
-    for mid, maps in grouped.items():
-        first = maps[0]
-        skey = "leaguepedia|" + mid
-        srow = session.exec(select(LolSeries).where(LolSeries.source_key == skey)).first()
-        is_new = srow is None
-        srow = srow or LolSeries(source_name="leaguepedia", match_id=mid, source_key=skey)
-        srow.overview_page = first.get("OverviewPage")
-        srow.tournament = first.get("OverviewPage")
-        srow.team1 = first.get("Team1")
-        srow.team2 = first.get("Team2")
-        srow.date = str(first.get("DateTime UTC") or "")
-        srow.n_games = len(maps)
-        srow.updated_at = now
-        if is_new:
-            srow.fetched_at = now
-            series_new += 1
-        session.add(srow)
-        session.commit()
-        # link existing maps to the confirmed MatchId
-        for m in maps:
-            gid = str(m.get("GameId") or "").strip()
-            if not gid:
-                continue
-            game = session.exec(
-                select(LolGameHistory).where(
-                    LolGameHistory.source_name == "leaguepedia",
-                    LolGameHistory.source_game_id == gid,
-                )
-            ).first()
-            if game is not None:
-                game.match_id = mid
-                game.n_game_in_match = _to_int(m.get("N GameInMatch") or m.get("N_GameInMatch"))
-                game.updated_at = now
-                session.add(game)
-                maps_linked += 1
-        session.commit()
+    # Compute last-5 eligibility per participant, ordered by series date < kickoff.
+    team_reports = {}
+    for name in sorted(participants):
+        kickoff = _kickoff_for_lol_team(session, name)
+        team_reports[name] = _mark_last_n_series(session, name, resolution.get(name, [name]), kickoff, now)
 
     state.next_retry_at = None
     provider_state.record(
         session, "leaguepedia", "success",
-        request_count=1,
-        records_processed=series_new + maps_linked,
-        coverage={"series": series_new, "maps_linked": maps_linked},
+        request_count=requests,
+        records_processed=series_new,
+        coverage={"series_new": series_new, "teams": {k: v["eligible"] for k, v in team_reports.items()}},
     )
-    log("info", f"leaguepedia series={series_new} maps_linked={maps_linked}")
-    return {"status": "success", "series": series_new, "maps_linked": maps_linked}
+    log("info", f"leaguepedia series_new={series_new} teams={ {k: v['eligible'] for k, v in team_reports.items()} }")
+    return {"status": "success", "series": series_new, "teams": team_reports}
 
 
 # --------------------------------------------------------------------------
@@ -669,10 +905,11 @@ def run(session: Session) -> dict:
 
     tsdb = _ingest_thesportsdb(session, football_run, participants["football"], flog)
     api = _ingest_api_football(session, football_run, participants["football"], flog)
+    freshness = _football_freshness(session, participants["football"], flog)
     football_status = "partial" if api.get("status") in ("partial", "unconfigured") else "success"
     source_runs.finalize(
         session, football_run, football_status,
-        message=f"api_football={api.get('status')}; tsdb_evidence={tsdb.get('evidence_rows')}",
+        message=f"api_football={api.get('status')}; tsdb_evidence={tsdb.get('evidence_rows')}; freshness={ {k: v['eligible_last_10'] for k, v in freshness.items()} }",
         inserted=tsdb.get("evidence_rows", 0) + api.get("fixtures", 0),
     )
 
@@ -685,7 +922,7 @@ def run(session: Session) -> dict:
     lol_status = "success" if lp.get("status") in ("success", "gated") else "partial"
     source_runs.finalize(
         session, lol_run, lol_status,
-        message=f"leaguepedia={lp.get('status')}; series={lp.get('series')}",
+        message=f"leaguepedia={lp.get('status')}; series_new={lp.get('series')}",
         inserted=lp.get("series", 0),
     )
 
@@ -697,7 +934,9 @@ def run(session: Session) -> dict:
         "api_football_requests": api.get("requests", 0),
         "api_football_fixtures": api.get("fixtures", 0),
         "thesportsdb_evidence_rows": tsdb.get("evidence_rows", 0),
+        "football_freshness": freshness,
         "leaguepedia": lp.get("status"),
         "leaguepedia_series": lp.get("series", 0),
+        "leaguepedia_teams": lp.get("teams", {}),
         "at": datetime.now(UTC).isoformat(),
     }
