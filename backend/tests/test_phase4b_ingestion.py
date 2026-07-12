@@ -12,4 +12,7 @@ def test_active_participants_are_scoped_to_current_odds():
 def test_unconfigured_api_football_does_not_break_ingestion():
     with Session(engine) as session:
         result = run(session)
-        assert result["api_football"] in {"unconfigured", "db", "env"}
+        # In tests live ingestion is disabled; the coordinator must degrade
+        # gracefully without raising and without hitting the network.
+        assert result["api_football"] in {"unconfigured", "db", "env", "ui", "disabled", "skipped_active_run"}
+        assert "at" in result

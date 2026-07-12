@@ -21,6 +21,7 @@ class TheSportsDBClient:
         "lookupevent.php",
         "lookupeventstats.php",
         "lookuplineup.php",
+        "eventslast.php",
     }
 
     def __init__(
@@ -110,3 +111,6 @@ class TheSportsDBClient:
 
     def lookup_lineup(self, external_id: str) -> dict:
         return self._do("lookuplineup.php", {"id": external_id})
+
+    def events_last(self, team_external_id: str) -> dict:
+        return self._do("eventslast.php", {"id": team_external_id})

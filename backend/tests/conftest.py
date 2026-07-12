@@ -11,6 +11,7 @@ os.environ["INTEGRATION_MASTER_KEY_PATH"] = str(_tmp_dir / "integration-master.k
 os.environ["CONFIG_ADMIN_PASSWORD_PATH"] = str(_tmp_dir / "config-admin.password")
 os.environ["CONFIG_SESSION_KEY_PATH"] = str(_tmp_dir / "config-session.key")
 os.environ["FOOTBALL_SYNC_UI_BOOTSTRAP_REQUIRED"] = "false"
+os.environ["PHASE4B_LIVE_INGESTION"] = "false"
 
 _app_dir = Path(__file__).resolve().parents[1] / "app"
 sys.path.insert(0, str(_app_dir.parent))

@@ -80,8 +80,28 @@ class LolGameHistory(SQLModel, table=True):
     blue_team: Optional[str] = None
     red_team: Optional[str] = None
     winner_team: Optional[str] = None
+    match_id: Optional[str] = Field(default=None, index=True)
+    n_game_in_match: Optional[int] = None
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class LolSeries(SQLModel, table=True):
+    """A confirmed best-of series grouping maps only by a verified MatchId."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_name: str = Field(index=True)
+    match_id: str = Field(index=True)
+    overview_page: Optional[str] = None
+    tournament: Optional[str] = None
+    league: Optional[str] = Field(default=None, index=True)
+    team1: Optional[str] = Field(default=None, index=True)
+    team2: Optional[str] = Field(default=None, index=True)
+    date: Optional[str] = None
+    n_games: Optional[int] = None
+    source_key: str = Field(index=True)
+    fetched_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
 

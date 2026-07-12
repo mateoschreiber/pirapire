@@ -134,3 +134,5 @@ class IntegrationProviderState(SQLModel, table=True):
     request_count: int = 0
     records_processed: int = 0
     coverage_json: Optional[str] = None
+    next_retry_at: Optional[datetime] = None
+    cursor_json: Optional[str] = None

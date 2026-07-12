@@ -109,3 +109,64 @@ class FootballEntityMetadata(SQLModel, table=True):
     sport: Optional[str] = None
     fallback_used: bool = True
     retrieved_at: datetime = Field(default_factory=_now)
+
+
+class FootballFixtureStat(SQLModel, table=True):
+    """Per-team statistics for a resolved fixture. Null-preserving evidence.
+
+    One row per (provider, fixture_id, team side). Missing values stay null;
+    zeros are only stored when the provider explicitly published a zero.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider: str = Field(index=True)
+    fixture_id: str = Field(index=True)
+    team_side: str = Field(index=True)
+    team_external_id: Optional[str] = Field(default=None, index=True)
+    team_name: Optional[str] = None
+    opponent_name: Optional[str] = None
+    competition_name: Optional[str] = None
+    season: Optional[str] = None
+    kickoff_utc: Optional[datetime] = Field(default=None, index=True)
+    match_status: Optional[str] = None
+    is_home: Optional[bool] = None
+    goals_for: Optional[int] = None
+    goals_against: Optional[int] = None
+    ht_goals_for: Optional[int] = None
+    ht_goals_against: Optional[int] = None
+    result: Optional[str] = None
+    corners: Optional[int] = None
+    shots_total: Optional[int] = None
+    shots_on_target: Optional[int] = None
+    fouls: Optional[int] = None
+    yellow_cards: Optional[int] = None
+    red_cards: Optional[int] = None
+    penalties_scored: Optional[int] = None
+    penalties_missed: Optional[int] = None
+    stats_present: bool = False
+    events_present: bool = False
+    source_external_id: Optional[str] = Field(default=None, index=True)
+    source_key: str = Field(index=True)
+    fetched_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class FootballFixturePlayerStat(SQLModel, table=True):
+    """Per-player, per-fixture detail (fouls, cards) as null-preserving evidence."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider: str = Field(index=True)
+    fixture_id: str = Field(index=True)
+    team_name: Optional[str] = Field(default=None, index=True)
+    player_external_id: Optional[str] = Field(default=None, index=True)
+    player_name: Optional[str] = Field(default=None, index=True)
+    fouls_committed: Optional[int] = None
+    fouls_drawn: Optional[int] = None
+    yellow_cards: Optional[int] = None
+    red_cards: Optional[int] = None
+    shots_total: Optional[int] = None
+    shots_on_target: Optional[int] = None
+    penalties_scored: Optional[int] = None
+    penalties_missed: Optional[int] = None
+    source_key: str = Field(index=True)
+    fetched_at: datetime = Field(default_factory=_now)

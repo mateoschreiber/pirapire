@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     football_data_api_key: str = ""
     api_football_api_key: str = ""
     api_football_base_url: str = "https://v3.football.api-sports.io"
+    api_football_request_delay_seconds: float = 6.5
+    api_football_bootstrap_request_cap: int = 90
+    api_football_seasons: str = "2024,2023,2022"
+    phase4b_live_ingestion: bool = True
     football_data_base_url: str = "https://api.football-data.org/v4"
     football_data_competitions: str = "WC,CL,PL,BL1,SA,PD,FL1"
     football_data_request_delay_seconds: float = 7.0
