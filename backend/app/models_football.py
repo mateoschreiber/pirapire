@@ -210,3 +210,22 @@ class EventTeamHistoryWindow(SQLModel, table=True):
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+
+class EventStatisticsReadModel(SQLModel, table=True):
+    """Materialized descriptive statistics per event and sport (Phase 4C).
+
+    payload_json holds the computed descriptive stats. input_fingerprint is a
+    hash of the window + raw stats + kickoff; recomputation happens only when it
+    changes. No predictions/odds are ever stored here.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_key: str = Field(index=True)
+    sport: str = Field(index=True)
+    status: str = "ok"
+    input_fingerprint: str = Field(index=True)
+    payload_json: str = ""
+    coverage_json: Optional[str] = None
+    computed_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)

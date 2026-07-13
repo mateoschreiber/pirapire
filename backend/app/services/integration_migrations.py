@@ -62,9 +62,27 @@ def run_migrations() -> None:
             },
         )
         _add_columns(conn, "lolseries", {**_quality, "game_ids_json": "TEXT", "series_status": "TEXT"})
+        _create_indexes(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _create_indexes(conn) -> None:
+    """Composite indexes justified by EXPLAIN QUERY PLAN for Phase 4C read paths."""
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    idx = [
+        ("ix_ethw_event_team_rank", "eventteamhistorywindow", "event_key, team, rank"),
+        ("ix_lgh_source_match", "lolgamehistory", "source_name, match_id"),
+        ("ix_ltgs_source_game", "lolteamgamestat", "source_name, source_game_id"),
+        ("ix_lpgs_source_game", "lolplayergamestat", "source_name, source_game_id"),
+        ("ix_esrm_event_sport", "eventstatisticsreadmodel", "event_key, sport"),
+        ("ix_lolseries_status", "lolseries", "series_status"),
+        ("ix_ffs_provider_source", "footballfixturestat", "provider, source_id"),
+    ]
+    for name, table, cols in idx:
+        if table in tables:
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})")
 
 
 def _add_columns(conn, table: str, additions: dict[str, str]) -> None:

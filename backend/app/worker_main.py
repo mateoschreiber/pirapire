@@ -53,6 +53,15 @@ def run_fresh_football():
             logger.warning("Fresh football error: %s", e)
 
 
+def run_descriptive_stats():
+    from app.services.descriptive_stats import rebuild_all
+    with Session(engine) as session:
+        try:
+            logger.info("Descriptive stats: %s", rebuild_all(session))
+        except Exception as e:
+            logger.warning("Descriptive stats error: %s", e)
+
+
 def run_sports_sync():
     from app.services.live_source_sync import sync_if_stale
     with Session(engine) as session:
@@ -70,6 +79,7 @@ if __name__ == '__main__':
     scheduler.add_job(run_sports_sync, IntervalTrigger(hours=4), id='sports', coalesce=True, max_instances=1)
     scheduler.add_job(run_historical_ingestion, IntervalTrigger(hours=1), id='historical-ingestion', coalesce=True, max_instances=1)
     scheduler.add_job(run_fresh_football, IntervalTrigger(hours=1), id='fresh-football', coalesce=True, max_instances=1)
+    scheduler.add_job(run_descriptive_stats, IntervalTrigger(hours=1), id='descriptive-stats', coalesce=True, max_instances=1)
     scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=24), id='wc_squads', coalesce=True, max_instances=1)
     scheduler.start()
     logger.info('Scheduler: Aposta 12min, Sports 4h')
