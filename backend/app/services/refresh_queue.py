@@ -63,7 +63,7 @@ def claim_task(session: Session, worker_id: str) -> RefreshQueue | None:
         .where(RefreshQueue.locked_at.is_not(None))
     ).all()
     for t in expired:
-        if t.locked_at is not None and (now.replace(tzinfo=None) - t.locked_at).total_seconds() > LOCK_TTL_SECONDS:
+        if t.locked_at is not None and (now - (t.locked_at.replace(tzinfo=UTC) if t.locked_at.tzinfo is None else t.locked_at.astimezone(UTC))).total_seconds() > LOCK_TTL_SECONDS:
             t.locked_by = None
             t.locked_at = None
             session.add(t)
@@ -123,7 +123,7 @@ def enqueue_scheduled_events(session: Session) -> int:
     enqueued = 0
     for ev in events:
         if ev.last_reconciled_at is not None:
-            age_h = (now - ev.last_reconciled_at).total_seconds() / 3600.0
+            age_h = (now - (ev.last_reconciled_at.replace(tzinfo=UTC) if ev.last_reconciled_at.tzinfo is None else ev.last_reconciled_at.astimezone(UTC))).total_seconds() / 3600.0
             if age_h < ttl:
                 continue  # not stale yet
         enqueue(session, ev.event_key, ev.sport or "unknown", "scheduled_refresh")

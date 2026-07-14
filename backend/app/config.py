@@ -100,6 +100,15 @@ class Settings(BaseSettings):
     lol_history_allow_download: bool = False
     lol_history_download_url_template: str = ""
 
+    # Operational cadence: configurable, conservative defaults.
+    worker_aposta_sync_minutes: int = 30
+    worker_sports_sync_hours: int = 6
+    worker_historical_ingestion_hours: int = 24
+    worker_fresh_football_hours: int = 4
+    worker_descriptive_stats_hours: int = 6
+    worker_event_refresh_minutes: int = 15
+    worker_wc_squads_hours: int = 24
+
     # Recommendation engine
     recommender_default_mode: str = "probability"
     recommender_min_probability: float = 0.55

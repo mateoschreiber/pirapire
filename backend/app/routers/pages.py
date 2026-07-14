@@ -16,7 +16,7 @@ from ..models_football import (
 from ..models_history import ComboHistory, PredictionHistory
 from ..models_imports import ImportedOdds, ManualImportBatch
 from ..models_aposta import ApostaEvent
-from ..models_lol import LolChampion, LolPatch
+from ..models_lol import LolChampion, LolGameHistory, LolPatch
 from ..models_markets import MarketCatalog
 from ..models_sources import SourceRun
 from ..services import source_registry as registry
@@ -42,7 +42,7 @@ def render(request: Request, template: str, active_page: str, **extra):
 
 
 def _count(session: Session, model) -> int:
-    return len(session.exec(select(model)).all())
+    return session.exec(select(func.count()).select_from(model)).one() or 0
 
 
 def _dashboard_counts() -> dict:
@@ -72,13 +72,9 @@ def _dashboard_counts() -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
-    from ..models_imports import ImportedOdds
-    from ..models_recommendations import BetRecommendation, RecommendationRun
-    from ..models_lol import LolPlayerGameStat
-
+    """Read-only operational dashboard for stored data and current events."""
     counts = _dashboard_counts()
     with Session(engine) as session:
-        # Get current Aposta odds count
         aposta_count = (
             session.exec(
                 select(func.count())
@@ -87,66 +83,45 @@ def dashboard(request: Request):
             ).one()
             or 0
         )
-
-        # Get upcoming scheduled events only (Phase 4D1: excludes finished/historical)
-        from ..models_aposta import ApostaEvent
-
-        scheduled_keys = set(session.exec(
-            select(ApostaEvent.event_key).where(
-                ApostaEvent.local_event_state == "scheduled",
-                ApostaEvent.event_key.is_not(None),
-            )
-        ).all())
+        scheduled_keys = set(
+            session.exec(
+                select(ApostaEvent.event_key).where(
+                    ApostaEvent.local_event_state == "scheduled",
+                    ApostaEvent.event_key.is_not(None),
+                )
+            ).all()
+        )
         rows = session.exec(
             select(ImportedOdds)
-            .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current,
-                   ImportedOdds.event_key.in_(scheduled_keys) if scheduled_keys else True)
+            .where(
+                ImportedOdds.source_name == "aposta_la",
+                ImportedOdds.is_current,
+                ImportedOdds.event_key.in_(scheduled_keys) if scheduled_keys else True,
+            )
             .order_by(ImportedOdds.event_date_sort)
         ).all()
         events_dict = {}
-        for r in rows:
-            k = r.event_key or (r.team_a or "") + "|" + (r.team_b or "") + "|" + (r.competition or "") + "|" + (r.event_date_sort or "")
-            if k not in events_dict:
-                events_dict[k] = {
-                    "team_a": r.team_a,
-                    "team_b": r.team_b,
-                    "competition": r.competition,
-                    "event_date": r.kickoff_utc or r.event_date_sort,
+        for row in rows:
+            key = row.event_key or "|".join(
+                (row.team_a or "", row.team_b or "", row.competition or "", row.event_date_sort or "")
+            )
+            if key not in events_dict:
+                events_dict[key] = {
+                    "team_a": row.team_a,
+                    "team_b": row.team_b,
+                    "competition": row.competition,
+                    "event_date": row.kickoff_utc or row.event_date_sort,
                     "event_date_py": datetime_utils.event_time_display(
-                        r.kickoff_utc or r.event_date_sort, r.event_time_status
+                        row.kickoff_utc or row.event_date_sort, row.event_time_status
                     ),
-                    "event_time_status": r.event_time_status,
-                    "sport": r.sport,
+                    "sport": row.sport,
                     "markets": 0,
-                    "event_id": r.id,
-                    "event_key": r.event_key,
+                    "event_id": row.id,
+                    "event_key": row.event_key,
                 }
-            events_dict[k]["markets"] += 1
-        events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[
-            :20
-        ]
-
-        # Get latest bets
-        latest_run = session.exec(
-            select(RecommendationRun).order_by(RecommendationRun.id.desc())
-        ).first()
-        bets = []
-        if latest_run:
-            bets = session.exec(
-                select(BetRecommendation)
-                .where(BetRecommendation.run_id == latest_run.id)
-                .limit(10)
-            ).all()
-
-        # LoL player count
-        lol_players = (
-            session.exec(
-                select(func.count(func.distinct(LolPlayerGameStat.player_name))).where(
-                    LolPlayerGameStat.player_name.isnot(None)
-                )
-            ).one()
-            or 0
-        )
+            events_dict[key]["markets"] += 1
+        events = sorted(events_dict.values(), key=lambda event: event.get("event_date") or "")[:20]
+        lol_games = _count(session, LolGameHistory)
 
     return render(
         request,
@@ -155,10 +130,8 @@ def dashboard(request: Request):
         counts=counts,
         aposta_odds=aposta_count,
         football_matches=counts.get("football_matches", 0),
-        lol_games=480,
-        lol_players=lol_players,
+        lol_games=lol_games,
         events=events,
-        bets=bets,
     )
 
 

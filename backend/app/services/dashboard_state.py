@@ -9,9 +9,6 @@ from ..models_football import FootballCompetition, FootballMatch
 from ..models_imports import ImportedOdds, ManualImportBatch
 from ..models_lol import LolChampion, LolGameHistory, LolPatch, LolPlayerGameStat, LolTeamGameStat
 from ..models_recommendations import BetRecommendation, ComboRecommendation, RecommendationRun
-from .aposta_snapshot import current_odds as snapshot_current
-from .aposta_snapshot import expired_odds as snapshot_expired
-from .aposta_snapshot import historical_odds as snapshot_historical
 
 
 def now() -> datetime:
@@ -122,33 +119,57 @@ def get_lol_state(session: Session) -> dict:
 
 
 def get_aposta_state(session: Session) -> dict:
+    """Dashboard summary using SQL aggregates, never the complete odds history."""
     try:
-        mode = settings.aposta_sync_mode or 'disabled'
+        mode = settings.aposta_sync_mode or "disabled"
         last_sync_run = _safe_first(session, ApostaSyncRun, ApostaSyncRun.id)
+        now_naive = datetime.now(UTC).replace(tzinfo=None)
+        source_filter = ImportedOdds.source_name == "aposta_la"
 
-        cur = snapshot_current(session, include_stale=False)
-        exp = snapshot_expired(session)
-        hist = snapshot_historical(session)
-
-        _now_naive = datetime.utcnow()
-        cur_not_expired = [odd for odd in cur if odd.event_date and odd.event_date > _now_naive] if cur else []
-        unmatched_odds = len([odd for odd in hist if odd.market_code is None])
-
-        unmapped_set = set()
-        for odd in hist:
-            if odd.market_code or odd.market_id:
-                continue
-            unmapped_set.add((odd.sport, odd.market_text))
+        historical_odds = session.exec(
+            select(func.count()).select_from(ImportedOdds).where(source_filter)
+        ).one()
+        current_odds = session.exec(
+            select(func.count()).select_from(ImportedOdds).where(
+                source_filter, ImportedOdds.is_current, ImportedOdds.event_date > now_naive
+            )
+        ).one()
+        expired_odds = session.exec(
+            select(func.count()).select_from(ImportedOdds).where(
+                source_filter,
+                ImportedOdds.is_current,
+                ImportedOdds.event_date.is_not(None),
+                ImportedOdds.event_date <= now_naive,
+            )
+        ).one()
+        unmatched_odds = session.exec(
+            select(func.count()).select_from(ImportedOdds).where(
+                source_filter,
+                ImportedOdds.market_code.is_(None),
+                ImportedOdds.market_id.is_(None),
+            )
+        ).one()
+        unmapped_markets = session.exec(
+            select(ImportedOdds.sport, ImportedOdds.market_text)
+            .where(
+                source_filter,
+                ImportedOdds.market_code.is_(None),
+                ImportedOdds.market_id.is_(None),
+            )
+            .distinct()
+        ).all()
 
         return {
             "mode": mode,
-            "last_snapshot": last_sync_run.finished_at.isoformat() if last_sync_run and last_sync_run.finished_at else None,
+            "last_snapshot": last_sync_run.finished_at.isoformat()
+            if last_sync_run and last_sync_run.finished_at
+            else None,
             "last_run_status": last_sync_run.status if last_sync_run else None,
-            "historical_odds": len(hist),
-            "current_odds": len(cur_not_expired),
-            "expired_odds": len(exp),
+            "historical_odds": historical_odds,
+            "current_odds": current_odds,
+            "expired_odds": expired_odds,
             "unmatched_odds": unmatched_odds,
-            "unmapped_markets": len(unmapped_set),
+            "unmapped_markets": len(unmapped_markets),
         }
     except Exception as e:
         return {

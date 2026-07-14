@@ -3,6 +3,7 @@ import signal
 import sys
 sys.path.insert(0, '/app')
 from app.database import engine, init_db
+from app.config import settings
 from sqlmodel import Session
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -12,15 +13,11 @@ logger = logging.getLogger('pirapire.worker')
 
 def run_aposta_sync():
     from app.services.aposta_sync import sync
-    from app.services.recommender.recommendation_service import run as rec_run
     with Session(engine) as session:
         try:
             result = sync(session)
             count = result.get('imported', 0)
             logger.info('Aposta: %s odds', count)
-            if count > 0:
-                r = rec_run(session, mode='balanced')
-                logger.info('Recs: %s singles', r.get('singles', 0))
         except Exception as e:
             logger.warning('Aposta sync error: %s', e)
 
@@ -116,15 +113,15 @@ if __name__ == '__main__':
     logger.info('Pirapire worker starting')
     init_db()
     scheduler = BackgroundScheduler()
-    scheduler.add_job(run_aposta_sync, IntervalTrigger(minutes=12), id='aposta', coalesce=True, max_instances=1)
-    scheduler.add_job(run_sports_sync, IntervalTrigger(hours=4), id='sports', coalesce=True, max_instances=1)
-    scheduler.add_job(run_historical_ingestion, IntervalTrigger(hours=1), id='historical-ingestion', coalesce=True, max_instances=1)
-    scheduler.add_job(run_fresh_football, IntervalTrigger(hours=1), id='fresh-football', coalesce=True, max_instances=1)
-    scheduler.add_job(run_descriptive_stats, IntervalTrigger(hours=1), id='descriptive-stats', coalesce=True, max_instances=1)
-    scheduler.add_job(run_event_refresh, IntervalTrigger(minutes=15), id='event-refresh', coalesce=True, max_instances=1)
-    scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=24), id='wc_squads', coalesce=True, max_instances=1)
+    scheduler.add_job(run_aposta_sync, IntervalTrigger(minutes=settings.worker_aposta_sync_minutes), id='aposta', coalesce=True, max_instances=1)
+    scheduler.add_job(run_sports_sync, IntervalTrigger(hours=settings.worker_sports_sync_hours), id='sports', coalesce=True, max_instances=1)
+    scheduler.add_job(run_historical_ingestion, IntervalTrigger(hours=settings.worker_historical_ingestion_hours), id='historical-ingestion', coalesce=True, max_instances=1)
+    scheduler.add_job(run_fresh_football, IntervalTrigger(hours=settings.worker_fresh_football_hours), id='fresh-football', coalesce=True, max_instances=1)
+    scheduler.add_job(run_descriptive_stats, IntervalTrigger(hours=settings.worker_descriptive_stats_hours), id='descriptive-stats', coalesce=True, max_instances=1)
+    scheduler.add_job(run_event_refresh, IntervalTrigger(minutes=settings.worker_event_refresh_minutes), id='event-refresh', coalesce=True, max_instances=1)
+    scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=settings.worker_wc_squads_hours), id='wc_squads', coalesce=True, max_instances=1)
     scheduler.start()
-    logger.info('Scheduler: Aposta 12min, Sports 4h')
+    logger.info('Scheduler started with configured extraction and statistics intervals')
     run_sports_sync()
     run_aposta_sync()
     signal.pause()
