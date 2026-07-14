@@ -91,15 +91,12 @@ def dashboard(request: Request):
         # Get upcoming scheduled events only (Phase 4D1: excludes finished/historical)
         from ..models_aposta import ApostaEvent
 
-        scheduled_keys = {
-            ev.event_key
-            for ev in session.exec(
-                select(ApostaEvent.event_key).where(
-                    ApostaEvent.local_event_state == "scheduled",
-                    ApostaEvent.event_key.is_not(None),
-                )
-            ).all()
-        }
+        scheduled_keys = set(session.exec(
+            select(ApostaEvent.event_key).where(
+                ApostaEvent.local_event_state == "scheduled",
+                ApostaEvent.event_key.is_not(None),
+            )
+        ).all())
         rows = session.exec(
             select(ImportedOdds)
             .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current,
