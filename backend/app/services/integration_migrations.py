@@ -65,6 +65,10 @@ def run_migrations() -> None:
         # Phase 4D1: event lifecycle + refresh queue.
         _add_columns(conn, "apostaevent", {"local_event_state": "TEXT", "last_reconciled_at": "TIMESTAMP"})
         _create_indexes(conn)
+        # Phase 4D2: WAL journal mode for concurrent reads during worker writes.
+        if conn.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
+            conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         conn.commit()
     finally:
         conn.close()
@@ -81,6 +85,9 @@ def _create_indexes(conn) -> None:
         ("ix_esrm_event_sport", "eventstatisticsreadmodel", "event_key, sport"),
         ("ix_lolseries_status", "lolseries", "series_status"),
         ("ix_ffs_provider_source", "footballfixturestat", "provider, source_id"),
+        # Phase 4D2: dashboard performance.
+        ("ix_odds_event_key_current", "importedodds", "event_key, source_name, is_current"),
+        ("ix_apostaevent_scheduled", "apostaevent", "local_event_state, event_key"),
     ]
     for name, table, cols in idx:
         if table in tables:
