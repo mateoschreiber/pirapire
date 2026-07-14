@@ -44,8 +44,30 @@ class ApostaEvent(SQLModel, table=True):
     current_snapshot_id: Optional[int] = Field(default=None, index=True)
     expires_at: Optional[datetime] = None
     source_url: Optional[str] = None
+    # Phase 4D1 event lifecycle.
+    local_event_state: Optional[str] = Field(default=None, index=True)
+    last_reconciled_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+
+class RefreshQueue(SQLModel, table=True):
+    """Coalesced per-event refresh queue (Phase 4D1).
+
+    Only added, kickoff_changed or participants_changed events are enqueued.
+    Multiple sync cycles before the worker pick up the task overwrite the same
+    row with the most recent state (coalescence). removed events are never
+    enqueued; they are simply inactivated via local_event_state.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_key: str = Field(unique=True, index=True)
+    sport: Optional[str] = Field(default=None, index=True)
+    reason: str = "added"
+    enqueued_at: datetime = Field(default_factory=_now)
+    last_update_at: datetime = Field(default_factory=_now)
+    locked_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
 
 
 class ApostaMarket(SQLModel, table=True):

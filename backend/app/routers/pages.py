@@ -88,10 +88,22 @@ def dashboard(request: Request):
             or 0
         )
 
-        # Get upcoming + recently expired WC events
+        # Get upcoming scheduled events only (Phase 4D1: excludes finished/historical)
+        from ..models_aposta import ApostaEvent
+
+        scheduled_keys = {
+            ev.event_key
+            for ev in session.exec(
+                select(ApostaEvent.event_key).where(
+                    ApostaEvent.local_event_state == "scheduled",
+                    ApostaEvent.event_key.is_not(None),
+                )
+            ).all()
+        }
         rows = session.exec(
             select(ImportedOdds)
-            .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current)
+            .where(ImportedOdds.source_name == "aposta_la", ImportedOdds.is_current,
+                   ImportedOdds.event_key.in_(scheduled_keys) if scheduled_keys else True)
             .order_by(ImportedOdds.event_date_sort)
         ).all()
         events_dict = {}
@@ -113,40 +125,6 @@ def dashboard(request: Request):
                     "event_key": r.event_key,
                 }
             events_dict[k]["markets"] += 1
-        events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[
-            :20
-        ]
-        # Also include recently expired WC events
-        for r in session.exec(
-            select(ImportedOdds)
-            .where(
-                ImportedOdds.source_name == "aposta_la",
-                ImportedOdds.sport == "football",
-                ImportedOdds.team_a.in_(
-                    ["España", "Argentina", "Noruega", "Suiza", "Bélgica", "Inglaterra"]
-                ),
-            )
-            .order_by(ImportedOdds.event_date_sort.desc())
-            .limit(3)
-        ).all():
-            k_exp = r.event_key or (r.team_a or "") + "|" + (r.team_b or "") + "|" + (r.competition or "") + "|" + (r.event_date_sort or "")
-            if k_exp not in events_dict:
-                events_dict[k_exp] = {
-                    "team_a": r.team_a,
-                    "team_b": r.team_b,
-                    "competition": r.competition,
-                    "event_date": r.kickoff_utc or r.event_date_sort,
-                    "event_date_py": datetime_utils.event_time_display(
-                        r.kickoff_utc or r.event_date_sort, r.event_time_status
-                    ),
-                    "event_time_status": r.event_time_status,
-                    "sport": r.sport,
-                    "markets": 0,
-                    "event_id": r.id,
-                    "event_key": r.event_key,
-                    "expired": True,
-                }
-                events_dict[k_exp]["markets"] += 1
         events = sorted(events_dict.values(), key=lambda e: e.get("event_date") or "")[
             :20
         ]

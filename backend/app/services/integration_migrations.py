@@ -62,6 +62,8 @@ def run_migrations() -> None:
             },
         )
         _add_columns(conn, "lolseries", {**_quality, "game_ids_json": "TEXT", "series_status": "TEXT"})
+        # Phase 4D1: event lifecycle + refresh queue.
+        _add_columns(conn, "apostaevent", {"local_event_state": "TEXT", "last_reconciled_at": "TIMESTAMP"})
         _create_indexes(conn)
         conn.commit()
     finally:

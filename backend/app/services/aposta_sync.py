@@ -429,6 +429,12 @@ def sync(session: Session, force_refresh: bool = False) -> dict:
             if active_id:
                 expire_absent_events(session, source, active_id, seen_keys)
 
+        # Phase 4D1: post-sync reconciliation and lifecycle refresh.
+        from .event_lifecycle import reconcile_after_sync
+        _ = reconcile_after_sync(session, snapshot_event_keys)
+        from .refresh_queue import enqueue_scheduled_events
+        enqueue_scheduled_events(session)
+
         match_result = run_event_matching_on_batch(session, batch.id)
 
         current_imported = filter_current_odds(imported)

@@ -62,6 +62,47 @@ def run_descriptive_stats():
             logger.warning("Descriptive stats error: %s", e)
 
 
+def run_event_refresh():
+    """Process the coalesced refresh queue: one task per event, instance-locked."""
+    from sqlmodel import select
+    from app.models_aposta import ApostaEvent
+    from app.services.refresh_queue import claim_task, release_task, enqueue_scheduled_events
+    from app.services.descriptive_stats import compute_event
+    from app.services.event_lifecycle import refresh_states, SCHEDULED
+
+    worker_id = "worker-1"
+    with Session(engine) as session:
+        try:
+            state_counts = refresh_states(session)
+            logger.info("Lifecycle states: %s", state_counts)
+            n = enqueue_scheduled_events(session)
+            if n:
+                logger.info("Enqueued %s scheduled events for refresh", n)
+            processed = 0
+            max_batch = 5
+            for _ in range(max_batch):
+                task = claim_task(session, worker_id)
+                if task is None:
+                    break
+                try:
+                    ev = session.exec(
+                        select(ApostaEvent).where(ApostaEvent.event_key == task.event_key)
+                    ).first()
+                    if ev is None or ev.local_event_state != SCHEDULED:
+                        release_task(session, task.event_key, True)
+                        continue
+                    compute_event(session, task.event_key)
+                    release_task(session, task.event_key, True)
+                    processed += 1
+                except Exception as exc:
+                    logger.warning("Refresh task %s error: %s", task.event_key, exc)
+                    release_task(session, task.event_key, False)
+            if processed:
+                logger.info("Event refresh: processed %s tasks", processed)
+        except Exception as e:
+            logger.warning("Event refresh error: %s", e)
+
+
 def run_sports_sync():
     from app.services.live_source_sync import sync_if_stale
     with Session(engine) as session:
@@ -80,6 +121,7 @@ if __name__ == '__main__':
     scheduler.add_job(run_historical_ingestion, IntervalTrigger(hours=1), id='historical-ingestion', coalesce=True, max_instances=1)
     scheduler.add_job(run_fresh_football, IntervalTrigger(hours=1), id='fresh-football', coalesce=True, max_instances=1)
     scheduler.add_job(run_descriptive_stats, IntervalTrigger(hours=1), id='descriptive-stats', coalesce=True, max_instances=1)
+    scheduler.add_job(run_event_refresh, IntervalTrigger(minutes=15), id='event-refresh', coalesce=True, max_instances=1)
     scheduler.add_job(run_wc_squad_sync, IntervalTrigger(hours=24), id='wc_squads', coalesce=True, max_instances=1)
     scheduler.start()
     logger.info('Scheduler: Aposta 12min, Sports 4h')
