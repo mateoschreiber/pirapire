@@ -108,4 +108,4 @@ Note: `precompute_upcoming_stats()` is currently a stub — it returns `{"precom
 
 - **Upcoming matches API** (`/api/lol/matches/upcoming`): Fetches `LolMatchEvent` records within configurable window, enriches with odds from `LolOddsSnapshot`/`LolTeamOdd`
 - **Competition filtering:** Dashboard shows only tier-1 leagues and international events
-- **Competition classification** (`_competition_code()` in `lol_api.py`): Regex-based mapping of league/tournament strings to canonical codes (LCK, LPL, LEC, LTA, LCP, WORLDS, MSI, FIRST_STAND, EWC)
+- **Competition classification** (`_competition_code()` in `lol_api.py`): Regex-based mapping of league/tournament strings to canonical codes (LCK, LPL, LEC, LCS, CBLOL, LCP, WORLDS, MSI, FIRST_STAND, EWC)

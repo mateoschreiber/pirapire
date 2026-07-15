@@ -124,21 +124,63 @@ A `LolMatchStatisticsReadModel` model exists in `models_lol.py` for future cache
 
 **Source:** `backend/app/routers/lol_api.py`
 
-The competition classifier maps Leaguepedia league/tournament strings to canonical codes:
+The competition classifier maps Leaguepedia league/tournament strings to canonical codes.
+For the 2026 season, the former **LTA** (League of The Americas) has been replaced by its two constituent sub-leagues: **LCS** (LTA North) and **CBLOL** (LTA South).
 
 | Code | Competition | Detection |
 |------|-------------|-----------|
 | `LCK` | League of Legends Champions Korea | League starts with `LCK` (excluding `LCK CL`) |
 | `LPL` | League of Legends Pro League | League starts with `LPL` |
 | `LEC` | League of Legends EMEA Championship | League starts with `LEC` |
-| `LTA` | League of The Americas | League starts with `LTA` |
+| `LCS` | League Championship Series | League starts with `LCS`, or league text matches `^LTA NORTH(?:/\|$)` |
+| `CBLOL` | Campeonato Brasileiro de League of Legends | League starts with `CBLOL`, or league text matches `^LTA SOUTH(?:/\|$)` |
 | `LCP` | League of Legends Championship Pacific | League starts with `LCP` |
 | `WORLDS` | World Championship | Contains "World Championship" or "Worlds" |
 | `MSI` | Mid-Season Invitational | Contains "Mid-Season Invitational" or "MSI" |
 | `FIRST_STAND` | First Stand | Contains "First Stand" |
 | `EWC` | Esports World Cup | Contains "Esports World Cup" |
 
-Dashboard displays only these 9 competitions. Academy leagues (e.g., `LCK CL`) are excluded.
+Dashboard displays only these 10 competitions. Academy leagues (e.g., `LCK CL`) are excluded.
+A bare `LTA` (without North/South qualifier) does not match any competition code and is excluded.
+
+## Official 2026 Competition Rosters
+
+**Source:** `OFFICIAL_COMPETITION_ROSTERS_2026` in `backend/app/routers/lol_api.py`
+
+As of the 2026 season, the API maintains an authoritative roster catalog for every tracked competition. Each roster entry includes a `status` field and an `official_source_url` linking to the lolesports.com tournament page or official announcement.
+
+### Active Rosters (published)
+
+| Code | Competition | Teams | Official Source |
+|------|-------------|-------|-----------------|
+| `LCK` | LCK | Gen.G Esports, T1, NONGSHIM RED FORCE, DN SOOPers, HANJIN BRION, Hanwha Life Esports, Dplus KIA, kt Rolster, BNK FEARX, KIWOOM DRX | [LCK 2026 Overview](https://lolesports.com/en-US/tournament/115548106590082745/overview) |
+| `LPL` | LPL | Anyone's Legend, BILIBILI GAMING, Invictus Gaming, Beijing JDG Esports, Shenzhen NINJAS IN PYJAMAS, Xi'an Team WE, TOP ESPORTS, WeiboGaming, EDWARD GAMING, LGD GAMING, Suzhou LNG Esports, Oh My God, THUNDER TALK GAMING, Ultra Prime | [LPL 2026 Overview](https://lolesports.com/en-US/tournament/115615907996665826/overview) |
+| `LEC` | LEC | Team Heretics, Natus Vincere, Team Vitality, Shifters, GIANTX, SK Gaming, Movistar KOI, Fnatic, Karmine Corp, G2 Esports | [LEC 2026 Overview](https://lolesports.com/en-US/tournament/115548681802226458/overview) |
+| `LCS` | LCS | Sentinels, Cloud9 Kia, Dignitas, Disguised, FlyQuest, LYON, Shopify Rebellion, Team Liquid Alienware | [LCS 2026 Address](https://lolesports.com/news/lcs-2026-address) |
+| `CBLOL` | CBLOL | Fluxo W7M, FURIA, LEVIATÁN, LOS, LOUD, paiN Gaming, RED Kalunga, Vivo Keyd Stars | [CBLOL 2026 Overview](https://lolesports.com/en-US/tournament/115565518151768348/overview) |
+| `LCP` | LCP | CTBC Flying Oyster, DetonatioN FocusMe, Relove Deep Cross Gaming, GAM Esports, Ground Zero Gaming, MVK Esports, Fukuoka SoftBank HAWKS gaming, Team Secret Whales | [LCP 2026 Overview](https://lolesports.com/en-US/tournament/115570728597462574/overview) |
+| `MSI` | MSI 2026 | BILIBILI GAMING, TOP ESPORTS, Hanwha Life Esports, T1, G2 Esports, Karmine Corp, LYON, Team Liquid Alienware, Team Secret Whales, Relove Deep Cross Gaming, FURIA | [MSI News](https://lolesports.com/en-US/news/msi-) |
+| `FIRST_STAND` | First Stand | BILIBILI GAMING, Beijing JDG Esports, Gen.G Esports, BNK FEARX, G2 Esports, LYON, Team Secret Whales, LOUD | [First Stand League](https://lolesports.com/en-US/leagues/first_stand) |
+| `EWC` | Esports World Cup 2026 | AG.AL, BILIBILI GAMING, Dplus KIA, FURIA, G2 Esports, GAM Esports, Gen.G Esports, Hanwha Life Esports, Beijing JDG Esports, Karmine Corp, LYON, MIBR.LOS, Movistar KOI, Sentinels, T1, Team Secret | [EWC LoL Competition](https://esportsworldcup.com/en/competitions/league-of-legends) |
+
+All of the above carry `"status": "official"` — the team list is confirmed by Riot Games.
+
+### Pending Rosters (not yet published)
+
+| Code | Competition | Status | Source |
+|------|-------------|--------|--------|
+| `WORLDS` | World Championship 2026 | `not_published` | [MSI and Worlds Updates](https://lolesports.com/en-US/news/msi-and-worlds-updates) |
+
+Worlds has no qualified teams published yet. The dashboard displays "Los participantes oficiales todavía no fueron publicados" for this competition.
+
+### How rosters are surfaced
+
+The `_competition_summary()` function in `lol_api.py` merges official rosters with data from the calendar:
+
+- For the **2026 season**, teams are sourced directly from `OFFICIAL_COMPETITION_ROSTERS_2026`, overriding any teams discovered by scanning match events.
+- For **other years**, teams are derived from `LolMatchEvent` records (status `calendar_derived`).
+- Each competition response includes `roster_status` (`official`, `calendar_derived`, or `not_published`) and `official_source_url` when an official source is available.
+- The dashboard UI renders a green "Lista oficial" badge for `official` rosters and a gray "Pendiente" badge for `not_published`.
 
 ## Team Name Resolution
 
