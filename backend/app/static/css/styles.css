@@ -333,3 +333,11 @@ table tbody tr { cursor: default; transition: background .12s; }
   .external-odds small { margin-left: 0; width: 100%; }
   .player-table-block table { min-width: 760px; }
 }
+
+.competition-card-badges { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.competition-source { color: var(--primary); font-weight: 700; text-decoration: none; }
+.competition-source:hover { text-decoration: underline; }
+@media (max-width: 520px) {
+  .competition-card-head { gap: 10px; }
+  .competition-card-badges { max-width: 46%; }
+}

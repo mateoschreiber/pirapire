@@ -118,16 +118,25 @@
     const visible = activeCompetition === "ALL" ? competitions : competitions.filter(function (item) { return item.code === activeCompetition; });
     container.innerHTML = visible.map(function (item) {
       const teams = item.qualified_teams || [];
+      const statusLabel = item.roster_status === "official" ? "Lista oficial" :
+        (item.roster_status === "calendar_derived" ? "Según calendario" : "Pendiente");
+      const statusClass = item.roster_status === "official" ? "badge-green" : "badge-gray";
+      const sourceHtml = item.official_source_url
+        ? '<a class="competition-source" href="' + esc(item.official_source_url) + '" target="_blank" rel="noopener noreferrer">Fuente oficial</a>'
+        : "";
       const teamHtml = teams.length
         ? '<div class="team-chip-list">' + teams.map(function (team) { return '<span class="team-chip">' + esc(team) + "</span>"; }).join("") + "</div>"
-        : '<p class="competition-empty">Clasificación todavía no publicada en el calendario.</p>';
+        : '<p class="competition-empty">Los participantes oficiales todavía no fueron publicados.</p>';
       return '<article class="competition-card" data-code="' + esc(item.code) + '">' +
         '<div class="competition-card-head"><div><span class="competition-code">' + esc(item.label) + "</span>" +
-        '<p>Temporada ' + esc(item.season) + "</p></div>" +
-        '<span class="badge badge-gray">' + item.team_count + " equipos</span></div>" + teamHtml + "</article>";
+        '<p>Temporada ' + esc(item.season) + " · " + sourceHtml + "</p></div>" +
+        '<div class="competition-card-badges"><span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
+        '<span class="badge badge-gray">' + item.team_count + " equipos</span></div></div>" + teamHtml + "</article>";
     }).join("");
     const available = competitions.filter(function (item) { return item.team_count > 0; }).length;
-    if (el("competition-coverage")) el("competition-coverage").textContent = available + " de 9 torneos con equipos publicados";
+    if (el("competition-coverage")) {
+      el("competition-coverage").textContent = available + " de " + competitions.length + " torneos con participantes publicados";
+    }
   }
 
   function oddsHtml(match) {

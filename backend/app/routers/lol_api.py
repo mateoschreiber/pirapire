@@ -14,7 +14,8 @@ COMPETITIONS = (
     ("LCK", "LCK"),
     ("LPL", "LPL"),
     ("LEC", "LEC"),
-    ("LTA", "LTA"),
+    ("LCS", "LCS"),
+    ("CBLOL", "CBLOL"),
     ("LCP", "LCP"),
     ("WORLDS", "WORLDS"),
     ("MSI", "MSI"),
@@ -23,6 +24,86 @@ COMPETITIONS = (
 )
 COMPETITION_LABELS = dict(COMPETITIONS)
 
+OFFICIAL_COMPETITION_ROSTERS_2026 = {
+    "LCK": {
+        "teams": (
+            "Gen.G Esports", "T1", "NONGSHIM RED FORCE", "DN SOOPers", "HANJIN BRION",
+            "Hanwha Life Esports", "Dplus KIA", "kt Rolster", "BNK FEARX", "KIWOOM DRX",
+        ),
+        "source_url": "https://lolesports.com/en-US/tournament/115548106590082745/overview",
+        "status": "official",
+    },
+    "LPL": {
+        "teams": (
+            "Anyone's Legend", "BILIBILI GAMING", "Invictus Gaming", "Beijing JDG Esports",
+            "Shenzhen NINJAS IN PYJAMAS", "Xi'an Team WE", "TOP ESPORTS", "WeiboGaming",
+            "EDWARD GAMING", "LGD GAMING", "Suzhou LNG Esports", "Oh My God",
+            "THUNDER TALK GAMING", "Ultra Prime",
+        ),
+        "source_url": "https://lolesports.com/en-US/tournament/115615907996665826/overview",
+        "status": "official",
+    },
+    "LEC": {
+        "teams": (
+            "Team Heretics", "Natus Vincere", "Team Vitality", "Shifters", "GIANTX",
+            "SK Gaming", "Movistar KOI", "Fnatic", "Karmine Corp", "G2 Esports",
+        ),
+        "source_url": "https://lolesports.com/en-US/tournament/115548681802226458/overview",
+        "status": "official",
+    },
+    "LCS": {
+        "teams": (
+            "Sentinels", "Cloud9 Kia", "Dignitas", "Disguised", "FlyQuest", "LYON",
+            "Shopify Rebellion", "Team Liquid Alienware",
+        ),
+        "source_url": "https://lolesports.com/news/lcs-2026-address",
+        "status": "official",
+    },
+    "CBLOL": {
+        "teams": (
+            "Fluxo W7M", "FURIA", "LEVIATÁN", "LOS", "LOUD", "paiN Gaming",
+            "RED Kalunga", "Vivo Keyd Stars",
+        ),
+        "source_url": "https://lolesports.com/en-US/tournament/115565518151768348/overview",
+        "status": "official",
+    },
+    "LCP": {
+        "teams": (
+            "CTBC Flying Oyster", "DetonatioN FocusMe", "Relove Deep Cross Gaming",
+            "GAM Esports", "Ground Zero Gaming", "MVK Esports",
+            "Fukuoka SoftBank HAWKS gaming", "Team Secret Whales",
+        ),
+        "source_url": "https://lolesports.com/en-US/tournament/115570728597462574/overview",
+        "status": "official",
+    },
+    "WORLDS": {
+        "teams": (),
+        "source_url": "https://lolesports.com/en-US/news/msi-and-worlds-updates",
+        "status": "not_published",
+    },
+    "MSI": {
+        "teams": (
+            "BILIBILI GAMING", "TOP ESPORTS", "Hanwha Life Esports", "T1",
+            "G2 Esports", "Karmine Corp", "LYON", "Team Liquid Alienware",
+            "Team Secret Whales", "Relove Deep Cross Gaming", "FURIA",
+        ),
+        "source_url": "https://lolesports.com/en-US/news/msi-",
+        "status": "official",
+    },
+    "FIRST_STAND": {
+        "teams": (
+            "BILIBILI GAMING", "Beijing JDG Esports", "Gen.G Esports", "BNK FEARX",
+            "G2 Esports", "LYON", "Team Secret Whales", "LOUD",
+        ),
+        "source_url": "https://lolesports.com/en-US/leagues/first_stand",
+        "status": "official",
+    },
+    "EWC": {
+        "teams": (),
+        "source_url": "https://resources.esportsworldcup.com/en",
+        "status": "not_published",
+    },
+}
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -39,11 +120,14 @@ def _competition_code(league: str | None, tournament: str | None = None) -> str 
         return "MSI"
     if "WORLD CHAMPIONSHIP" in combined or "WORLDS" in combined:
         return "WORLDS"
-    for code in ("LCK", "LPL", "LEC", "LTA", "LCP"):
+    if re.match(r"^LTA NORTH(?:/|$)", league_text):
+        return "LCS"
+    if re.match(r"^LTA SOUTH(?:/|$)", league_text):
+        return "CBLOL"
+    for code in ("LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP"):
         if re.match(rf"^{code}(?:/|$)", league_text):
             return code
     return None
-
 
 def _odds_for_match(session: Session, match: LolMatchEvent) -> dict:
     snapshot = session.exec(
@@ -93,20 +177,24 @@ def _competition_summary(events: list[LolMatchEvent], upcoming: list[LolMatchEve
     upcoming_counts = {code: 0 for code, _ in COMPETITIONS}
     for event in upcoming:
         code = _competition_code(event.league, event.tournament)
-        if code:
+        if code in upcoming_counts:
             upcoming_counts[code] += 1
+
     result = []
     for code, label in COMPETITIONS:
         relevant = [
             event for event in events
             if event.start_time_utc.year == year and _competition_code(event.league, event.tournament) == code
         ]
-        teams = sorted({
+        discovered_teams = sorted({
             team.strip()
             for event in relevant
             for team in (event.team_a, event.team_b)
             if team and team.strip().upper() not in {"TBD", "TBA", "UNKNOWN"}
         }, key=str.casefold)
+        official = OFFICIAL_COMPETITION_ROSTERS_2026.get(code) if year == 2026 else None
+        teams = list(official["teams"]) if official else discovered_teams
+        roster_status = official["status"] if official else ("calendar_derived" if teams else "not_published")
         result.append({
             "code": code,
             "label": label,
@@ -115,6 +203,8 @@ def _competition_summary(events: list[LolMatchEvent], upcoming: list[LolMatchEve
             "team_count": len(teams),
             "upcoming_matches": upcoming_counts[code],
             "coverage": "available" if teams else "not_published",
+            "roster_status": roster_status,
+            "official_source_url": official["source_url"] if official else None,
         })
     return result
 

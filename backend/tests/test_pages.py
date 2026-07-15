@@ -62,6 +62,11 @@ def test_competition_classifier_excludes_academies():
     from app.routers.lol_api import _competition_code
     assert _competition_code("LCK/2026 Season/Rounds 3-4") == "LCK"
     assert _competition_code("LCK CL/2026 Season/Rounds 3-4") is None
+    assert _competition_code("LCS/2026 Season") == "LCS"
+    assert _competition_code("CBLOL/2026 Season") == "CBLOL"
+    assert _competition_code("LTA North/2025 Season") == "LCS"
+    assert _competition_code("LTA South/2025 Season") == "CBLOL"
+    assert _competition_code("LTA/2025 Season") is None
     assert _competition_code("2026 Mid-Season Invitational") == "MSI"
     assert _competition_code("Esports World Cup 2026") == "EWC"
     assert _competition_code("World Championship/2026") == "WORLDS"
@@ -70,12 +75,27 @@ def test_competition_classifier_excludes_academies():
 def test_upcoming_api_exposes_only_allowed_competitions():
     payload = client.get("/api/lol/matches/upcoming?hours=336").json()
     assert payload["allowed_competitions"] == [
-        "LCK", "LPL", "LEC", "LTA", "LCP", "WORLDS", "MSI", "FIRST STAND", "EWC"
+        "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP",
+        "WORLDS", "MSI", "FIRST STAND", "EWC",
     ]
-    assert len(payload["competitions"]) == 9
-    allowed = {"LCK", "LPL", "LEC", "LTA", "LCP", "WORLDS", "MSI", "FIRST_STAND", "EWC"}
+    assert len(payload["competitions"]) == 10
+    allowed = {"LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", "WORLDS", "MSI", "FIRST_STAND", "EWC"}
     assert all(match["competition_code"] in allowed for match in payload["matches"])
 
+
+def test_2026_official_competition_rosters_are_complete():
+    payload = client.get("/api/lol/matches/upcoming?hours=336").json()
+    by_code = {item["code"]: item for item in payload["competitions"]}
+    expected_counts = {"LCK": 10, "LPL": 14, "LEC": 10, "LCS": 8, "CBLOL": 8, "LCP": 8, "MSI": 11, "FIRST_STAND": 8}
+    assert {code: by_code[code]["team_count"] for code in expected_counts} == expected_counts
+    assert set(by_code["LCK"]["qualified_teams"]) == {
+        "Gen.G Esports", "T1", "NONGSHIM RED FORCE", "DN SOOPers", "HANJIN BRION",
+        "Hanwha Life Esports", "Dplus KIA", "kt Rolster", "BNK FEARX", "KIWOOM DRX",
+    }
+    assert all(by_code[code]["roster_status"] == "official" for code in expected_counts)
+    assert all(by_code[code]["official_source_url"].startswith("https://") for code in expected_counts)
+    assert by_code["WORLDS"]["roster_status"] == "not_published"
+    assert by_code["EWC"]["roster_status"] == "not_published"
 
 def test_dashboard_assets_include_requested_metrics():
     js = client.get("/static/js/app.js").text
