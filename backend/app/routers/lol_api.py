@@ -99,9 +99,14 @@ OFFICIAL_COMPETITION_ROSTERS_2026 = {
         "status": "official",
     },
     "EWC": {
-        "teams": (),
-        "source_url": "https://resources.esportsworldcup.com/en",
-        "status": "not_published",
+        "teams": (
+            "AG.AL", "BILIBILI GAMING", "Dplus KIA", "FURIA", "G2 Esports",
+            "GAM Esports", "Gen.G Esports", "Hanwha Life Esports", "Beijing JDG Esports",
+            "Karmine Corp", "LYON", "MIBR.LOS", "Movistar KOI", "Sentinels", "T1",
+            "Team Secret",
+        ),
+        "source_url": "https://esportsworldcup.com/en/competitions/league-of-legends",
+        "status": "official",
     },
 }
 

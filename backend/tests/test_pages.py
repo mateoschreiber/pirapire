@@ -86,7 +86,7 @@ def test_upcoming_api_exposes_only_allowed_competitions():
 def test_2026_official_competition_rosters_are_complete():
     payload = client.get("/api/lol/matches/upcoming?hours=336").json()
     by_code = {item["code"]: item for item in payload["competitions"]}
-    expected_counts = {"LCK": 10, "LPL": 14, "LEC": 10, "LCS": 8, "CBLOL": 8, "LCP": 8, "MSI": 11, "FIRST_STAND": 8}
+    expected_counts = {"LCK": 10, "LPL": 14, "LEC": 10, "LCS": 8, "CBLOL": 8, "LCP": 8, "MSI": 11, "FIRST_STAND": 8, "EWC": 16}
     assert {code: by_code[code]["team_count"] for code in expected_counts} == expected_counts
     assert set(by_code["LCK"]["qualified_teams"]) == {
         "Gen.G Esports", "T1", "NONGSHIM RED FORCE", "DN SOOPers", "HANJIN BRION",
@@ -95,7 +95,6 @@ def test_2026_official_competition_rosters_are_complete():
     assert all(by_code[code]["roster_status"] == "official" for code in expected_counts)
     assert all(by_code[code]["official_source_url"].startswith("https://") for code in expected_counts)
     assert by_code["WORLDS"]["roster_status"] == "not_published"
-    assert by_code["EWC"]["roster_status"] == "not_published"
 
 def test_dashboard_assets_include_requested_metrics():
     js = client.get("/static/js/app.js").text
