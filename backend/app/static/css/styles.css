@@ -15,8 +15,16 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 body {
-  font-family: 'Segoe UI', Inter, system-ui, sans-serif;
+  font-family: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -213,3 +221,115 @@ table tbody tr:hover { background: #F8F9FA; }
 .sources-toolbar label { display: grid; gap: .3rem; }
 .replace-option { display: flex !important; align-items: center; gap: .45rem; grid-column: 1 / -1; }
 .replace-option input { width: auto; }
+
+
+/* Corporate UI v3 */
+:root {
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --text: #172033;
+  --text-secondary: #64748b;
+  --border: #dce3ed;
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --radius: 12px;
+  --shadow: 0 6px 20px rgba(15, 23, 42, .06);
+}
+body { letter-spacing: -.01em; }
+button, input, select { font: inherit; }
+.sidebar { box-shadow: 4px 0 18px rgba(15, 23, 42, .025); }
+.sidebar h1 a { letter-spacing: -.035em; }
+.sidebar .nav-link { padding: 10px 12px; border-radius: 9px; font-weight: 600; }
+.topbar { min-height: 64px; padding: 14px 28px; }
+.topbar h2 { color: #172554; font-size: 19px; font-weight: 750; letter-spacing: -.025em; }
+.content { padding: 28px; }
+.card { border-radius: 14px; padding: 22px; box-shadow: var(--shadow); }
+.btn {
+  min-height: 42px; justify-content: center; padding: 10px 18px; border: 1px solid transparent;
+  border-radius: 10px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff;
+  font-size: 13px; font-weight: 750; letter-spacing: -.005em;
+  box-shadow: 0 5px 12px rgba(37, 99, 235, .2); transition: transform .15s, box-shadow .15s, background .15s;
+}
+.btn:hover { transform: translateY(-1px); background: linear-gradient(135deg, #1d4ed8, #1e40af); box-shadow: 0 8px 18px rgba(37, 99, 235, .24); }
+.btn:active { transform: translateY(0); }
+.btn:disabled { cursor: not-allowed; opacity: .48; transform: none; box-shadow: none; }
+.btn-ghost { background: #fff; color: #334155; border-color: var(--border); box-shadow: none; }
+.btn-ghost:hover { background: #f8fafc; color: #0f172a; box-shadow: none; }
+.badge { padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
+table { font-size: 13px; }
+table th, table td { padding: 12px 14px; vertical-align: middle; }
+table th { color: #475569; font-size: 10px; font-weight: 750; letter-spacing: .07em; white-space: normal; }
+table tbody tr { cursor: default; transition: background .12s; }
+.table-scroll { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.stats-table { min-width: 560px; }
+.stats-table td:first-child { color: #334155; }
+.stats-table td:last-child { width: 39%; font-weight: 650; }
+.stats-table td strong, .stats-table td small { display: block; }
+.stats-table td small { margin-top: 2px; color: var(--text-secondary); font-size: 10px; font-weight: 500; }
+.stats-table .highlight-row { background: #eff6ff; }
+.stats-table .highlight-row td { color: #1e3a8a; }
+.stats-team { border-radius: 14px; padding: 18px; background: linear-gradient(180deg, #fff, #fcfdff); }
+.stats-team-head h4 { font-size: 16px; letter-spacing: -.02em; }
+
+.market-loading { display: flex; align-items: center; gap: 12px; min-height: 70px; color: var(--text-secondary); }
+.market-loading .skeleton { width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto; }
+.odds-grid.estimated > div { min-height: 82px; border: 1px solid #bfdbfe; background: linear-gradient(145deg, #eff6ff, #f8fbff); color: #172554; }
+.odds-grid.estimated span, .odds-grid.estimated small { display: block; }
+.odds-grid.estimated span { font-weight: 700; }
+.odds-grid.estimated small { margin-top: 4px; color: #475569; font-size: 11px; font-weight: 500; }
+.odds-grid.estimated strong { color: #1d4ed8; font-size: 26px; font-variant-numeric: tabular-nums; }
+.market-model > .meta { color: #475569; }
+.external-odds { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 13px; padding: 10px 12px; border-radius: 9px; background: #f8fafc; color: #475569; font-size: 11px; }
+.external-odds strong { color: #334155; }
+.external-odds small { margin-left: auto; }
+
+.tabs { gap: 5px; margin-bottom: 20px; padding: 5px; width: fit-content; max-width: 100%; border: 1px solid var(--border); border-radius: 12px; background: #eaf0f8; overflow-x: auto; }
+.tab { min-height: 38px; padding: 8px 15px; border: 0; border-radius: 8px; background: transparent; color: #64748b; font-size: 13px; font-weight: 700; white-space: nowrap; transition: background .15s, color .15s, box-shadow .15s; }
+.tab:hover { color: #1e40af; background: rgba(255,255,255,.65); }
+.tab.active { background: #fff; color: #1d4ed8; box-shadow: 0 2px 8px rgba(15,23,42,.08); }
+.source-control-card { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(220px, 320px) auto; align-items: end; gap: 16px; }
+.source-control-card > div h3 { margin: 2px 0 4px; }
+.source-control-card > .sync-message { grid-column: 1 / -1; min-height: 18px; }
+.sources-toolbar { margin-bottom: 18px; }
+.sources-toolbar label, .upload-form > label:not(.replace-option) { display: grid; gap: 7px; color: #334155; font-size: 12px; font-weight: 700; }
+.upload-form { display: grid; grid-template-columns: minmax(210px, .8fr) minmax(250px, 1fr) minmax(260px, 1.2fr); gap: 16px; align-items: end; }
+.upload-form input[type="password"], .upload-form input[type="file"], .upload-form select, .sources-toolbar input[type="password"] {
+  width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 9px;
+  background: #fff; color: #172033; outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.upload-form input:focus, .upload-form select:focus, .sources-toolbar input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.13); }
+.upload-form input[type="file"] { padding: 7px; color: #64748b; }
+.upload-form input[type="file"]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 0; border-radius: 7px; background: #e0e7ff; color: #1e40af; font-weight: 700; cursor: pointer; }
+.upload-form #file-size, .upload-form .replace-option, .upload-form > .meta, .upload-actions, .preview-result { grid-column: 1 / -1; }
+.replace-option { width: fit-content; padding: 10px 12px; border-radius: 9px; background: #f8fafc; color: #334155; font-size: 12px; font-weight: 600; }
+.replace-option input { accent-color: var(--primary); }
+.upload-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.preview-result { margin-top: 18px; max-width: 100%; overflow: auto; }
+.preview-result pre { margin-top: 10px; padding: 14px; border-radius: 10px; background: #0f172a; color: #e2e8f0; font-size: 11px; }
+.sources-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.source-card { position: relative; min-height: 150px; border: 1px solid var(--border); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+.source-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: 14px 0 0 14px; background: #3b82f6; }
+.source-card h3 { margin-bottom: 14px; color: #172554; font-size: 15px; }
+.source-card p { margin-top: 5px; color: var(--text-secondary); font-size: 12px; }
+#runs-list.card, #aliases-list.card { margin-bottom: 0; }
+
+@media (max-width: 980px) {
+  .source-control-card { grid-template-columns: 1fr 1fr; }
+  .source-control-card > div { grid-column: 1 / -1; }
+  .upload-form { grid-template-columns: 1fr 1fr; }
+  .upload-form > label:nth-of-type(3) { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+  .content { padding: 14px; }
+  .topbar { min-height: 56px; padding: 11px 14px; }
+  .card { padding: 16px; border-radius: 12px; }
+  .source-control-card, .upload-form { grid-template-columns: 1fr; }
+  .source-control-card > *, .upload-form > label:nth-of-type(3) { grid-column: 1 / -1; }
+  .source-control-card .btn, .upload-actions .btn { width: 100%; }
+  .stats-team { padding: 13px; }
+  .stats-table { min-width: 500px; }
+  .odds-grid.estimated { grid-template-columns: 1fr; }
+  .external-odds small { margin-left: 0; width: 100%; }
+  .player-table-block table { min-width: 760px; }
+}

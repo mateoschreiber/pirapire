@@ -94,12 +94,15 @@ The metrics engine computes **team and player statistics** from recent completed
 1. Resolve both team names via `lol_team_aliases.canonical_team()`
 2. Find last 5 complete `LolSeries` per team (Oracle's Elixir only, strictly before match start)
 3. Load `LolTeamGameStat` rows for those series
-4. Compute percentage metrics: towers, inhibitors, kills, deaths, dragons, barons, gold (all as share of total)
-5. Compute absolute metrics: game duration, series duration averages
-6. Compute per-map player metrics: kills, deaths, gold, solo kills, CS
-7. Store results in `LolMatchStatisticsReadModel` with an input fingerprint for cache validation
+4. Compute per-series win/loss records (aggregated from individual map results) and a **win_rate_pct** for each team
+5. Compute both percentage shares and absolute per-map averages for towers, inhibitors, kills, deaths, dragons, barons, gold
+6. Compute average map/series duration
+7. Compute per-player metrics: kills, deaths, gold per map, CS per map (absolute values)
+8. Run `_estimated_market()` to produce **form-based fair odds** for both teams using Laplace-smoothed relative probability
 
-**Coverage labels:** `complete`, `partial`, or `unavailable` — visible in the match detail UI as "Completo", "Parcial", or "N/D".
+**Coverage labels:** `complete`, `partial`, or `unavailable` — visible in the match detail UI as "Completo", "Parcial", or "N/D". The response also includes `estimated_market` (form-based odds) and `data_notes` with context about the source of odds and sample window.
+
+Note: `precompute_upcoming_stats()` is currently a stub — it returns `{"precomputed": 0, "total_scheduled": 0}` without computing or persisting anything. The `LolMatchStatisticsReadModel` table exists but is not written by the app-level code. Statistics are computed on-demand via the `/statistics` endpoint, not precomputed.
 
 ## 6. Dashboard & API Serving
 

@@ -5,23 +5,24 @@
   <button class="tab active" data-tab="status" type="button">Estado</button>
   <button class="tab" data-tab="files" type="button">Archivos</button>
   <button class="tab" data-tab="runs" type="button">Ejecuciones</button>
-  <button class="tab" data-tab="aliases" type="button">Aliases</button>
+  <button class="tab" data-tab="aliases" type="button">Alias</button>
 </div>
 <section id="status" class="tab-panel active">
-  <div class="sources-toolbar">
-    <label>Token administrativo <input id="sync-admin-token" type="password" autocomplete="current-password"></label>
-    <button id="sync-all-button" class="btn" type="button">Sincronizar</button>
-    <span id="sync-status" class="meta" aria-live="polite"></span>
+  <div class="sources-toolbar card source-control-card">
+    <div><p class="eyebrow">Actualización global</p><h3>Sincronizar fuentes</h3><p class="meta">Reconstruye las estadísticas desde las versiones más recientes.</p></div>
+    <label><span>Token administrativo</span><input id="sync-admin-token" type="password" autocomplete="current-password" placeholder="Ingrese el token"></label>
+    <button id="sync-all-button" class="btn" type="button">Sincronizar datos</button>
+    <span id="sync-status" class="meta sync-message" aria-live="polite"></span>
   </div>
   <div id="sources-status" class="sources-grid">Cargando…</div>
 </section>
 <section id="files" class="tab-panel">
-  <div class="card">
-    <h3>Importar estadísticas</h3>
+  <div class="card sources-panel">
+    <div class="section-heading"><div><p class="eyebrow">Carga de datos</p><h3>Importar estadísticas</h3></div><span class="badge badge-blue">CSV · máximo 100 MB</span></div>
     <form id="upload-form" class="upload-form">
-      <label>Token administrativo <input id="admin-token" type="password" autocomplete="current-password" required></label>
-      <label>Tipo <select name="type"><option value="oracle">Oracle's Elixir / estadísticas LoL</option><option value="manual_statistics">Estadísticas manuales</option><option value="manual_odds">Odds / cuotas manuales</option></select></label>
-      <label>Archivo <input id="upload-file" type="file" name="file" accept=".csv" required></label>
+      <label><span>Token administrativo</span><input id="admin-token" type="password" autocomplete="current-password" placeholder="Ingrese el token" required></label>
+      <label><span>Tipo de fuente</span><select name="type"><option value="oracle">Oracle's Elixir / estadísticas LoL</option><option value="manual_statistics">Estadísticas manuales</option><option value="manual_odds">Odds / cuotas manuales</option></select></label>
+      <label><span>Archivo CSV</span><input id="upload-file" type="file" name="file" accept=".csv" required></label>
       <div id="file-size" class="meta">Límite: 100 MB.</div>
       <label class="replace-option"><input type="checkbox" name="replace_existing" value="true"> Actualizar y reemplazar los datos existentes de los años incluidos</label>
       <p class="meta">Si el servidor ya contiene un archivo con el mismo nombre, se reemplaza automáticamente y se elimina la versión anterior.</p>
@@ -33,8 +34,8 @@
     <div id="preview" class="preview-result" aria-live="polite"></div>
   </div>
 </section>
-<section id="runs" class="tab-panel"><div id="runs-list">Cargando…</div></section>
-<section id="aliases" class="tab-panel"><div id="aliases-list">Cargando…</div></section>
+<section id="runs" class="tab-panel"><div id="runs-list" class="card table-scroll">Cargando…</div></section>
+<section id="aliases" class="tab-panel"><div id="aliases-list" class="card">Cargando…</div></section>
 <script>
 (function () {
   const MAX_BYTES = 100 * 1024 * 1024;
@@ -65,7 +66,7 @@
   function loadRuns() {
     json('/api/sources/runs').then((data) => {
       $('#runs-list').innerHTML = data.runs.length
-        ? '<table><thead><tr><th>Fuente</th><th>Trabajo</th><th>Estado</th><th>Inicio</th><th>Insertados</th><th>Error</th></tr></thead><tbody>' + data.runs.map((run) => `<tr><td>${run.source_code}</td><td>${run.job}</td><td>${run.status}</td><td>${run.started_at}</td><td>${run.records_inserted}</td><td>${run.error_message || ''}</td></tr>`).join('') + '</tbody></table>'
+        ? '<table><thead><tr><th>Fuente</th><th>Proceso</th><th>Estado</th><th>Fecha de inicio</th><th>Registros insertados</th><th>Detalle del error</th></tr></thead><tbody>' + data.runs.map((run) => `<tr><td>${run.source_code}</td><td>${run.job}</td><td>${run.status}</td><td>${run.started_at}</td><td>${run.records_inserted}</td><td>${run.error_message || ''}</td></tr>`).join('') + '</tbody></table>'
         : '<p class="empty-state">Aún no existen ejecuciones.</p>';
     }).catch((error) => { $('#runs-list').textContent = 'Error: ' + error.message; });
   }

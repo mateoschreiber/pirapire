@@ -48,15 +48,16 @@ The conftest creates a **temporary SQLite database** in the system temp director
 |------|-------------------|
 | `test_dashboard_html()` | `/` renders competitive title, live clock |
 | `test_sources_html_has_upload_flow()` | `/sources` has preview/save buttons, upload validation |
-| `test_match_detail_html()` | `/lol/matches/{key}` renders loading state |
+| `test_match_detail_html()` | `/lol/matches/{key}` renders loading state, estimated market heading, `market-source-badge` |
 | `test_upcoming_api()` | `/api/lol/matches/upcoming` returns correct window_hours |
 | `test_upcoming_timezone()` | API response contains `America/Asuncion` timezone |
 | `test_match_not_found()` | Non-existent match returns 404 |
-| `test_static_assets()` | CSS and JS files are served correctly |
+| `test_static_assets()` | CSS serves Inter font; JS includes `el("live-clock")`; Inter font file served |
 | `test_competition_classifier_excludes_academies()` | Academy leagues (LCK CL) are excluded |
 | `test_upcoming_api_exposes_only_allowed_competitions()` | Only 9 competition codes appear |
-| `test_dashboard_assets_include_requested_metrics()` | JS contains expected display strings |
+| `test_dashboard_assets_include_requested_metrics()` | JS contains expected display strings including win rate, estimated odds, per-map labels |
 | `test_manual_odds_upload_and_match_response()` | Full odds upload → API response integration test |
+| `test_estimated_market_uses_both_teams_recent_series()` | `_estimated_market()` returns correct probabilities/odds with Laplace smoothing |
 
 ### test_timezone.py
 
@@ -84,7 +85,5 @@ The conftest creates a **temporary SQLite database** in the system temp director
 ## Coverage Areas Not Yet Tested
 
 - **Series builder** (`services/series_builder.py`) — No dedicated test
-- **Metrics engine** (`services/lol_metrics_engine.py`) — No dedicated test
-- **Oracle's Elixir importer** — Only integration-tested via upload API
 - **Odds importer** — Tested in test_pages.py for one scenario
 - **Worker jobs** — No scheduler tests

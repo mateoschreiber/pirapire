@@ -67,6 +67,7 @@ def _team_payload(session: Session, team_name: str, before: datetime):
     series = _recent_series(session, team, before)
     games = [game for item in series for game in _series_games(session, item)]
     team_rows, opponents = [], []
+    series_map_results = {}
     for game in games:
         rows = session.exec(select(LolTeamGameStat).where(LolTeamGameStat.game_id == game.id)).all()
         own = next((row for row in rows if _resolve(session, row.team_name) == team), None)
@@ -77,6 +78,12 @@ def _team_payload(session: Session, team_name: str, before: datetime):
             continue
         team_rows.append(own)
         opponents.append(opponent)
+        if game.series_id is not None:
+            result = series_map_results.setdefault(game.series_id, {"wins": 0, "losses": 0})
+            if own.result == 1:
+                result["wins"] += 1
+            elif own.result == 0:
+                result["losses"] += 1
 
     total = len(games)
     valid = len(team_rows)
@@ -117,14 +124,26 @@ def _team_payload(session: Session, team_name: str, before: datetime):
         "reason": None if durations else (reason or "metric_not_provided"),
     }
     series_durations = []
+    series_wins = 0
+    series_losses = 0
     for item in series:
         value = sum(game.game_length_seconds or 0 for game in _series_games(session, item))
         if value:
             series_durations.append(value)
+        result = series_map_results.get(item.id, {"wins": 0, "losses": 0})
+        if result["wins"] != result["losses"]:
+            if result["wins"] > result["losses"]:
+                series_wins += 1
+            else:
+                series_losses += 1
+    decided_series = series_wins + series_losses
 
     payload = {
         "team_name": team,
         "series_used": len(series),
+        "series_wins": series_wins,
+        "series_losses": series_losses,
+        "win_rate_pct": round(100 * series_wins / decided_series, 1) if decided_series else None,
         "maps_used": valid,
         "series": [
             {
@@ -227,6 +246,41 @@ def _players(session: Session, team: str, games, team_rows):
     return output
 
 
+def _estimated_market(team_a: dict, team_b: dict, team_a_name: str, team_b_name: str) -> dict:
+    sample_a = team_a["series_wins"] + team_a["series_losses"]
+    sample_b = team_b["series_wins"] + team_b["series_losses"]
+    if not sample_a or not sample_b:
+        return {
+            "available": False,
+            "model": "Forma de las últimas 5 series",
+            "reason": "Se requiere al menos una serie decidida por equipo.",
+        }
+    # Laplace smoothing avoids impossible 0%/100% probabilities in a five-series sample.
+    strength_a = (team_a["series_wins"] + 1) / (sample_a + 2)
+    strength_b = (team_b["series_wins"] + 1) / (sample_b + 2)
+    probability_a = strength_a / (strength_a + strength_b)
+    probability_b = 1 - probability_a
+    return {
+        "available": True,
+        "model": "Forma de las últimas 5 series",
+        "method": "Probabilidad relativa con suavizado Laplace",
+        "team_a": {
+            "name": team_a_name,
+            "probability_pct": round(probability_a * 100, 1),
+            "decimal_odds": round(1 / probability_a, 2),
+            "series_wins": team_a["series_wins"],
+            "series_used": sample_a,
+        },
+        "team_b": {
+            "name": team_b_name,
+            "probability_pct": round(probability_b * 100, 1),
+            "decimal_odds": round(1 / probability_b, 2),
+            "series_wins": team_b["series_wins"],
+            "series_used": sample_b,
+        },
+    }
+
+
 def compute_match_statistics(session: Session, match_key: str):
     match = session.exec(select(LolMatchEvent).where(LolMatchEvent.match_key == match_key)).first()
     if not match:
@@ -240,8 +294,9 @@ def compute_match_statistics(session: Session, match_key: str):
         "team_b_name": match.team_b,
         "players_a": _players(session, team_a["team_name"], games_a, rows_a),
         "players_b": _players(session, team_b["team_name"], games_b, rows_b),
+        "estimated_market": _estimated_market(team_a, team_b, match.team_a, match.team_b),
         "data_notes": {
-            "odds": "Las cuotas provienen de capturas externas, no de Oracle's Elixir.",
+            "odds": "Las cuotas calculadas son una estimación estadística interna y no representan una casa de apuestas.",
             "sample": "Estadísticas calculadas sobre las últimas 5 series con mapas disponibles.",
         },
     }, {"team_a": team_a["coverage"], "team_b": team_b["coverage"]}

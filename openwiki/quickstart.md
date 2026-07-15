@@ -42,7 +42,7 @@ Open **http://localhost:8090**.
 ## Key Concepts
 
 - **Series** — A best-of-N match between two LoL teams, composed of individual maps (games). The `LolSeries` model groups `LolGameHistory` records by league + date + team pair.
-- **Statistics Engine** — Computes team and player metrics from the last 5 completed series per team (strictly before match kickoff). Produces percentages for towers, inhibitors, kills, deaths, dragons, barons, gold plus average map/series duration.
+- **Statistics Engine** — Computes team and player metrics from the last 5 completed series per team (strictly before match kickoff). Produces absolute per-map averages for towers, inhibitors, kills, deaths, dragons, barons, and gold, plus series win rate, average map/series duration, and form-based market odds.
 - **Coverage Labels** — Metrics are tagged `complete`, `partial`, or `unavailable` based on how many recent series had usable data.
 - **Team Aliases** — Normalizes team names across sources (Leaguepedia, Oracle's Elixir manual CSV) using a flexible alias table with NFKD normalization.
 - **Competition Classification** — Matches are classified into standard league codes (`LCK`, `LPL`, `LEC`, `LTA`, `LCP`, `WORLDS`, `MSI`, `FIRST_STAND`, `EWC`).
@@ -60,7 +60,7 @@ Data Dragon API         ──►  LolPatch + LolChampion
     Series Builder ──► LolSeries (group games)
            │
            ▼
-    Metrics Engine ──► LolMatchStatisticsReadModel (cached stats)
+    Metrics Engine ──► (on-demand stats via /statistics endpoint)
            │
            ▼
     Dashboard / Match Detail pages

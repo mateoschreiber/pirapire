@@ -30,6 +30,8 @@ def test_match_detail_html():
     assert response.status_code == 200
     assert "Cargando" in response.text
     assert 'data-testid="live-clock"' in response.text
+    assert 'id="market-source-badge"' in response.text
+    assert "Cuotas calculadas del enfrentamiento" in response.text
 
 
 def test_upcoming_api():
@@ -47,7 +49,10 @@ def test_match_not_found():
 
 
 def test_static_assets():
-    assert client.get("/static/css/styles.css").status_code == 200
+    css = client.get("/static/css/styles.css")
+    assert css.status_code == 200
+    assert 'font-family: "Inter"' in css.text
+    assert client.get("/static/fonts/inter-latin.woff2").status_code == 200
     js = client.get("/static/js/app.js")
     assert js.status_code == 200
     assert 'el("live-clock")' in js.text
@@ -79,9 +84,12 @@ def test_dashboard_assets_include_requested_metrics():
     assert "Dragones asesinados" in js
     assert "Barones asesinados" in js
     assert "Oro total" in js
+    assert "Porcentaje de victorias" in js
+    assert "Cuotas justas estimadas" in js
+    assert "Valor · últimas 5 series" in js
     assert "solo_kills_status" not in js
     assert "Solo kills" not in js
-    assert "CS promedio/mapa" in js
+    assert "CS promedio por mapa" in js
     assert "cs_per_map" in js
     assert "Sin cuotas capturadas" in js
 
@@ -168,3 +176,18 @@ def test_oracle_replacement_updates_and_removes_stale_games(tmp_path):
         )).one()
         assert alpha.towers == 11
         assert player.cs == 333
+
+
+def test_estimated_market_uses_both_teams_recent_series():
+    from app.services.lol_metrics_engine import _estimated_market
+
+    team_a = {"series_wins": 4, "series_losses": 1}
+    team_b = {"series_wins": 2, "series_losses": 3}
+    market = _estimated_market(team_a, team_b, "Alpha", "Beta")
+    assert market["available"] is True
+    assert market["team_a"]["probability_pct"] == 62.5
+    assert market["team_b"]["probability_pct"] == 37.5
+    assert market["team_a"]["decimal_odds"] == 1.6
+    assert market["team_b"]["decimal_odds"] == 2.67
+    assert market["team_a"]["series_used"] == 5
+    assert market["team_b"]["series_used"] == 5

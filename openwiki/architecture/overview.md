@@ -40,11 +40,12 @@ app.mount("/static", ...)             # CSS + JS
 
 - **Lifespan handler** calls `init_db()` on startup (creates tables, runs migrations)
 - **Templates** rendered via Jinja2 from `app/templates/`
-- **Static assets** served from `app/static/`
+- **Static assets** served from `app/static/` (CSS, JS, fonts)
+- **Match detail page** (`match_detail.html`) now renders estimated market odds with a dynamic `market-source-badge` that updates between "Calculando", "Modelo estadístico", "Fuente externa", or "Datos insuficientes" based on available data
 
 ## Background Worker (`app/worker_main.py`)
 
-APScheduler `BackgroundScheduler` with five recurring jobs:
+APScheduler `BackgroundScheduler` with six recurring jobs:
 
 | Job | Interval | Description |
 |-----|----------|-------------|
@@ -53,8 +54,7 @@ APScheduler `BackgroundScheduler` with five recurring jobs:
 | `sync_datadragon` | 1440 min | Data Dragon champion/version sync |
 | `import_odds` | 5 min | Polls odds CSV inbox |
 | `import_oracles` | 30 min | Polls Oracle's Elixir CSV inbox |
-
-Additionally, `job_precompute_stats()` is defined but not scheduled by default (configure as needed).
+| `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` (currently a stub) |
 
 ## Database Layer
 
@@ -122,7 +122,7 @@ When modifying this codebase, watch for:
 2. **APScheduler in-process:** The worker uses `BackgroundScheduler` without an external broker. It is not distributed and restarts on container restart.
 3. **Functional service pattern:** Services are modules of free functions, not classes. All take `Session` as first argument.
 4. **No Alembic:** Schema migrations are done via `PRAGMA table_info` + `ALTER TABLE ADD COLUMN` in `migrations.py`. New models need both a SQLModel class and potentially a migration entry.
-5. **Frontend is vanilla JS:** No framework. Template rendering is server-side Jinja2 with JavaScript fetching JSON from `/api/lol/matches/*` endpoints.
+5. **Frontend is vanilla JS:** No framework. Template rendering is server-side Jinja2 with JavaScript fetching JSON from `/api/lol/matches/*` endpoints. The UI received a **Corporate v3 refresh** (styles.css): Inter font (self-hosted woff2), `--bg`/`--surface`/`--primary` CSS variables, rounded cards, gradient buttons, skeleton loading states, responsive breakpoints at 980px and 680px, and `theme-color` meta. The font file is preloaded in `base.html` and served from `/static/fonts/inter-latin.woff2`.
 6. **Stale seed.py:** `/backend/app/seed.py` references deleted football models and will fail if called. It is a pre-Phase-1 artifact.
 7. **Duplicate standalone scripts:** `/backend/lol_metrics_engine.py` and `/backend/oracles_elixir_importer.py` exist at the backend root — these are older versions superseded by the app package versions. Do not import them.
 
@@ -131,9 +131,10 @@ When modifying this codebase, watch for:
 ### `lol_metrics_engine.py`
 Core statistics engine. Computes team and player metrics from the last 5 complete Oracle's Elixir series per team. Key functions:
 - `_recent_series()` — Fetches last 5 complete series from LolSeries (Oracle's Elixir only)
-- `_team_payload()` — Computes percentage metrics (towers, inhibitors, kills, deaths, dragons, barons, gold), absolute averages, and coverage labels
-- `_players()` — Computes per-player metrics (kills %, deaths %, gold %, CS per map, solo kills)
-- `precompute_upcoming_stats()` — Iterates all upcoming LolMatchEvents, computes stats, writes LolMatchStatisticsReadModel
+- `_team_payload()` — Computes both percentage shares (in `metrics`) and absolute per-map averages (in `averages`) for towers, inhibitors, kills, deaths, dragons, barons, and gold. Also computes **series win rate** (`series_wins`, `series_losses`, `win_rate_pct`), average map/series duration, and coverage labels. The match detail UI renders the absolute per-map averages, not percentages.
+- `_players()` — Computes per-player absolute kills/deaths totals, gold per map, and CS per map. (Percentage shares — `kills_pct`, `deaths_pct` — are computed internally for compatibility but not rendered by the current UI.)
+- `_estimated_market()` — Computes probabilistic market odds from both teams' recent series records using Laplace-smoothed relative probability. Returns fair decimal odds and win probability per team, or `available: false` with a reason when data is insufficient.
+- `precompute_upcoming_stats()` — Stub. Returns `{"precomputed": 0, "total_scheduled": 0}`. Scheduled in the worker every 30 min but does not yet compute or persist anything.
 
 ### `series_builder.py`
 Groups LolGameHistory records into LolSeries. `rebuild_series()`:

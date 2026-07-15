@@ -4,6 +4,7 @@
   const DISPLAY_TIMEZONE = "America/Asuncion";
   let dashboardData = null;
   let activeCompetition = "ALL";
+  let matchDetailData = null;
 
   function el(id) { return document.getElementById(id); }
   function hide(node) { if (node) node.classList.add("hidden"); }
@@ -169,6 +170,7 @@
     if (typeof MATCH_KEY === "undefined") return;
     try {
       const match = await fetchJSON(API + "/" + encodeURIComponent(MATCH_KEY));
+      matchDetailData = match;
       renderMatchHeader(match);
       renderMatchOdds(match);
       await loadStatistics();
@@ -189,17 +191,39 @@
       '<span>' + (match.best_of ? "BO" + match.best_of : "Formato N/D") + "</span>";
   }
 
-  function renderMatchOdds(match) {
+  function renderMatchOdds(match, estimated) {
     const container = el("odds-content");
+    const badge = el("market-source-badge");
     if (!container) return;
-    if (!match.odds_available) {
-      container.innerHTML = '<div class="source-warning"><strong>No existen odds para este encuentro.</strong><p>' +
-        esc(match.odds_message || "Debe cargarse una captura de un proveedor externo.") + "</p></div>";
+    if (estimated && estimated.available) {
+      const sideA = estimated.team_a;
+      const sideB = estimated.team_b;
+      if (badge) { badge.textContent = "Modelo estadístico"; badge.className = "badge badge-blue"; }
+      let external = "";
+      if (match && match.odds_available) {
+        external = '<div class="external-odds"><strong>Referencia externa</strong><span>' + esc(match.team_a) + " " + fmtOdds(match.odds_a) +
+          " · " + esc(match.team_b) + " " + fmtOdds(match.odds_b) + "</span><small>" + esc(match.odds_provider || "Proveedor externo") + "</small></div>";
+      }
+      container.innerHTML = '<div class="market-model"><div class="odds-grid estimated">' +
+        '<div><span>' + esc(sideA.name) + '<small>' + fmtPct(sideA.probability_pct) + ' probabilidad · ' + sideA.series_wins + '/' + sideA.series_used + ' series</small></span><strong>' + fmtOdds(sideA.decimal_odds) + '</strong></div>' +
+        '<div><span>' + esc(sideB.name) + '<small>' + fmtPct(sideB.probability_pct) + ' probabilidad · ' + sideB.series_wins + '/' + sideB.series_used + ' series</small></span><strong>' + fmtOdds(sideB.decimal_odds) + '</strong></div>' +
+        '</div><p class="meta"><strong>Cuotas justas estimadas.</strong> ' + esc(estimated.model) + ' · ' + esc(estimated.method) + '.</p>' + external + '</div>';
       return;
     }
-    container.innerHTML = '<div class="odds-grid"><div><span>' + esc(match.team_a) + '</span><strong>' + fmtOdds(match.odds_a) +
-      '</strong></div><div><span>' + esc(match.team_b) + '</span><strong>' + fmtOdds(match.odds_b) + "</strong></div></div>" +
-      '<p class="meta">Proveedor: ' + esc(match.odds_provider) + (match.odds_captured_at ? " · Captura " + esc(fmtTime(match.odds_captured_at)) : "") + "</p>";
+    if (match && match.odds_available) {
+      if (badge) { badge.textContent = "Fuente externa"; badge.className = "badge badge-gray"; }
+      container.innerHTML = '<div class="odds-grid"><div><span>' + esc(match.team_a) + '</span><strong>' + fmtOdds(match.odds_a) +
+        '</strong></div><div><span>' + esc(match.team_b) + '</span><strong>' + fmtOdds(match.odds_b) + "</strong></div></div>" +
+        '<p class="meta">Proveedor: ' + esc(match.odds_provider) + (match.odds_captured_at ? " · Captura " + esc(fmtTime(match.odds_captured_at)) : "") + "</p>";
+      return;
+    }
+    if (!estimated) {
+      if (badge) { badge.textContent = "Calculando"; badge.className = "badge badge-gray"; }
+      container.innerHTML = '<div class="market-loading"><span class="skeleton"></span><p>Calculando cuotas con la forma reciente de ambos equipos…</p></div>';
+      return;
+    }
+    if (badge) { badge.textContent = "Datos insuficientes"; badge.className = "badge badge-yellow"; }
+    container.innerHTML = '<div class="source-warning"><strong>No se pudieron estimar las cuotas.</strong><p>' + esc(estimated.reason || "No hay historial suficiente para ambos equipos.") + "</p></div>";
   }
 
   async function loadStatistics() {
@@ -217,6 +241,7 @@
     if (!stats || !stats.payload) return;
     const payload = stats.payload;
     const coverage = stats.coverage || {};
+    renderMatchOdds(matchDetailData, payload.estimated_market);
     renderTeamStats("team-a-stats", payload.team_a, coverage.team_a);
     renderTeamStats("team-b-stats", payload.team_b, coverage.team_b);
     renderPlayers("players-section", payload);
@@ -244,18 +269,18 @@
     const averages = data.averages || {};
     container.innerHTML = '<div class="stats-team-head"><div><h4>' + esc(data.team_name) + '</h4><p>' + data.series_used + " series · " + data.maps_used +
       ' mapas</p></div><span class="badge ' + className + '">' + label + "</span></div>" +
-      "<table class='stats-table'><tbody>" +
-      "<tr><th>Métrica</th><th>Promedio por mapa</th></tr>" +
-      "<tr><td>Torretas destruidas</td><td>" + averageValue(averages.towers, 2) + "</td></tr>" +
-      "<tr><td>Inhibidores destruidos</td><td>" + averageValue(averages.inhibitors, 2) + "</td></tr>" +
-      "<tr><td>Asesinatos</td><td>" + averageValue(averages.kills, 2) + "</td></tr>" +
-      "<tr><td>Muertes</td><td>" + averageValue(averages.deaths, 2) + "</td></tr>" +
-      "<tr><td>Dragones asesinados</td><td>" + averageValue(averages.dragons, 2) + "</td></tr>" +
-      "<tr><td>Barones asesinados</td><td>" + averageValue(averages.barons, 2) + "</td></tr>" +
-      "<tr><td>Oro total</td><td>" + averageValue(averages.gold, 0) + "</td></tr>" +
-      "<tr><td>Duración media del mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds && data.avg_map_duration_seconds.value) + "</td></tr>" +
-      "<tr><td>Duración media de la serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds && data.avg_series_duration_seconds.value) + "</td></tr>" +
-      "</tbody></table>";
+      "<div class='table-scroll'><table class='stats-table'><thead><tr><th>Indicador</th><th>Valor · últimas 5 series</th></tr></thead><tbody>" +
+      "<tr class='highlight-row'><td>Porcentaje de victorias</td><td><strong>" + fmtPct(data.win_rate_pct) + "</strong><small>" + data.series_wins + " victorias · " + data.series_losses + " derrotas</small></td></tr>" +
+      "<tr><td>Torretas destruidas · promedio por mapa</td><td>" + averageValue(averages.towers, 2) + "</td></tr>" +
+      "<tr><td>Inhibidores destruidos · promedio por mapa</td><td>" + averageValue(averages.inhibitors, 2) + "</td></tr>" +
+      "<tr><td>Asesinatos · promedio por mapa</td><td>" + averageValue(averages.kills, 2) + "</td></tr>" +
+      "<tr><td>Muertes · promedio por mapa</td><td>" + averageValue(averages.deaths, 2) + "</td></tr>" +
+      "<tr><td>Dragones asesinados · promedio por mapa</td><td>" + averageValue(averages.dragons, 2) + "</td></tr>" +
+      "<tr><td>Barones asesinados · promedio por mapa</td><td>" + averageValue(averages.barons, 2) + "</td></tr>" +
+      "<tr><td>Oro total · promedio por mapa</td><td>" + averageValue(averages.gold, 0) + "</td></tr>" +
+      "<tr><td>Duración promedio del mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds && data.avg_map_duration_seconds.value) + "</td></tr>" +
+      "<tr><td>Duración promedio de la serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds && data.avg_series_duration_seconds.value) + "</td></tr>" +
+      "</tbody></table></div>";
   }
 
   function renderPlayers(elementId, payload) {
@@ -274,7 +299,7 @@
 
   function renderPlayerTable(teamName, players) {
     let html = '<div class="player-table-block"><h4>' + esc(teamName) + '</h4><div class="table-scroll"><table><thead><tr>' +
-      "<th>Jugador</th><th>Rol</th><th>Mapas</th><th>Kills</th><th>Deaths</th><th>Oro promedio/mapa</th><th>CS promedio/mapa</th></tr></thead><tbody>";
+      "<th>Jugador</th><th>Rol</th><th>Mapas jugados</th><th>Asesinatos</th><th>Muertes</th><th>Oro promedio por mapa</th><th>CS promedio por mapa</th></tr></thead><tbody>";
     players.forEach(function (player) {
       const cs = player.cs_per_map == null ? '<span class="metric-unavailable">N/D</span>' : Number(player.cs_per_map).toFixed(1);
       const gold = player.gold_per_map == null ? '<span class="metric-unavailable">N/D</span>' : fmtNumber(Math.round(player.gold_per_map));
