@@ -15,6 +15,28 @@
     <span id="sync-status" class="meta sync-message" aria-live="polite"></span>
   </div>
   <div id="sources-status" class="sources-grid">Cargando…</div>
+  <section id="source-config-card" class="card hidden" aria-live="polite">
+    <div class="section-heading"><div><p class="eyebrow">Configuración</p><h3 id="source-config-title">Fuente</h3></div><button id="source-config-close" class="btn btn-ghost" type="button">Cerrar</button></div>
+    <form id="source-config-form" class="source-config-form">
+      <label><span>Token administrativo</span><input id="source-admin-token" type="password" autocomplete="current-password" placeholder="Ingrese el token" required></label>
+      <label><span>Código</span><input id="source-config-code" readonly></label>
+      <label><span>URL de API o web</span><input id="source-config-url" type="url" placeholder="https://api.ejemplo.com"></label>
+      <label><span>Clave API</span><input id="source-config-key" type="password" autocomplete="off" placeholder="Se conserva si queda vacío"></label>
+      <label class="replace-option"><input id="source-config-enabled" type="checkbox" checked> Fuente habilitada</label>
+      <div class="upload-actions"><button class="btn" type="submit">Guardar configuración</button><button id="source-config-test" class="btn btn-ghost" type="button">Probar conexión</button></div>
+    </form>
+    <p id="source-config-message" class="meta"></p>
+  </section>
+  <section class="card source-add-card">
+    <div><p class="eyebrow">Nueva integración</p><h3>Agregar API externa</h3><p class="meta">Registra una API o página web para probar y conservar su configuración.</p></div>
+    <form id="custom-source-form" class="source-config-form">
+      <label><span>Nombre</span><input id="custom-source-name" required placeholder="Mi API de estadísticas"></label>
+      <label><span>URL de API o web</span><input id="custom-source-url" type="url" required placeholder="https://api.ejemplo.com"></label>
+      <label><span>Clave API opcional</span><input id="custom-source-key" type="password" autocomplete="off"></label>
+      <div class="upload-actions"><button class="btn" type="submit">Agregar API</button></div>
+    </form>
+    <p id="custom-source-message" class="meta"></p>
+  </section>
 </section>
 <section id="files" class="tab-panel">
   <div class="card sources-panel">
@@ -71,9 +93,90 @@
     }).catch((error) => { $('#runs-list').textContent = 'Error: ' + error.message; });
   }
 
-  json('/api/sources').then((data) => {
-    $('#sources-status').innerHTML = data.sources.map((source) => `<article class="source-card"><h3>${source.display_name}</h3><p>${source.status}</p><p>${source.configured ? 'Configurada' : 'Sin configurar'}</p><p>${source.last_error || ''}</p></article>`).join('');
-  }).catch((error) => { $('#sources-status').textContent = 'Error: ' + error.message; });
+  const configCard = $('#source-config-card');
+  const configForm = $('#source-config-form');
+  const configMessage = $('#source-config-message');
+  const sourceToken = () => $('#source-admin-token').value || $('#sync-admin-token').value || $('#admin-token').value;
+  const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+
+  function loadSources() {
+    json('/api/sources').then((data) => {
+      $('#sources-status').innerHTML = data.sources.map((source) => `<article class="source-card"><h3>${escapeHtml(source.display_name)}</h3><p>${source.status}</p><p>${source.configured ? 'Configurada' : 'Sin configurar'}</p><p>${escapeHtml(source.base_url || source.last_error || '')}</p><button class="btn btn-ghost" type="button" data-config-source="${escapeHtml(source.code)}">Configurar</button></article>`).join('');
+    }).catch((error) => { $('#sources-status').textContent = 'Error: ' + error.message; });
+  }
+
+  async function openSourceConfig(code) {
+    const token = sourceToken();
+    if (!token) { configMessage.textContent = 'Ingrese el token administrativo para configurar fuentes.'; configCard.classList.remove('hidden'); return; }
+    try {
+      const source = await json('/api/sources/' + encodeURIComponent(code) + '/configuration', {headers: {'X-Admin-Token': token}});
+      $('#source-config-title').textContent = source.display_name;
+      $('#source-config-code').value = source.code;
+      $('#source-config-url').value = source.base_url || '';
+      $('#source-config-key').value = '';
+      $('#source-config-enabled').checked = source.enabled;
+      configMessage.textContent = source.api_key_configured ? 'Clave API configurada; déjela vacía para conservarla.' : '';
+      configCard.classList.remove('hidden');
+      configCard.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    } catch (error) {
+      configMessage.textContent = 'No se pudo abrir: ' + error.message;
+      configCard.classList.remove('hidden');
+    }
+  }
+
+  $('#sources-status').addEventListener('click', (event) => {
+    const code = event.target.dataset.configSource;
+    if (code) openSourceConfig(code);
+  });
+  $('#source-config-close').addEventListener('click', () => configCard.classList.add('hidden'));
+
+  configForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const token = sourceToken();
+    if (!token) { configMessage.textContent = 'Ingrese el token administrativo.'; return; }
+    configMessage.textContent = 'Guardando configuración…';
+    try {
+      const result = await json('/api/sources/' + encodeURIComponent($('#source-config-code').value) + '/configuration', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json', 'X-Admin-Token': token},
+        body: JSON.stringify({base_url: $('#source-config-url').value, api_key: $('#source-config-key').value || null, enabled: $('#source-config-enabled').checked})
+      });
+      configMessage.textContent = result.configured ? 'Configuración guardada.' : 'Configuración guardada; indique una URL para activarla.';
+      loadSources();
+    } catch (error) { configMessage.textContent = 'No se pudo guardar: ' + error.message; }
+  });
+
+  $('#source-config-test').addEventListener('click', async () => {
+    const token = sourceToken();
+    if (!token) { configMessage.textContent = 'Ingrese el token administrativo.'; return; }
+    configMessage.textContent = 'Probando conexión…';
+    try {
+      const result = await json('/api/sources/' + encodeURIComponent($('#source-config-code').value) + '/test', {method: 'POST', headers: {'X-Admin-Token': token}});
+      configMessage.textContent = result.status === 'healthy' ? 'Conexión verificada.' : 'No se pudo verificar: ' + (result.reason || 'sin detalles');
+      loadSources(); loadRuns();
+    } catch (error) { configMessage.textContent = 'No se pudo probar: ' + error.message; }
+  });
+
+  $('#custom-source-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const token = sourceToken();
+    const message = $('#custom-source-message');
+    if (!token) { message.textContent = 'Ingrese el token administrativo en la configuración de fuente.'; return; }
+    message.textContent = 'Registrando API…';
+    try {
+      const result = await json('/api/sources/custom', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Admin-Token': token},
+        body: JSON.stringify({display_name: $('#custom-source-name').value, base_url: $('#custom-source-url').value, api_key: $('#custom-source-key').value || null, enabled: true})
+      });
+      message.textContent = 'API registrada: ' + result.display_name + '.';
+      $('#custom-source-form').reset();
+      loadSources();
+      openSourceConfig(result.code);
+    } catch (error) { message.textContent = 'No se pudo agregar: ' + error.message; }
+  });
+
+  loadSources();
   loadRuns();
 
   async function monitorSynchronization(runId) {

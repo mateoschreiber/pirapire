@@ -23,6 +23,8 @@ def test_sources_html_has_upload_flow():
     assert "100 * 1024 * 1024" in response.text
     assert 'id="sync-all-button"' in response.text
     assert 'name="replace_existing"' in response.text
+    assert 'id="source-config-form"' in response.text
+    assert 'id="custom-source-form"' in response.text
 
 
 def test_match_detail_html():
@@ -113,6 +115,52 @@ def test_dashboard_assets_include_requested_metrics():
     assert "loadPreviewOdds" in js
     assert "data-odds-key" in js
     assert "Cuotas calculadas no disponibles" in js
+
+
+
+def test_known_aliases_reconcile_renamed_teams():
+    from datetime import datetime, timezone
+    from sqlmodel import Session, select
+    from app.database import engine
+    from app.models_lol import LolMatchEvent
+    from app.services.lol_team_aliases import canonical_team, synchronize_known_aliases
+
+    with Session(engine) as session:
+        session.add(LolMatchEvent(
+            match_key="alias-sync-agal", source_name="test", source_match_id="alias-sync-agal",
+            league="EWC", tournament="EWC", team_a="AG.AL", team_b="T1",
+            start_time_utc=datetime(2026, 8, 1, tzinfo=timezone.utc), status="scheduled",
+        ))
+        session.commit()
+        result = synchronize_known_aliases(session)
+        assert canonical_team(session, "AG.AL") == "Anyone's Legend"
+        assert canonical_team(session, "LYON (2024 American Team)") == "LYON"
+        assert canonical_team(session, "Ninjas in Pyjamas.CN") == "Ninjas in Pyjamas"
+        assert result["exhibitions"][0]["alias"] == "CNB Legends"
+        event = session.exec(select(LolMatchEvent).where(LolMatchEvent.match_key == "alias-sync-agal")).one()
+        assert event.team_a == "Anyone's Legend"
+
+
+def test_sources_support_configuration_and_custom_api():
+    from app.config import settings
+
+    headers = {"X-Admin-Token": settings.admin_token}
+    configured = client.put(
+        "/api/sources/external_odds_api/configuration",
+        headers=headers,
+        json={"base_url": "https://example.com/api", "api_key": "secret", "enabled": True},
+    )
+    assert configured.status_code == 200
+    assert configured.json()["api_key_configured"] is True
+    assert "secret" not in configured.text
+    created = client.post(
+        "/api/sources/custom",
+        headers=headers,
+        json={"display_name": "Stats API Test", "base_url": "https://example.com/stats", "enabled": True},
+    )
+    assert created.status_code == 200
+    assert created.json()["custom"] is True
+    assert any(item["code"] == created.json()["code"] for item in client.get("/api/sources").json()["sources"])
 
 
 def test_manual_odds_upload_and_match_response(tmp_path):

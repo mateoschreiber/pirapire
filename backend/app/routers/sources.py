@@ -2,41 +2,241 @@ import hashlib
 import os
 import shutil
 import time
+import json
+import re
+import urllib.error
+import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlmodel import Session, select
 from ..config import settings
 from ..database import engine, get_session
 from ..models_lol import DataSource, ImportBatch, ImportError, LolTeamAlias, SourceRun
 
 router = APIRouter(prefix="/api")
-SOURCES = {"leaguepedia_schedule":"Leaguepedia Schedule", "leaguepedia_statistics":"Leaguepedia Statistics", "oracles_elixir":"Oracle's Elixir", "riot_datadragon":"Riot Data Dragon", "manual_odds_csv":"Manual odds CSV", "external_odds_api":"External odds API"}
+SOURCES = {
+    "leaguepedia_schedule": "Leaguepedia Schedule",
+    "leaguepedia_statistics": "Leaguepedia Statistics",
+    "oracles_elixir": "Oracle's Elixir",
+    "riot_datadragon": "Riot Data Dragon",
+    "manual_odds_csv": "Manual odds CSV",
+    "external_odds_api": "External odds API",
+}
+
+
+class SourceConfiguration(BaseModel):
+    base_url: str = ""
+    api_key: str | None = None
+    clear_api_key: bool = False
+    enabled: bool = True
+
+
+class CustomSourceConfiguration(SourceConfiguration):
+    display_name: str
+
 
 def _now(): return datetime.now(UTC)
+
+
 def _admin(token: str | None = Header(default=None, alias="X-Admin-Token")):
-    if not settings.admin_token or token != settings.admin_token: raise HTTPException(403, "Administrative authentication required")
+    if not settings.admin_token or token != settings.admin_token:
+        raise HTTPException(403, "Administrative authentication required")
+
+
 def _source(session, code):
-    if code not in SOURCES: raise HTTPException(404, "Unknown source")
-    row=session.exec(select(DataSource).where(DataSource.code==code)).first()
-    if not row:
-        row=DataSource(code=code,display_name=SOURCES[code],configured=(code=="oracles_elixir"),enabled=(code=="oracles_elixir"))
-        session.add(row);session.commit();session.refresh(row)
+    row = session.exec(select(DataSource).where(DataSource.code == code)).first()
+    if row:
+        return row
+    if code not in SOURCES:
+        raise HTTPException(404, "Unknown source")
+    row = DataSource(
+        code=code,
+        display_name=SOURCES[code],
+        configured=(code == "oracles_elixir"),
+        enabled=(code == "oracles_elixir"),
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
     return row
+
+
+def _config(row: DataSource) -> dict:
+    try:
+        return json.loads(row.config_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+
 def _view(row):
-    return {k:getattr(row,k) for k in ("code","display_name","enabled","configured","status","last_run_at","last_success_at","last_error","last_duration_ms","records_received","records_inserted","records_updated","records_skipped","coverage","next_run_at")}
+    view = {key: getattr(row, key) for key in (
+        "code", "display_name", "enabled", "configured", "status", "last_run_at",
+        "last_success_at", "last_error", "last_duration_ms", "records_received",
+        "records_inserted", "records_updated", "records_skipped", "coverage", "next_run_at",
+    )}
+    config = _config(row)
+    view["base_url"] = config.get("base_url", "")
+    view["api_key_configured"] = bool(config.get("api_key"))
+    view["custom"] = row.code not in SOURCES
+    return view
+
+
+def _configuration_view(row: DataSource) -> dict:
+    config = _config(row)
+    return {
+        "code": row.code,
+        "display_name": row.display_name,
+        "base_url": config.get("base_url", ""),
+        "api_key_configured": bool(config.get("api_key")),
+        "enabled": row.enabled,
+        "configured": row.configured,
+        "custom": row.code not in SOURCES,
+    }
+
+
+def _validate_url(url: str) -> str:
+    value = url.strip()
+    if not value:
+        return ""
+    if not re.match(r"^https?://", value, flags=re.I):
+        raise HTTPException(422, "La URL debe iniciar con http:// o https://")
+    return value
+
 
 @router.get("/sources")
-def sources(session:Session=Depends(get_session)):
-    return {"sources":[_view(_source(session,c)) for c in SOURCES]}
+def sources(session: Session = Depends(get_session)):
+    builtin = [_source(session, code) for code in SOURCES]
+    custom = [
+        row for row in session.exec(select(DataSource).order_by(DataSource.display_name)).all()
+        if row.code not in SOURCES
+    ]
+    return {"sources": [_view(row) for row in builtin + custom]}
+
+
 @router.get("/sources/detail/{code}")
-def source(code:str,session:Session=Depends(get_session)): return _view(_source(session,code))
-@router.post("/sources/{code}/test",dependencies=[Depends(_admin)])
-def test(code:str,session:Session=Depends(get_session)):
-    row=_source(session,code); started=_now(); run=SourceRun(source_code=code,job="test",status="success",started_at=started,finished_at=_now(),duration_ms=0); row.status="healthy" if row.configured else "degraded"; row.last_run_at=_now(); row.last_success_at=_now() if row.configured else None; session.add_all([row,run]);session.commit();return {"status":row.status,"run_id":run.id}
-@router.post("/sources/{code}/sync",dependencies=[Depends(_admin)])
-def sync(code:str,session:Session=Depends(get_session)):
-    row=_source(session,code); run=SourceRun(source_code=code,job="sync",status="failed",started_at=_now(),finished_at=_now(),error_message="Adapter sync is not configured");row.status="degraded";row.last_error=run.error_message;row.last_run_at=_now();session.add_all([row,run]);session.commit();return {"status":"degraded","run_id":run.id,"reason":run.error_message}
+def source(code: str, session: Session = Depends(get_session)):
+    return _view(_source(session, code))
+
+
+@router.get("/sources/{code}/configuration", dependencies=[Depends(_admin)])
+def source_configuration(code: str, session: Session = Depends(get_session)):
+    return _configuration_view(_source(session, code))
+
+
+@router.put("/sources/{code}/configuration", dependencies=[Depends(_admin)])
+def save_source_configuration(
+    code: str,
+    payload: SourceConfiguration,
+    session: Session = Depends(get_session),
+):
+    row = _source(session, code)
+    config = _config(row)
+    config["base_url"] = _validate_url(payload.base_url)
+    if payload.clear_api_key:
+        config.pop("api_key", None)
+    elif payload.api_key is not None and payload.api_key.strip():
+        config["api_key"] = payload.api_key.strip()
+    row.config_json = json.dumps(config, sort_keys=True)
+    row.enabled = payload.enabled
+    row.configured = bool(config.get("base_url")) or code == "oracles_elixir"
+    row.status = "healthy" if row.configured and row.enabled else "degraded"
+    row.last_error = None
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _configuration_view(row)
+
+
+@router.post("/sources/custom", dependencies=[Depends(_admin)])
+def create_custom_source(
+    payload: CustomSourceConfiguration,
+    session: Session = Depends(get_session),
+):
+    name = payload.display_name.strip()
+    if not name:
+        raise HTTPException(422, "El nombre es obligatorio")
+    base = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:40] or "api"
+    code = f"custom_api_{base}"
+    suffix = 2
+    while session.exec(select(DataSource).where(DataSource.code == code)).first():
+        code = f"custom_api_{base}_{suffix}"
+        suffix += 1
+    row = DataSource(code=code, display_name=name)
+    session.add(row)
+    session.commit()
+    return save_source_configuration(code, payload, session)
+
+
+def _test_configured_source(row: DataSource) -> tuple[bool, str | None]:
+    config = _config(row)
+    url = config.get("base_url", "")
+    if not url:
+        return row.configured, None if row.configured else "Configure una URL de API antes de probar"
+    headers = {"User-Agent": settings.leaguepedia_user_agent}
+    if config.get("api_key"):
+        headers["Authorization"] = f"Bearer {config['api_key']}"
+    try:
+        request = urllib.request.Request(url, headers=headers, method="HEAD")
+        with urllib.request.urlopen(request, timeout=8) as response:
+            if response.status < 400:
+                return True, None
+    except urllib.error.HTTPError as exc:
+        if exc.code not in {403, 405}:
+            return False, f"HTTP {exc.code}"
+    except Exception as exc:
+        return False, str(exc)
+    try:
+        request = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(request, timeout=8) as response:
+            return response.status < 400, None if response.status < 400 else f"HTTP {response.status}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+@router.post("/sources/{code}/test", dependencies=[Depends(_admin)])
+def test(code: str, session: Session = Depends(get_session)):
+    row = _source(session, code)
+    started = _now()
+    ok, error = _test_configured_source(row)
+    finished = _now()
+    run = SourceRun(
+        source_code=code,
+        job="test",
+        status="success" if ok else "failed",
+        started_at=started,
+        finished_at=finished,
+        duration_ms=int((finished - started).total_seconds() * 1000),
+        error_message=error,
+    )
+    row.status = "healthy" if ok else "degraded"
+    row.last_run_at = finished
+    row.last_success_at = finished if ok else row.last_success_at
+    row.last_error = error
+    session.add_all([row, run])
+    session.commit()
+    return {"status": row.status, "run_id": run.id, "reason": error}
+
+
+@router.post("/sources/{code}/sync", dependencies=[Depends(_admin)])
+def sync(code: str, session: Session = Depends(get_session)):
+    row = _source(session, code)
+    run = SourceRun(
+        source_code=code,
+        job="sync",
+        status="failed",
+        started_at=_now(),
+        finished_at=_now(),
+        error_message="Adapter sync is not configured",
+    )
+    row.status = "degraded"
+    row.last_error = run.error_message
+    row.last_run_at = _now()
+    session.add_all([row, run])
+    session.commit()
+    return {"status": "degraded", "run_id": run.id, "reason": run.error_message}
+
 @router.get("/sources/runs")
 def runs(session:Session=Depends(get_session)): return {"runs":session.exec(select(SourceRun).order_by(SourceRun.id.desc()).limit(100)).all()}
 
@@ -78,7 +278,15 @@ def import_status(batch_id: int, session: Session = Depends(get_session)):
 @router.get("/imports/{batch_id}/errors")
 def import_errors(batch_id:int,session:Session=Depends(get_session)): return {"errors":session.exec(select(ImportError).where(ImportError.batch_id==batch_id)).all()}
 @router.get("/aliases/unresolved")
-def aliases(session:Session=Depends(get_session)): return {"aliases":[]}
+def aliases(session: Session = Depends(get_session)):
+    from ..services.lol_team_aliases import EXHIBITION_TEAMS
+    return {"aliases": list(EXHIBITION_TEAMS)}
+
+
+@router.post("/aliases/synchronize", dependencies=[Depends(_admin)])
+def synchronize_aliases(session: Session = Depends(get_session)):
+    from ..services.lol_team_aliases import synchronize_known_aliases
+    return synchronize_known_aliases(session)
 @router.post("/sources/oracles/upload",dependencies=[Depends(_admin)])
 async def oracle_upload(file:UploadFile=File(...),session:Session=Depends(get_session)):
     if not file.filename or Path(file.filename).suffix.lower() not in {".csv",".zip"}: raise HTTPException(400,"Only CSV or ZIP files are accepted")
@@ -245,7 +453,9 @@ def _synchronize_history(run_id: int) -> None:
         try:
             from ..services.imports.oracles_elixir_importer import _import_csv_file
             from ..services.series_builder import rebuild_series
+            from ..services.lol_team_aliases import synchronize_known_aliases
 
+            synchronize_known_aliases(session)
             files = _latest_processed_files(session)
             if not files:
                 raise ValueError("No existen archivos Oracle procesados para sincronizar")
