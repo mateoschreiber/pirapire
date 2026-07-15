@@ -63,20 +63,7 @@ def request_json(url: str, headers: dict | None = None) -> dict:
         response = client.get(url, headers=headers)
         status = response.status_code
         response.raise_for_status()
-        return {
-            "ok": True,
-            "status": status,
-            "data": response.json(),
-            "error": None,
-            "retry_after": response.headers.get("Retry-After"),
-            "content_type": response.headers.get("Content-Type", ""),
-            "rate_limit": {
-                key: value
-                for key, value in response.headers.items()
-                if key.lower().startswith("x-app-rate-limit")
-                or key.lower().startswith("x-method-rate-limit")
-            },
-        }
+        return {"ok": True, "status": status, "data": response.json(), "error": None, "retry_after": None}
     except httpx.HTTPStatusError as e:
         retry_after = None
         if e.response.status_code == 429:
@@ -87,11 +74,9 @@ def request_json(url: str, headers: dict | None = None) -> dict:
             "data": None,
             "error": f"HTTP {e.response.status_code}",
             "retry_after": retry_after,
-            "content_type": e.response.headers.get("Content-Type", ""),
-            "rate_limit": {},
         }
     except httpx.TimeoutException:
-        return {"ok": False, "status": None, "data": None, "error": "timeout", "retry_after": None, "content_type": None, "rate_limit": {}}
+        return {"ok": False, "status": None, "data": None, "error": "timeout", "retry_after": None}
     except httpx.RequestError as e:
         return {
             "ok": False,
@@ -99,8 +84,6 @@ def request_json(url: str, headers: dict | None = None) -> dict:
             "data": None,
             "error": f"request_error: {type(e).__name__}",
             "retry_after": None,
-            "content_type": None,
-            "rate_limit": {},
         }
     except Exception as e:
         return {
@@ -109,6 +92,5 @@ def request_json(url: str, headers: dict | None = None) -> dict:
             "data": None,
             "error": f"parse_error: {type(e).__name__}",
             "retry_after": None,
-            "content_type": None,
-            "rate_limit": {},
         }
+

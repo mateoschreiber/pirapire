@@ -67,15 +67,6 @@ def test_root_references_app_js():
     assert "/static/js/app.js" in html
 
 
-def test_dashboard_event_cards_are_keyboard_accessible_links():
-    html = client.get("/").text
-    if 'class="event-card"' not in html:
-        return
-    assert '<a class="event-card"' in html
-    assert "aria-label=" in html
-    assert "onclick=" not in html
-
-
 def test_root_has_theme_persistence_bootstrap():
     html = client.get("/").text
     assert "pirapire.theme" in html
@@ -111,12 +102,12 @@ def test_dashboard_shows_normalized_counts():
 
     html = client.get("/").text
     matches = [m for m in _extract_stats(html)]
-    # The dashboard shows stored LoL games and football matches.
-    assert 'id="stat-lol-games"' in html
+    # The champion and match stat cells should reflect at least the seeded rows.
+    assert 'id="stat-champions"' in html
     assert 'id="stat-matches"' in html
-    lol_games_value = _stat_value(html, "stat-lol-games")
+    champions_value = _stat_value(html, "stat-champions")
     matches_value = _stat_value(html, "stat-matches")
-    assert lol_games_value >= 0
+    assert champions_value >= 4
     assert matches_value >= 3
     assert matches  # sanity
 
@@ -124,7 +115,7 @@ def test_dashboard_shows_normalized_counts():
 def _extract_stats(html: str):
     import re
 
-    return re.findall(r'id="stat-[a-z-]+">(\d+)<', html)
+    return re.findall(r'id="stat-[a-z]+">(\d+)<', html)
 
 
 def _stat_value(html: str, stat_id: str) -> int:

@@ -1,59 +1,19 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
-  <script>
-    // Aplica el tema guardado antes de pintar el layout para evitar flash.
-    (function () {
-      try {
-        var KEY = "pirapire.theme";
-        var saved = localStorage.getItem(KEY);
-        var theme = (saved === "light" || saved === "dark")
-          ? saved
-          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-        document.documentElement.setAttribute("data-theme", theme);
-      } catch (e) {
-        document.documentElement.setAttribute("data-theme", "light");
-      }
-    })();
-  </script>
-  <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}?v={{ build_commit }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pirapire - LoL Stats</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-  <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden>
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <span class="brand-name">{{ app_name }}</span>
-        <button id="themeToggle" type="button" class="btn btn-ghost" style="color:var(--sidebar-text);font-size:1.1rem;padding:0.2rem 0.5rem;margin-left:auto" aria-label="Toggle theme">☾</button>
-      </div>
-      <nav class="nav">
-        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Inicio</a>
-        <a class="nav-link {% if active_page == 'data_football' %}active{% endif %}" href="/data/football/ui">Futbol</a>
-        <a class="nav-link {% if active_page == 'data_lol' %}active{% endif %}" href="/data/lol/ui">LoL</a>
-        <a class="nav-link {% if active_page == 'teams' %}active{% endif %}" href="/teams/ui">Equipos</a>
-        <a class="nav-link {% if active_page == 'history' %}active{% endif %}" href="/history/ui">Historial</a>
-        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings/ui">Config</a>
-      </nav>
-    </aside>
-
-    <main class="main">
-      <div class="topbar">
-        <span id="top-clock" class="top-clock">--:--</span>
-      </div>
-      <div id="flash" class="flash" hidden></div>
-      {% block content %}{% endblock %}
-
-      <footer class="footer">
-        {{ app_name }} · Sistema analítico. No automatiza apuestas reales.
-      </footer>
+    <nav class="top-nav">
+        <h1><a href="/">Pirapire</a></h1>
+        <span class="nav-subtitle">League of Legends</span>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
     </main>
-  </div>
-
-  <script src="{{ url_for('static', path='/js/app.js') }}?v={{ build_commit }}"></script>
-  {% block scripts %}{% endblock %}
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

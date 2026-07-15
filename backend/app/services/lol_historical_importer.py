@@ -84,7 +84,11 @@ def total_cs(row: dict) -> int | None:
 def league_allowed(league: str | None) -> bool:
     if not league:
         return False
-    return True
+    active = {x.strip().upper() for x in getattr(settings, 'lol_history_active_leagues', 'LCK,LPL,LEC,LCS,CBLOL,LCP,MSI,WORLDS,FIRST_STAND').split(',') if x.strip()}
+    legacy = {x.strip().upper() for x in getattr(settings, 'lol_history_legacy_leagues', 'LTA,LLA,PCS,VCS,LJL,LCO,TCL,LCL').split(',') if x.strip()}
+    if league in active:
+        return True
+    return bool(getattr(settings, 'lol_history_include_legacy', True) and league in legacy)
 
 
 def source_key(*parts) -> str:

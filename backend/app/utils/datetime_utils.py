@@ -26,26 +26,6 @@ def format_local(dt: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     return local.strftime(fmt) if local else ""
 
 
-def parse_iso(value: str | datetime | None) -> datetime | None:
-    if isinstance(value, datetime):
-        return value
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
-def event_time_display(value: str | datetime | None, status: str | None) -> str:
-    if not status or status == "unconfirmed":
-        return "Horario pendiente de reconfirmación"
-    parsed = parse_iso(value)
-    if parsed is None:
-        return "Horario pendiente de reconfirmación"
-    return f"{format_local(parsed, '%d/%m %H:%M')} PY"
-
-
 def now_local() -> datetime:
     return datetime.now(get_tz())
 

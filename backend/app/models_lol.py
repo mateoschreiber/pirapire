@@ -1,13 +1,16 @@
 from datetime import UTC, datetime
 from typing import Optional
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import JSON, Column, Field, SQLModel
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
 
 
+# ---------------------------------------------------------------------------
+# Static / reference models
+# ---------------------------------------------------------------------------
 class LolPatch(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     source_name: str = Field(index=True)
@@ -65,6 +68,9 @@ class LolLeagueAlias(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+# ---------------------------------------------------------------------------
+# Game-level history (kept for stats computation)
+# ---------------------------------------------------------------------------
 class LolGameHistory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     source_name: str = Field(index=True)
@@ -80,40 +86,8 @@ class LolGameHistory(SQLModel, table=True):
     blue_team: Optional[str] = None
     red_team: Optional[str] = None
     winner_team: Optional[str] = None
-    match_id: Optional[str] = Field(default=None, index=True)
-    n_game_in_match: Optional[int] = None
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
-
-
-class LolSeries(SQLModel, table=True):
-    """A confirmed best-of series grouping maps only by a verified MatchId."""
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    source_name: str = Field(index=True)
-    match_id: str = Field(index=True)
-    overview_page: Optional[str] = None
-    tournament: Optional[str] = None
-    league: Optional[str] = Field(default=None, index=True)
-    team1: Optional[str] = Field(default=None, index=True)
-    team2: Optional[str] = Field(default=None, index=True)
-    date: Optional[str] = None
-    n_games: Optional[int] = None
-    game_ids_json: Optional[str] = None
-    source_key: str = Field(index=True)
-    # series_status: 'complete' when result + all published maps are present,
-    # otherwise 'partial'. Only 'complete' series may be picked for the window.
-    series_status: Optional[str] = Field(default=None, index=True)
-    # Phase 4B2 data-quality fields.
-    source: Optional[str] = Field(default=None, index=True)
-    source_url: Optional[str] = None
-    source_id: Optional[str] = Field(default=None, index=True)
-    observed_at: Optional[datetime] = None
-    data_as_of: Optional[datetime] = None
-    freshness_class: Optional[str] = Field(default=None, index=True)
-    eligible_for_last_n: bool = False
-    fetched_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
 
@@ -166,6 +140,7 @@ class LolPlayerGameStat(SQLModel, table=True):
     cs: Optional[int] = None
     damage: Optional[int] = None
     gold: Optional[int] = None
+    solo_kills: Optional[int] = None
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
 
@@ -180,31 +155,52 @@ class LolDataCoverage(SQLModel, table=True):
     last_imported_at: datetime = Field(default_factory=_now)
 
 
-class RiotPlayerIdentity(SQLModel, table=True):
-    """Explicitly confirmed bridge between an internal player and a Riot account."""
-
+# ---------------------------------------------------------------------------
+# New LoL-only models (Phase 1 refactor)
+# ---------------------------------------------------------------------------
+class LolMatchEvent(SQLModel, table=True):
+    """Upcoming or finished professional LoL series."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    player_id: int = Field(index=True)
-    game_name: str
-    tag_line: str
-    puuid: Optional[str] = Field(default=None, index=True)
-    platform: str = "la2"
-    valid_from: datetime = Field(default_factory=_now)
-    source: str = "confirmed_manual"
-    confirmed: bool = False
-    last_verified_at: Optional[datetime] = None
+    match_key: str = Field(index=True, unique=True)
+    source_name: str = Field(index=True)
+    source_match_id: str = Field(index=True)
+    league: Optional[str] = Field(default=None, index=True)
+    tournament: Optional[str] = None
+    team_a: str = Field(index=True)
+    team_b: str = Field(index=True)
+    start_time_utc: datetime = Field(index=True)
+    best_of: Optional[int] = None
+    status: str = Field(default="scheduled")  # scheduled | live | finished | cancelled | postponed
+    source_url: Optional[str] = None
+    observed_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
 
 
-class RiotMatchReference(SQLModel, table=True):
-    """Personal/verified Riot match reference, deliberately separate from esports."""
-
+class LolOddsSnapshot(SQLModel, table=True):
+    """Immutable capture of general winner odds for a series."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    identity_id: int = Field(foreign_key="riotplayeridentity.id", index=True)
-    match_id: str = Field(index=True, unique=True)
-    queue_id: Optional[int] = None
-    game_type: Optional[str] = None
-    game_mode: Optional[str] = None
-    game_started_at: Optional[datetime] = None
-    source_name: str = "riot_match_v5"
-    match_scope: str = "personal_verified"
-    retrieved_at: datetime = Field(default_factory=_now)
+    match_event_id: Optional[int] = Field(default=None, foreign_key='lolmatchevent.id', index=True)
+    provider: str = Field(index=True)
+    captured_at: datetime = Field(default_factory=_now)
+    is_current: bool = True
+    source_url: Optional[str] = None
+
+
+class LolTeamOdd(SQLModel, table=True):
+    """One team selection inside a snapshot."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    snapshot_id: Optional[int] = Field(default=None, foreign_key='loloddssnapshot.id', index=True)
+    team_name: str = Field(index=True)
+    decimal_odds: float
+
+
+class LolMatchStatisticsReadModel(SQLModel, table=True):
+    """Materialised cached statistics payload for a match."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    match_key: str = Field(index=True, unique=True)
+    input_fingerprint: str
+    status: str = "pending"
+    payload_json: Optional[str] = Field(default=None, sa_column=Column(JSON))
+    coverage_json: Optional[str] = Field(default=None, sa_column=Column(JSON))
+    computed_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)

@@ -8,8 +8,7 @@ tzdata==2026.3
 pytest==9.1.1
 httpx==0.28.1
 ruff==0.15.21
-beautifulsoup4>=4.12
-lxml>=5.3
-requests>=2.31
 apscheduler>=3.10
-cryptography==49.0.0
+requests>=2.31
+lxml>=5.3
+beautifulsoup4>=4.12

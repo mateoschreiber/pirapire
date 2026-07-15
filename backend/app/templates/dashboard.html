@@ -1,38 +1,15 @@
-{% extends 'base.html' %}
-{% block title %}Dashboard{% endblock %}
-{% block header %}Pirapire{% endblock %}
+{% extends "base.html" %}
 {% block content %}
-<div class="notice">
-  <strong>Pirapire</strong> &mdash; Extraccion, almacenamiento y estadisticas descriptivas de datos deportivos.
-</div>
-
-<section class="card">
-  <h2 class="card-title">Datos almacenados</h2>
-  <div class="status-grid">
-    <div class="status-item"><span class="status-label">App</span><span class="status-value">OK</span></div>
-    <div class="status-item"><span class="status-label">Cuotas actuales</span><span class="status-value">{{ aposta_odds }}</span></div>
-    <div class="status-item"><span class="status-label">Futbol</span><span class="status-value"><span id="stat-matches">{{ football_matches }}</span> partidos</span></div>
-    <div class="status-item"><span class="status-label">LoL</span><span class="status-value"><span id="stat-lol-games">{{ lol_games }}</span> partidas</span></div>
-  </div>
+<section class="dashboard">
+    <h2>Proximos encuentros LoL <span class="timezone">(America/Asuncion)</span></h2>
+    <div id="matches-container">
+        <p class="loading">Cargando encuentros...</p>
+    </div>
+    <div id="empty-state" class="empty hidden">
+        <p>No hay encuentros programados para las proximas 48 horas.</p>
+    </div>
+    <div id="error-state" class="error hidden">
+        <p>Error al cargar los encuentros. Reintentando...</p>
+    </div>
 </section>
-
-<section class="card">
-  <h2 class="card-title">Proximos encuentros</h2>
-  <div class="event-cards">
-    {% if events %}
-    {% for e in events %}
-    <a class="event-card" href="/events/{{ e.event_key }}" aria-label="{{ e.team_a or '?' }} vs {{ e.team_b or '?' }}; {{ e.competition or 'Sin competición' }}; {{ e.event_date_py or 'Horario pendiente de reconfirmación' }}; {{ e.markets }} mercados">
-      <div class="event-sport">{{ 'L' if e.sport == 'lol' else 'F' }}</div>
-      <div class="event-content">
-        <div class="event-teams">{{ e.team_a or '?' }} vs {{ e.team_b or '?' }}</div>
-        <div class="event-meta">{{ e.competition or '' }} &middot; {{ e.event_date_py or 'Horario pendiente de reconfirmación' }} &middot; {{ e.markets }} mercados</div>
-      </div>
-    </a>
-    {% endfor %}
-    {% else %}
-    <p class="muted">No hay eventos proximos. Sincronizando datos...</p>
-    {% endif %}
-  </div>
-</section>
-
 {% endblock %}

@@ -1,14 +1,13 @@
-"""Import historical LoL esports CSV (Oracle's Elixir format) into canonical tables.
+"""Import historical LoL esports CSV (Oracle's Elixir format).
 
-Team rows become LolTeamGameStat; player rows become LolPlayerGameStat.
-Missing columns are tolerated; unknown columns are warned.
+Team rows (``position`` == ``team``) become LolOracleGame; player rows become
+LolOraclePlayerStat. Missing columns are tolerated; unknown columns are warned.
 """
 
 from sqlmodel import Session
 
 from . import csv_utils
-from ...models_imports import ManualImportBatch
-from ...models_lol import LolTeamGameStat, LolPlayerGameStat
+from ...models_imports import LolOracleGame, LolOraclePlayerStat, ManualImportBatch
 
 KNOWN_COLUMNS = {
     "gameid", "datacompleteness", "url", "league", "year", "split", "playoffs",
@@ -73,27 +72,27 @@ def import_csv(session: Session, batch: ManualImportBatch, csv_text: str) -> Man
                     skipped += 1
                     continue
                 seen.add(key)
-
-                source_key = f"oracles_elixir|{gameid}|{teamname}"
                 session.add(
-                    LolTeamGameStat(
-                        source_name="oracles_elixir",
+                    LolOracleGame(
+                        batch_id=batch.id,
                         source_game_id=gameid,
-                        source_key=source_key,
                         date=csv_utils.col(row, "date"),
                         league=csv_utils.col(row, "league"),
+                        split=csv_utils.col(row, "split"),
+                        playoffs=csv_utils.safe_bool(csv_utils.col(row, "playoffs")),
+                        game_number=csv_utils.safe_int(csv_utils.col(row, "game")),
                         patch=csv_utils.col(row, "patch"),
                         team_name=teamname or "?",
                         side=csv_utils.col(row, "side"),
                         result=csv_utils.safe_int(csv_utils.col(row, "result")),
-                        kills=csv_utils.safe_int(csv_utils.col(row, "teamkills")),
-                        deaths=csv_utils.safe_int(csv_utils.col(row, "teamdeaths")),
+                        game_length_seconds=csv_utils.parse_game_length_seconds(csv_utils.col(row, "gamelength")),
+                        team_kills=csv_utils.safe_int(csv_utils.col(row, "teamkills")),
+                        team_deaths=csv_utils.safe_int(csv_utils.col(row, "teamdeaths")),
                         towers=csv_utils.safe_int(csv_utils.col(row, "towers")),
                         inhibitors=csv_utils.safe_int(csv_utils.col(row, "inhibitors")),
                         dragons=csv_utils.safe_int(csv_utils.col(row, "dragons")),
                         barons=csv_utils.safe_int(csv_utils.col(row, "barons")),
                         gold=csv_utils.safe_int(csv_utils.col(row, "earnedgold")),
-                        game_length_seconds=csv_utils.parse_game_length_seconds(csv_utils.col(row, "gamelength")),
                     )
                 )
                 team_rows += 1
@@ -104,13 +103,10 @@ def import_csv(session: Session, batch: ManualImportBatch, csv_text: str) -> Man
                     skipped += 1
                     continue
                 seen.add(key)
-
-                source_key = f"oracles_elixir|{gameid}|{playername}|{position}"
                 session.add(
-                    LolPlayerGameStat(
-                        source_name="oracles_elixir",
+                    LolOraclePlayerStat(
+                        batch_id=batch.id,
                         source_game_id=gameid,
-                        source_key=source_key,
                         date=csv_utils.col(row, "date"),
                         league=csv_utils.col(row, "league"),
                         team_name=teamname or None,
@@ -133,5 +129,5 @@ def import_csv(session: Session, batch: ManualImportBatch, csv_text: str) -> Man
     batch.imported_rows = team_rows + player_rows
     batch.skipped_rows = skipped
     status = "success" if batch.error_rows == 0 else ("partial" if batch.imported_rows > 0 else "error")
-    message = f"team_rows={team_rows} player_rows={player_rows} (canonical tables)"
+    message = f"team_rows={team_rows} player_rows={player_rows}"
     return csv_utils.finish_batch(session, batch, status, message)

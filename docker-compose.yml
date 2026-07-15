@@ -1,24 +1,15 @@
-# Pirapire - standalone deployment.
-# Works from any directory: clone the repo, copy .env.example to .env, then
-#   docker compose up -d --build
-# Data and logs are stored next to this file (./data and ./logs).
-
 services:
   pirapire_app:
-    build:
-      context: ./backend
-      args:
-        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+    build: ./backend
     image: pirapire_app
     container_name: ${PIRAPIRE_CONTAINER_NAME:-pirapire_app}
-    environment:
-      PIRAPIRE_ENV_FILE: /run/secrets/pirapire.env
+    env_file:
+      - .env
     ports:
       - "${PIRAPIRE_PORT:-8090}:8000"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-      - ./.env:/run/secrets/pirapire.env:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -26,38 +17,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
-
-
-  pirapire_worker:
-    image: pirapire_app
-    container_name: pirapire_worker
-    environment:
-      PIRAPIRE_ENV_FILE: /run/secrets/pirapire.env
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./.env:/run/secrets/pirapire.env:ro
-    restart: unless-stopped
-    command: python -u /app/app/worker_main.py
-    depends_on:
-      - pirapire_app
-    healthcheck:
-      test: ["CMD", "python", "-c", "import pathlib,sys; sys.exit(0 if b'worker_main.py' in pathlib.Path('/proc/1/cmdline').read_bytes() else 1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  pirapire_browser:
-    build: ./browser-worker
-    image: pirapire_browser
-    container_name: pirapire_browser
-    restart: unless-stopped
-    environment:
-      - PORT=8080
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
