@@ -12,3 +12,4 @@ apscheduler>=3.10
 requests>=2.31
 lxml>=5.3
 beautifulsoup4>=4.12
+gdown>=5.2

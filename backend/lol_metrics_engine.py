@@ -19,6 +19,7 @@ def _get_recent_series_game_ids(session: Session, team_name: str, before_utc: da
             select(LolSeries)
             .where(LolSeries.team_a == name)
             .where(LolSeries.last_game_at < before_utc.isoformat())
+            .where(LolSeries.complete == True)  # noqa: E712
             .order_by(LolSeries.last_game_at.desc())
             .limit(limit)
         ).all()
@@ -28,6 +29,7 @@ def _get_recent_series_game_ids(session: Session, team_name: str, before_utc: da
             select(LolSeries)
             .where(LolSeries.team_b == name)
             .where(LolSeries.last_game_at < before_utc.isoformat())
+            .where(LolSeries.complete == True)  # noqa: E712
             .order_by(LolSeries.last_game_at.desc())
             .limit(limit)
         ).all()
@@ -39,7 +41,7 @@ def _get_game_ids_from_series(series_list):
     ids = set()
     for s in series_list:
         if s.game_ids_json:
-            try: ids.update(_json.loads(s.game_ids_json))
+            try: ids.update(json.loads(s.game_ids_json))
             except: pass
     return ids
 
