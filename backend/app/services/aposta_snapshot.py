@@ -96,7 +96,13 @@ def backfill_canonical_identity(session: Session) -> int:
     from .event_identity import event_key_for, utc_datetime
 
     changed = 0
-    rows = session.exec(select(ImportedOdds)).all()
+    # Startup must not hydrate the entire historical odds archive. Only legacy
+    # rows missing identity and the current snapshot can affect this backfill.
+    rows = session.exec(
+        select(ImportedOdds).where(
+            ImportedOdds.event_key.is_(None) | ImportedOdds.is_current
+        )
+    ).all()
     active_by_key: dict[str, ImportedOdds] = {}
     for row in rows:
         kickoff = utc_datetime(row.event_date)

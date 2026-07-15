@@ -10,6 +10,14 @@ from ..services.no_vig import calculate as calculate_no_vig
 router = APIRouter(prefix="/api/events", tags=["events"])
 
 
+def _can_calculate_no_vig(sport: str, market_code: str | None, selection_count: int) -> bool:
+    """Compatibility guard; the statistics UI does not render no-vig values."""
+    if sport != "football":
+        return False
+    required = {"match_winner": 3, "total_goals_over_under": 2}
+    return required.get(market_code) == selection_count
+
+
 def _event_for_key(session: Session, event_key: str) -> ApostaEvent:
     event = session.exec(select(ApostaEvent).where(ApostaEvent.event_key == event_key)).first()
     if not event:

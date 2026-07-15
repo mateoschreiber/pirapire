@@ -4,7 +4,7 @@ Materializes descriptive aggregates per Aposta event from already-validated
 data:
   * Football: the strict EventTeamHistoryWindow (10 fixtures per team, anchor
     excluded, kickoff_utc < cutoff_utc).
-  * LoL: the last 5 *complete* LolSeries before the event kickoff, with their
+  * LoL: the last 10 *complete* LolSeries before the event kickoff, with their
     Leaguepedia map and player facts.
 
 Rules: null is never turned into zero; every metric carries coverage
@@ -33,7 +33,7 @@ from ..models_imports import ImportedOdds
 from ..models_lol import LolGameHistory, LolPlayerGameStat, LolSeries, LolTeamGameStat
 
 FOOTBALL_WINDOW_N = 10
-LOL_SERIES_N = 5
+LOL_SERIES_N = 10
 MAP_SOURCE = "leaguepedia_map"
 
 ES_EN_COUNTRY = {
@@ -189,7 +189,11 @@ def _fb_team_block(session, event_key, team, cutoff) -> dict:
         "match_type": r.match_type,
         "goals_for": r.goals_for, "goals_against": r.goals_against,
         "ht_for": r.ht_goals_for, "ht_against": r.ht_goals_against,
-        "corners": r.corners, "shots_total": r.shots_total,
+        "corners": r.corners,
+        "corners_first_half": r.corners_first_half,
+        "corners_second_half": r.corners_second_half,
+        "offsides": r.offsides,
+        "shots_total": r.shots_total,
         "shots_on_target": r.shots_on_target, "fouls": r.fouls,
         "yellow_cards": r.yellow_cards, "red_cards": r.red_cards,
         "penalties_awarded": r.penalties_awarded,
@@ -201,9 +205,13 @@ def _fb_team_block(session, event_key, team, cutoff) -> dict:
         "goals_for": _mean([r.goals_for for r in rows], FOOTBALL_WINDOW_N),
         "goals_against": _mean([r.goals_against for r in rows], FOOTBALL_WINDOW_N),
         "corners_for": _mean([r.corners for r in rows], FOOTBALL_WINDOW_N),
-        "shots_for": _mean([r.shots_total for r in rows], FOOTBALL_WINDOW_N),
-        "shots_on_target_for": _mean([r.shots_on_target for r in rows], FOOTBALL_WINDOW_N),
+        "corners_first_half": _mean([r.corners_first_half for r in rows], FOOTBALL_WINDOW_N),
+        "corners_second_half": _mean([r.corners_second_half for r in rows], FOOTBALL_WINDOW_N),
+        "offsides": _mean([r.offsides for r in rows], FOOTBALL_WINDOW_N),
+        "shots_total": _mean([r.shots_total for r in rows], FOOTBALL_WINDOW_N),
+        "shots_on_target": _mean([r.shots_on_target for r in rows], FOOTBALL_WINDOW_N),
         "fouls_committed": _mean([r.fouls for r in rows], FOOTBALL_WINDOW_N),
+        "fouls_received": _mean([_opp_metric(session, r, "fouls") for r in rows], FOOTBALL_WINDOW_N),
         "yellow_cards": _mean([r.yellow_cards for r in rows], FOOTBALL_WINDOW_N),
         "red_cards": _mean([r.red_cards for r in rows], FOOTBALL_WINDOW_N),
         # Opponent cards shown as cards received by the opponent (no causal attribution).
@@ -227,8 +235,8 @@ def _fb_team_block(session, event_key, team, cutoff) -> dict:
     }
 
 
-def _opp_card(session, row: FootballFixtureStat, color: str):
-    """The opponent's own cards in that same fixture (received by opponent)."""
+def _opp_metric(session, row: FootballFixtureStat, field: str):
+    """Return the opponent value for the same fixture, preserving nulls."""
     other = session.exec(
         select(FootballFixtureStat).where(
             FootballFixtureStat.provider == row.provider,
@@ -236,9 +244,12 @@ def _opp_card(session, row: FootballFixtureStat, color: str):
             FootballFixtureStat.team_side != row.team_side,
         )
     ).first()
-    if other is None:
-        return None
-    return other.yellow_cards if color == "yellow" else other.red_cards
+    return getattr(other, field, None) if other is not None else None
+
+
+def _opp_card(session, row: FootballFixtureStat, color: str):
+    field = "yellow_cards" if color == "yellow" else "red_cards"
+    return _opp_metric(session, row, field)
 
 
 def _football_statistics(session, event_key, event) -> dict:
@@ -272,14 +283,25 @@ def _try_dt(text):
         return None
 
 
+def _lol_name_set(session, name: str | None) -> set[str]:
+    """Known source/canonical names for an Aposta participant."""
+    if not name:
+        return set()
+    from .lol_team_aliases import canonical_team, leaguepedia_query_names
+
+    names = [name, canonical_team(session, name, "leaguepedia")]
+    names.extend(leaguepedia_query_names(session, name))
+    return {_norm(value) for value in names if value}
+
+
 def _lol_series_window(session, team, other, cutoff) -> list[LolSeries]:
     """Last LOL_SERIES_N complete series for a team, before cutoff, excluding
     the anchor series (head-to-head vs the other participant near cutoff)."""
     rows = session.exec(
         select(LolSeries).where(LolSeries.series_status == "complete")
     ).all()
-    tset = {_norm(team)}
-    oset = {_norm(other)} if other else set()
+    tset = _lol_name_set(session, team)
+    oset = _lol_name_set(session, other)
     mine = []
     for s in rows:
         names = {_norm(s.team1), _norm(s.team2)}
@@ -317,6 +339,7 @@ def _team_map_stat(session, gid, team):
 
 def _lol_team_block(session, team, other, cutoff) -> dict:
     series = _lol_series_window(session, team, other, cutoff)
+    team_names = _lol_name_set(session, team)
     series_list = []
     # per-map accumulators
     kills, deaths, towers, inhibs = [], [], [], []
@@ -335,7 +358,7 @@ def _lol_team_block(session, team, other, cutoff) -> dict:
             # Identify this team's canonical name as stored on the map.
             cand = None
             for nm in (g.blue_team, g.red_team):
-                if _norm(nm) == _norm(team):
+                if _norm(nm) in team_names:
                     cand = nm
                     break
             if cand is None:
@@ -380,7 +403,7 @@ def _lol_team_block(session, team, other, cutoff) -> dict:
                 if p.deaths is not None:
                     pd["deaths"] += p.deaths
                     pd["maps"] += 1
-        opp = s.team2 if _norm(s.team1) == _norm(team) else s.team1
+        opp = s.team2 if _norm(s.team1) in team_names else s.team1
         series_list.append({
             "match_id": s.match_id,
             "date": s.date,
@@ -410,8 +433,8 @@ def _lol_team_block(session, team, other, cutoff) -> dict:
         "team": team,
         "series_count": len(series),
         "maps_count": maps_count,
-        "last_5_series": series_list,
-        "last_3_series_detail": series_list[:3],
+        "last_10_series": series_list,
+        "last_5_series_detail": series_list[:5],
         "per_map": {
             "kills": {"average": _avg(kills), "total": sum(v for v in kills if v is not None),
                       "coverage": {"non_null": len([v for v in kills if v is not None]), "denominator": len(kills), "required": maps_count}},
@@ -454,7 +477,7 @@ def _lol_statistics(session, event_key, event) -> dict:
         "event_key": event_key,
         "teams": [a, b],
         "cutoff_utc": cutoff.isoformat() if cutoff else None,
-        "window": "last-5 complete LolSeries before kickoff (anchor excluded)",
+        "window": "last-10 complete LolSeries before kickoff (anchor excluded)",
         "status": "complete" if complete else "incomplete",
         "team_stats": blocks,
         "matchup_kills_leader": overall_leader,

@@ -49,6 +49,14 @@ LEAGUEPEDIA_CONFIRMED_ALIASES = [
     ("Zeu5 Esports", "Zeu5 Esports"),
     ("SDM Tigres", "SDM Tigres"),
     ("Fuego", "Fuego"),
+    ("Nongshim RedForce", "Nongshim RedForce"),
+    ("HANJIN BRION", "HANJIN BRION"),
+    ("HANJIN BRION", "BRION"),
+    ("DN SOOPers", "DN SOOPers"),
+    ("Kiwoom DRX", "Kiwoom DRX"),
+    ("KT Rolster", "KT Rolster"),
+    ("BNK FearX", "BNK FearX"),
+    ("LYON (2024 American Team)", "Lyon Gaming"),
 ]
 # Ambiguous / unresolved aliases stay out of the confirmed map on purpose.
 LEAGUEPEDIA_PENDING_ALIASES: list[str] = []

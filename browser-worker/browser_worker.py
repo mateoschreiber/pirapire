@@ -42,14 +42,17 @@ _SOFA_JS = r"""async (args) => {
       category: e.tournament && e.tournament.category && e.tournament.category.name
     };
     const st = await jget(base+'/event/'+e.id+'/statistics');
-    const teamStats = {home:{}, away:{}};
-    if (st && st.statistics) {
-      const all = st.statistics.find(p => p.period === 'ALL');
-      if (all) { for (const g of (all.groups||[])) { for (const it of (g.statisticsItems||[])) {
-        teamStats.home[it.name] = it.homeValue; teamStats.away[it.name] = it.awayValue;
+    const statsFor = (period) => {
+      const result = {home:{}, away:{}};
+      const block = st && st.statistics && st.statistics.find(p => p.period === period);
+      if (block) { for (const g of (block.groups||[])) { for (const it of (g.statisticsItems||[])) {
+        result.home[it.name] = it.homeValue; result.away[it.name] = it.awayValue;
       }}}
-    }
-    item.stats = teamStats;
+      return result;
+    };
+    item.stats = statsFor('ALL');
+    item.stats_first_half = statsFor('1ST');
+    item.stats_second_half = statsFor('2ND');
     const inc = await jget(base+'/event/'+e.id+'/incidents');
     const pen = {home:{awarded:0,scored:0,missed:0}, away:{awarded:0,scored:0,missed:0}};
     let shootout = false;

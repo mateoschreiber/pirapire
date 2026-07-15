@@ -172,7 +172,7 @@ def test_endpoint_offline_and_shape():
         _clean(s)
 
 
-def test_lol_five_series_weighted_average_winloss_and_leader():
+def test_lol_ten_series_weighted_average_winloss_and_leader():
     from app.models_lol import LolGameHistory, LolPlayerGameStat, LolSeries, LolTeamGameStat
     lmark = "t4clol"
 
@@ -190,8 +190,8 @@ def test_lol_five_series_weighted_average_winloss_and_leader():
     with Session(engine) as s:
         _clean_lol(s)
         cutoff = datetime(2026, 6, 1, tzinfo=UTC)
-        # 6 complete series (only 5 most recent before cutoff should be used)
-        for si in range(6):
+        # 11 complete series (only 10 most recent before cutoff should be used)
+        for si in range(11):
             mid = f"{lmark}_S{si}"
             sdate = cutoff - timedelta(days=(si + 1) * 5)
             gids = []
@@ -230,8 +230,8 @@ def test_lol_five_series_weighted_average_winloss_and_leader():
 
         r = ds.compute_event(s, f"{lmark}_evt", force=True)
         blk = r["team_stats"]["Zed"]
-        assert blk["series_count"] == 5              # exactly 5 (not 6)
-        assert blk["maps_count"] == 10               # 5*2
+        assert blk["series_count"] == 10             # exactly 10 (not 11)
+        assert blk["maps_count"] == 20               # 10*2
         assert blk["per_map"]["kills"]["average"] == 10.0
         assert blk["per_map"]["deaths"]["derived"] is True
         assert blk["per_map"]["total_map_kills"]["average"] == 15.0   # 10 + 5

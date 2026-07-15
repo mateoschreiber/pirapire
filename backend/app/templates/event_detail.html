@@ -28,55 +28,117 @@
 {% endblock %}
 {% block scripts %}
 <script>
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
   var eventId = window.location.pathname.split("/").pop();
-  fetch("/api/events/" + eventId).then(r => r.json()).then(function(event) {
-    document.title = event.team_a + " vs " + event.team_b;
-    var h = "";
-    event.markets.forEach(function(m) {
-      h += '<div class="market-group">';
-      h += '<div class="market-title">' + (m.market_text || m.market_code) + (m.line ? " (" + m.line + ")" : "");
-      if (m.no_vig_available) h += ' <span class="muted">overround ' + m.overround_pct + '%</span>';
-      else h += ' <span class="muted">' + m.no_vig_status + '</span>';
-      h += '</div>';
-      h += '<div class="market-selections">';
-      m.selections.forEach(function(s) {
-        h += '<div class="selection-row">';
-        h += '<span class="sel-name">' + (s.selection_raw || s.selection) + '</span>';
-        h += '<span class="sel-odds">' + s.odds_decimal.toFixed(2) + '</span>';
-        h += '<span class="sel-implied">' + s.implied_pct + '%</span>';
-        if (s.no_vig_probability !== null) h += '<span class="sel-novig">(' + s.no_vig_pct + '% sin margen)</span>';
-        h += '</div>';
-      });
-      h += '</div></div>';
-    });
-    document.getElementById("event-markets").innerHTML = h || '<p class="muted">Sin mercados</p>';
-  }).catch(function(e) {
-    document.getElementById("event-markets").innerHTML = '<p class="muted">Error cargando mercados</p>';
-  });
+  function esc(value) {
+    var node = document.createElement("span");
+    node.textContent = value == null ? "" : String(value);
+    return node.innerHTML;
+  }
+  function averageRow(label, metric) {
+    if (!metric || metric.average == null) return "";
+    var coverage = metric.coverage || {};
+    var suffix = coverage.denominator != null
+      ? " <span class=muted>(" + coverage.non_null + "/" + coverage.denominator + ")</span>"
+      : "";
+    return "<div class=stat-row><span>" + esc(label) + "</span><strong>" +
+      Number(metric.average).toFixed(2) + "</strong>" + suffix + "</div>";
+  }
 
-  fetch("/api/events/" + eventId + "/statistics").then(r => r.json()).then(function(stats) {
-    var h = "";
-    for (var team in stats) {
-      if (team === "event_id" || team === "sport" || team === "window") continue;
-      var t = stats[team];
-      if (!t || !t.matches) continue;
-      h += "<div class=team-stats><h3>" + team + " (" + t.matches + " partidos)</h3>";
-      if (t.wins !== undefined) {
-        h += "<div class=stat-row><span>Forma:</span><span>" + t.wins + "W " + t.draws + "D " + t.losses + "L";
-        if (t.winrate) h += " (" + t.winrate + "%)";
-        h += "</span></div>";
-      }
-      if (t.avg_goals_for) h += "<div class=stat-row><span>Goles/partido:</span><span>" + t.avg_goals_for + " a favor / " + t.avg_goals_against + " en contra</span></div>";
-      if (t.avg_kills) h += "<div class=stat-row><span>Kills/partida:</span><span>" + t.avg_kills + " / " + t.avg_deaths + " muertes</span></div>";
-      if (t.avg_towers) h += "<div class=stat-row><span>Torres/partida:</span><span>" + t.avg_towers + "</span></div>";
-      if (t.both_scored) h += "<div class=stat-row><span>Ambos marcan:</span><span>" + t.both_scored + "/" + t.matches + "</span></div>";
-      if (t.over_2_5) h += "<div class=stat-row><span>Over 2.5:</span><span>" + t.over_2_5 + "/" + t.matches + "</span></div>";
-      if (t.recent) h += "<div class=stat-row><span>Reciente:</span><span>" + t.recent.join(" ") + "</span></div>";
-      h += "</div>";
-    }
-    document.getElementById("event-stats").innerHTML = h || "<p class=muted>Sin estadisticas disponibles</p>";
-  }).catch(function(e) { document.getElementById("event-stats").innerHTML = "<p class=muted>Error cargando estadisticas</p>"; });
+  fetch("/api/events/" + encodeURIComponent(eventId))
+    .then(function (response) {
+      if (!response.ok) throw new Error("No se pudieron cargar las cuotas");
+      return response.json();
+    })
+    .then(function (event) {
+      document.title = event.team_a + " vs " + event.team_b;
+      var html = "";
+      event.markets.forEach(function (market) {
+        html += '<div class="market-group"><div class="market-title">' +
+          esc(market.raw_market_label || market.market_text) + '</div>';
+        html += '<div class="market-selections">';
+        market.selections.forEach(function (selection) {
+          html += '<div class="selection-row"><span class="sel-name">' +
+            esc(selection.selection_raw || selection.selection) +
+            '</span><span class="sel-odds">' +
+            Number(selection.odds_decimal).toFixed(2) + '</span></div>';
+        });
+        html += "</div></div>";
+      });
+      document.getElementById("event-markets").innerHTML =
+        html || "<p class=muted>Sin cuotas activas en Aposta.LA.</p>";
+    })
+    .catch(function (error) {
+      document.getElementById("event-markets").innerHTML =
+        "<p class=muted>" + esc(error.message) + "</p>";
+    });
+
+  fetch("/api/events/" + encodeURIComponent(eventId) + "/statistics")
+    .then(function (response) {
+      if (!response.ok) throw new Error("No se pudieron cargar las estadisticas");
+      return response.json();
+    })
+    .then(function (stats) {
+      var blocks = [];
+      var teams = stats.team_stats || {};
+      Object.keys(teams).forEach(function (name) {
+        var team = teams[name];
+        var html = '<div class="team-stats"><h3>' + esc(name) + "</h3>";
+        if (stats.sport === "football") {
+          html += "<p class=muted>Ultimos " + team.window_size + "/10 partidos anteriores al evento</p>";
+          var wdl = team.wdl_ft || {};
+          if (wdl.win_pct != null) {
+            html += "<div class=stat-row><span>Victorias</span><strong>" +
+              wdl.win + " (" + Number(wdl.win_pct).toFixed(1) + "%)</strong></div>";
+            html += "<div class=stat-row><span>Empates / derrotas</span><strong>" +
+              wdl.draw + " / " + wdl.loss + "</strong></div>";
+          }
+          var m = team.metrics || {};
+          [
+            ["Promedio de goles", "goals_for"],
+            ["Tarjetas amarillas", "yellow_cards"],
+            ["Tarjetas rojas", "red_cards"],
+            ["Faltas cometidas", "fouls_committed"],
+            ["Faltas recibidas", "fouls_received"],
+            ["Corners", "corners_for"],
+            ["Corners 1er tiempo", "corners_first_half"],
+            ["Corners 2do tiempo", "corners_second_half"],
+            ["Offsides", "offsides"],
+            ["Tiros totales", "shots_total"],
+            ["Tiros a puerta", "shots_on_target"]
+          ].forEach(function (item) { html += averageRow(item[0], m[item[1]]); });
+        } else {
+          html += "<p class=muted>Ultimas " + team.series_count +
+            "/10 series anteriores al evento; " + team.maps_count + " mapas</p>";
+          var pm = team.per_map || {};
+          html += averageRow("Kills por mapa", pm.kills);
+          html += averageRow("Muertes por mapa", pm.deaths);
+          html += averageRow("Torres por mapa", pm.towers);
+          html += averageRow("Inhibidores por mapa", pm.inhibitors);
+          html += averageRow("Kills totales por mapa", pm.total_map_kills);
+          var duration = team.map_duration || {};
+          if (duration.average_all != null) {
+            html += "<div class=stat-row><span>Duracion media de mapa</span><strong>" +
+              Math.round(duration.average_all / 60) + " min</strong></div>";
+          }
+          var leader = (team.players || {}).kills_leader;
+          if (leader) {
+            html += "<div class=stat-row><span>Lider de kills</span><strong>" +
+              esc(leader.player) + " (" + Number(leader.kills_per_map).toFixed(2) +
+              " por mapa)</strong></div>";
+          }
+        }
+        html += "</div>";
+        blocks.push(html);
+      });
+      document.getElementById("event-stats").innerHTML = blocks.length
+        ? blocks.join("")
+        : "<p class=muted>Aun no hay historial suficiente para este encuentro.</p>";
+    })
+    .catch(function (error) {
+      document.getElementById("event-stats").innerHTML =
+        "<p class=muted>" + esc(error.message) + "</p>";
+    });
 });
 </script>
 {% endblock %}

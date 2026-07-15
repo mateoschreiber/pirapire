@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
@@ -93,6 +93,7 @@ _STAT_MAP = {
     "total shots": "shots_total",
     "shots on goal": "shots_on_target",
     "fouls": "fouls",
+    "offsides": "offsides",
     "yellow cards": "yellow_cards",
     "red cards": "red_cards",
 }
@@ -652,7 +653,7 @@ def _set_cursor(session, slug, cursor: dict) -> None:
 
 
 LEAGUEPEDIA_BASE = "https://lol.fandom.com/wiki/Special:CargoExport"
-SERIES_LAST_N = 5
+SERIES_LAST_N = 10
 
 
 def _leaguepedia_query(team_names: list[str], log):
@@ -1205,8 +1206,15 @@ def _ingest_leaguepedia(session, run, participants, log) -> dict:
 
 def run(session: Session) -> dict:
     """One bounded, idempotent ingestion pass restricted to active participants."""
+    # Ignore orphaned historical run markers left by a crashed process. A
+    # genuinely concurrent ingestion remains protected during its bounded
+    # four-hour execution window.
+    active_since = datetime.now(UTC) - timedelta(hours=4)
     active = session.exec(
-        select(SourceRun).where(SourceRun.status.in_(("running", "pending")))
+        select(SourceRun).where(
+            SourceRun.status.in_(("running", "pending")),
+            SourceRun.started_at >= active_since,
+        )
     ).first()
     participants = active_participants(session)
     if active is not None:

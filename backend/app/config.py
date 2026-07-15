@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     recommender_event_grace_minutes: int = 30
     leaguepedia_sync_enabled: bool = True
     leaguepedia_base_url: str = "https://lol.fandom.com/wiki/Special:CargoExport"
-    leaguepedia_import_lookback_days: int = 21
+    leaguepedia_import_lookback_days: int = 365
     leaguepedia_import_lookahead_days: int = 14
     leaguepedia_request_delay_seconds: float = 2.0
 
@@ -102,8 +102,8 @@ class Settings(BaseSettings):
 
     # Operational cadence: configurable, conservative defaults.
     worker_aposta_sync_minutes: int = 30
-    worker_sports_sync_hours: int = 6
-    worker_historical_ingestion_hours: int = 24
+    worker_sports_sync_hours: int = 12
+    worker_historical_ingestion_hours: int = 12
     worker_fresh_football_hours: int = 4
     worker_descriptive_stats_hours: int = 6
     worker_event_refresh_minutes: int = 15

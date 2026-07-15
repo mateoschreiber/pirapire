@@ -205,6 +205,7 @@ def _sofa_team_events(worker: str, team_id: int, log) -> list[dict]:
 
 _SOFA_STAT_KEYS = {
     "corners": "Corner kicks",
+    "offsides": "Offsides",
     "shots_total": "Total shots",
     "shots_on_target": "Shots on target",
     "fouls": "Fouls",
@@ -317,7 +318,7 @@ def _team_cached_window(session, team_name, kickoff) -> int:
 
 def _fetch_team(team_name, worker, fd_client, fd_ids, now) -> dict:
     """Network-only phase (no DB writes). Returns rows-to-persist for a team."""
-    sofa_id = _sofa_resolve_id(worker, team_name, None) if worker else None
+    sofa_id = _sofa_resolve_id(worker, _english_name(team_name), None) if worker else None
     events = _sofa_team_events(worker, sofa_id, None) if (worker and sofa_id) else []
     requests = 1 if (worker and sofa_id) else 0
     fd_id = fd_ids.get(_english_name(team_name))
@@ -356,6 +357,12 @@ def _fetch_team(team_name, worker, fd_client, fd_ids, now) -> dict:
         ht = (fd_m.get("score") or {}).get("halfTime") or {} if fd_m else None
         for side, tname, oname, side_key in (("home", home, away, "home"), ("away", away, home, "away")):
             side_stats = _sofa_side_stats(stats.get(side_key) or {})
+            first_half_stats = _sofa_side_stats(
+                (e.get("stats_first_half") or {}).get(side_key) or {}
+            )
+            second_half_stats = _sofa_side_stats(
+                (e.get("stats_second_half") or {}).get(side_key) or {}
+            )
             side_pen = pen.get(side_key) or {}
             gf = e.get("hs") if side == "home" else e.get("as")
             ga = e.get("as") if side == "home" else e.get("hs")
@@ -376,7 +383,11 @@ def _fetch_team(team_name, worker, fd_client, fd_ids, now) -> dict:
                 "goals_for": _to_int(gf), "goals_against": _to_int(ga),
                 "ht_goals_for": _to_int(htf), "ht_goals_against": _to_int(hta),
                 "result": winner,
-                "corners": side_stats["corners"], "shots_total": side_stats["shots_total"],
+                "corners": side_stats["corners"],
+                "corners_first_half": first_half_stats["corners"],
+                "corners_second_half": second_half_stats["corners"],
+                "offsides": side_stats["offsides"],
+                "shots_total": side_stats["shots_total"],
                 "shots_on_target": side_stats["shots_on_target"], "fouls": side_stats["fouls"],
                 "yellow_cards": side_stats["yellow_cards"], "red_cards": side_stats["red_cards"],
                 "penalties_awarded": _to_int(side_pen.get("awarded")),
@@ -442,7 +453,10 @@ def run(session: Session, worker_url: str | None = None) -> dict:
     never locked across slow browser navigations.
     """
     active = session.exec(
-        select(SourceRun).where(SourceRun.status.in_(("running", "pending")))
+        select(SourceRun).where(
+            SourceRun.source_slug == "fresh_football",
+            SourceRun.status.in_(("running", "pending")),
+        )
     ).first()
     if active is not None:
         return {"status": "skipped_active_run", "active_run_id": active.id}

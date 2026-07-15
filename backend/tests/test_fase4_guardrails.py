@@ -27,6 +27,7 @@ def test_no_setinterval_polling_in_app_js():
     assert "setInterval" not in js
 
 
-def test_dashboard_has_best_bets_section():
+def test_dashboard_focuses_on_stored_data():
     html = client.get("/").text
-    assert "Mejores opciones" in html
+    assert "Datos almacenados" in html
+    assert "Mejores opciones" not in html

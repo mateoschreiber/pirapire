@@ -15,7 +15,8 @@ from ..models_lol import LolSeries
 
 TEAM_FIELDS = (
     "goals_for", "goals_against", "ht_goals_for", "ht_goals_against",
-    "corners", "shots_total", "shots_on_target", "fouls",
+    "corners", "corners_first_half", "corners_second_half", "offsides",
+    "shots_total", "shots_on_target", "fouls",
     "yellow_cards", "red_cards", "penalties_scored", "penalties_missed",
 )
 
