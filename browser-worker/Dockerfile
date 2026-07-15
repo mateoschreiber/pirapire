@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir \
-    fastapi==0.115.6 \
-    uvicorn[standard]==0.34.0 \
+    fastapi==0.139.0 \
+    uvicorn[standard]==0.51.0 \
     playwright
 
 RUN playwright install chromium
