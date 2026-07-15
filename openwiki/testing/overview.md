@@ -59,6 +59,8 @@ The conftest creates a **temporary SQLite database** in the system temp director
 | `test_manual_odds_upload_and_match_response()` | Full odds upload → API response integration test |
 | `test_estimated_market_uses_both_teams_recent_series()` | `_estimated_market(4-1, 2-3)` returns p=62.5%, odds=1.60 / 2.67 with Laplace smoothing |
 | `test_2026_official_competition_rosters_are_complete()` | 2026 rosters: counts (LCK=10, LPL=14, LEC=10, LCS=8, CBLOL=8, LCP=8, MSI=11, FIRST_STAND=8, EWC=16), all `roster_status="official"` except WORLDS (`not_published`), LCK teams match published list |
+| `test_known_aliases_reconcile_renamed_teams()` | `synchronize_known_aliases()` maps AG.AL→Anyone’s Legend, LYON→LYON, Ninjas in Pyjamas.CN→Ninjas in Pyjamas; match event team_a updated; exhibition teams returned |
+| `test_sources_support_configuration_and_custom_api()` | PUT source configuration stores base_url/api_key/enabled via admin token; custom source POST creates new DataSource listed in /api/sources; api_key_configured is true but secret not in response |
 
 ### test_timezone.py
 

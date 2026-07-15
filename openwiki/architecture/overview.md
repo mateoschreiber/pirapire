@@ -38,7 +38,7 @@ app.include_router(sources.router)    # /api/sources, /api/imports
 app.mount("/static", ...)             # CSS + JS
 ```
 
-- **Lifespan handler** calls `init_db()` on startup (creates tables, runs migrations)
+- **Lifespan handler** calls `init_db()` then `synchronize_known_aliases()` on startup (creates tables, runs migrations, reconciles team aliases)
 - **Templates** rendered via Jinja2 from `app/templates/`
 - **Static assets** served from `app/static/` (CSS, JS, fonts)
 - **Match detail page** (`match_detail.html`) now renders estimated market odds with a dynamic `market-source-badge` that updates between "Calculando", "Modelo estadístico", "Fuente externa", or "Datos insuficientes" based on available data
@@ -96,7 +96,10 @@ All models in `app/models_lol.py` (~300 lines). Key model groups:
 The sources router (23279 bytes — largest router) provides:
 - `GET /api/sources` — List all data sources with status
 - `GET /api/sources/detail/{code}` — Source detail
-- `POST /api/sources/{code}/test` — Test connectivity (admin token required)
+- `GET /api/sources/{code}/configuration` — Get source config (admin token required)
+- `PUT /api/sources/{code}/configuration` — Save base URL, API key, enabled flag (admin)
+- `POST /api/sources/custom` — Register a new external API source (admin)
+- `POST /api/sources/{code}/test` — Real HTTP connectivity test via HEAD/GET with auth headers (admin)
 - `POST /api/sources/{code}/sync` — Trigger sync (stub — returns "Adapter sync is not configured")
 - `GET /api/sources/runs` — Last 100 source run records
 - `GET /api/sources/runs/{run_id}` — Run detail
@@ -106,6 +109,8 @@ The sources router (23279 bytes — largest router) provides:
 - `POST /api/sources/oracles/upload` — Upload CSV/ZIP file for Oracle's Elixir (100 MB limit, SHA-256 dedup)
 - `POST /api/imports/preview` — Preview upload rows without persisting
 - `POST /api/imports/save` — Validate and commit batch
+- `GET /api/aliases/unresolved` — List exhibition team aliases
+- `POST /api/aliases/synchronize` — Manually trigger alias reconciliation (admin)
 
 All write operations require `X-Admin-Token` header matching `settings.admin_token`.
 
@@ -148,6 +153,10 @@ Team name normalization. `canonical_team()` uses a multi-step resolution:
 1. Exact alias match → return canonical
 2. NFKD normalized match (with noise word removal: esports, gaming, team, club, lol)
 3. Optional league-scoped alias lookup
+
+**`synchronize_known_aliases()`** persists verified renames from `KNOWN_TEAM_ALIASES` (Anyone’s Legend, LYON, Ninjas in Pyjamas, paiN Gaming) into the `LolTeamAlias` table, then normalizes team name fields across `LolMatchEvent`, `LolGameHistory`, `LolTeamGameStat`, and `LolPlayerGameStat` records. Called on every app startup (in `main.py` lifespan) and during Oracle’s Elixir historical sync. `rebuild_series()` runs automatically if any game history was updated.
+
+**`EXHIBITION_TEAMS`** lists known showmatch-only rosters (CNB Legends, PaiN Legends) exposed via `GET /api/aliases/unresolved`.
 
 ### `lol_league_catalog.py`
 Defines 9 active tier-1 leagues (LCK, LPL, LEC, LCS, CBLOL, LCP, MSI, WORLDS, FIRST_STAND) and 8 legacy leagues (LTA, LLA, PCS, VCS, LJL, LCO, TCL, LCL). `canonical_league()` maps any input string to a canonical slug.

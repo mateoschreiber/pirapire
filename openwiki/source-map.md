@@ -7,7 +7,7 @@ backend/
 ├── app/
 │   ├── __init__.py               # Package marker (empty)
 │   │
-│   ├── main.py                   # FastAPI entrypoint. Lifespan handler, 4 routers, static mount
+│   ├── main.py                   # FastAPI entrypoint. Lifespan: init_db() + synchronize_known_aliases(), 4 routers, static mount
 │   ├── config.py                 # Pydantic BaseSettings: all .env vars documented
 │   ├── database.py               # SQLModel engine + init_db() + get_session()
 │   ├── migrations.py             # Idempotent ALTER TABLE ADD COLUMN for SQLite schema evolution
@@ -22,15 +22,16 @@ backend/
 │   │   ├── pages.py              # HTML template routes: /, /lol/matches/{key}, /sources
 │   │   ├── lol_api.py            # JSON API: /api/lol/matches/*. Competition classification,
 │   │   │                         #   odds enrichment, statistics retrieval.
-│   │   └── sources.py            # Source status, CSV upload/preview, import/run history.
-│   │                             #   Admin-auth for sensitive operations.
+│   │   └── sources.py            # Source status, config GET/PUT, custom sources, alias sync,
+│   │                             #   CSV upload, connectivity test, import/run history. Admin-auth.
 │   │
 │   ├── services/
 │   │   ├── http_client.py        # Shared httpx wrapper: timeout, retry, structured JSON
 │   │   ├── series_builder.py     # Groups LolGameHistory → LolSeries. rebuild_series() entrypoint
 │   │   ├── lol_metrics_engine.py # Team + player statistics from last 5 series. precompute_upcoming_stats()
 │   │   ├── lol_odds_importer.py  # CSV odds import: validation, team resolution, snapshots
-│   │   ├── lol_team_aliases.py   # Team name normalization: NFKD alias resolution, upsert
+│   │   ├── lol_team_aliases.py   # Team name normalization: NFKD alias resolution, upsert,
+    │   │   │                             #   KNOWN_TEAM_ALIASES, EXHIBITION_TEAMS, synchronize_known_aliases()
 │   │   ├── lol_league_catalog.py # League definitions, alias catalog, seed function
 │   │   ├── lol_historical_importer.py  # (removed in refactor — merged into imports/)
 │   │   │
@@ -52,7 +53,7 @@ backend/
 │   │
 │   ├── static/
 │   │   ├── css/
-│   │   │   └── styles.css       # Dashboard and match detail CSS. Sidebar layout, cards, tables.
+│   │   │   └── styles.css       # Dashboard/match detail CSS + source-config forms. Sidebar layout, cards, tables.
 │   │   └── js/
 │   │       └── app.js           # Vanilla JS: dashboard rendering, match detail, data fetch.
 │   │                           #   Uses es-PY locale, America/Asuncion timezone.
@@ -61,7 +62,8 @@ backend/
 │   │   ├── base.html           # Base template: sidebar nav, topbar with live clock, content slot
 │   │   ├── dashboard.html      # Competitive dashboard: filters, competition grid, match list
 │   │   ├── match_detail.html   # Match detail: hero, odds, team stats, player stats, coverage
-│   │   └── sources.html        # Source admin: status, file upload, run history, aliases tabs
+│   │   └── sources.html        # Source admin: status, file upload, run history, aliases tabs,
+    │   │                             #   source config form, custom API registration
 │   │
 │   └── utils/
 │       └── datetime_utils.py   # Timezone helpers: UTC↔local conversion, format
@@ -75,7 +77,8 @@ backend/
 └── tests/
     ├── conftest.py              # Temp SQLite DB init
     ├── test_health.py           # Health + source API + removed-domain tests
-    ├── test_pages.py            # Page rendering, API endpoints, competition classifier
+    ├── test_pages.py            # Page rendering, API endpoints, competition classifier,
+    │   ├── test_pages.py            #   alias reconciliation + source config/custom API tests
     └── test_timezone.py         # Timezone conversion tests
 ```
 
