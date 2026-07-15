@@ -1,22 +1,29 @@
 {% extends "base.html" %}
+{% block title %}Detalle del partido{% endblock %}
 {% block content %}
 <section class="match-detail">
-    <div id="match-header">
-        <h2 id="match-title">Cargando...</h2>
+    <div id="match-header" class="match-detail-hero">
+        <p class="eyebrow">Análisis previo</p>
+        <h2 id="match-title">Cargando…</h2>
     </div>
-    <div id="odds-section" class="card">
-        <h3>Cuotas generales</h3>
-        <div id="odds-content"><p class="loading">Cargando cuotas...</p></div>
+    <div id="odds-section" class="card odds-card">
+        <div class="section-heading">
+            <div><p class="eyebrow">Mercado</p><h3>Cuotas generales</h3></div>
+            <span class="badge badge-gray">Fuente externa</span>
+        </div>
+        <div id="odds-content"><p class="loading">Cargando cuotas…</p></div>
     </div>
     <div id="stats-section" class="card">
-        <h3>Estadisticas (ultimas 10 series)</h3>
-        <div id="team-a-stats"></div>
-        <div id="team-b-stats"></div>
-        <div id="players-section"></div>
-        <div id="coverage-info"></div>
+        <div class="section-heading">
+            <div><p class="eyebrow">Forma reciente</p><h3>Estadísticas de las últimas 5 series con datos</h3></div>
+        </div>
+        <div class="stats-grid">
+            <div id="team-a-stats" class="stats-team"></div>
+            <div id="team-b-stats" class="stats-team"></div>
+        </div>
+        <div id="players-section" class="players-data"></div>
+        <div id="coverage-info" class="data-notes"></div>
     </div>
 </section>
-<script>
-    const MATCH_KEY = "{{ match_key }}";
-</script>
+<script>const MATCH_KEY = "{{ match_key }}";</script>
 {% endblock %}

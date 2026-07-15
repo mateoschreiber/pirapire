@@ -1,6 +1,6 @@
 import sys, os, time, logging
 from datetime import datetime, timezone
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app.config import settings
@@ -66,6 +66,19 @@ def job_import_oracles():
         log.exception(f"import_oracles: failed {e}")
 
 
+def job_heartbeat():
+    from app.models_lol import WorkerHeartbeat
+    with _session() as session:
+        row = session.exec(select(WorkerHeartbeat).where(WorkerHeartbeat.worker_name == "pirapire_worker")).first()
+        if not row:
+            row = WorkerHeartbeat(worker_name="pirapire_worker")
+        row.status = "healthy"
+        row.last_seen_at = datetime.now(timezone.utc)
+        row.detail = "scheduler_running"
+        session.add(row)
+        session.commit()
+
+
 def job_precompute_stats():
     log.info("precompute_stats: start")
     try:
@@ -80,6 +93,7 @@ def job_precompute_stats():
 init_db()
 log.info("Worker started. Scheduling jobs...")
 
+scheduler.add_job(job_heartbeat, "interval", minutes=1, id="heartbeat", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
 scheduler.add_job(job_sync_schedule, "interval", minutes=settings.lol_schedule_interval_minutes, id="sync_schedule", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
 scheduler.add_job(job_sync_datadragon, "interval", minutes=settings.datadragon_interval_minutes, id="sync_datadragon", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
 scheduler.add_job(job_import_odds, "interval", minutes=5, id="import_odds", coalesce=True, max_instances=1)

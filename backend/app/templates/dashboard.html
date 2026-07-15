@@ -1,21 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - Pirapire{% endblock %}
+{% block title %}Dashboard competitivo{% endblock %}
 {% block content %}
-<section class="dashboard">
-    <div class="card">
-        <div class="topbar" style="padding:0;margin-bottom:16px;border:none;background:transparent">
-            <h3>Proximos encuentros de League of Legends</h3>
-            <button class="btn" onclick="refreshData()">Actualizar</button>
+<section class="dashboard dashboard-competitive">
+    <div class="dashboard-hero">
+        <div>
+            <p class="eyebrow">League of Legends · Calendario profesional</p>
+            <h3>Próximos encuentros</h3>
+            <p class="meta">Solo circuitos principales e internacionales · Próximos 14 días · Hora de Asunción</p>
         </div>
-        <p class="meta" style="margin-bottom:12px">Ventana: proximas 48 horas (America/Asuncion)</p>
-        <div id="matches-container"><p class="skeleton" style="height:200px"></p></div>
+        <button class="btn" type="button" onclick="refreshData()">Actualizar datos</button>
+    </div>
+
+    <div class="competition-filter" id="competition-filter" aria-label="Filtrar por torneo"></div>
+
+    <section class="dashboard-section" aria-labelledby="teams-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Temporada actual</p>
+                <h3 id="teams-title">Equipos clasificados / registrados</h3>
+            </div>
+            <span id="competition-coverage" class="meta"></span>
+        </div>
+        <div id="competitions-container" class="competition-grid">
+            <div class="skeleton dashboard-skeleton"></div>
+        </div>
+    </section>
+
+    <section class="dashboard-section" aria-labelledby="matches-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Agenda</p>
+                <h3 id="matches-title">Partidos programados</h3>
+            </div>
+            <span id="matches-count" class="badge badge-gray">Cargando</span>
+        </div>
+        <div id="matches-container" class="match-card-grid"><div class="skeleton dashboard-skeleton"></div></div>
         <div id="empty-state" class="empty-state hidden">
-            <p>No hay encuentros programados para las proximas 48 horas.</p>
+            <p>No hay encuentros programados para el filtro seleccionado dentro de los próximos 14 días.</p>
         </div>
         <div id="error-state" class="error-state hidden">
             <p>Error al cargar los encuentros.</p>
-            <button class="btn" onclick="refreshData()">Reintentar</button>
+            <button class="btn" type="button" onclick="refreshData()">Reintentar</button>
         </div>
-    </div>
+    </section>
 </section>
 {% endblock %}

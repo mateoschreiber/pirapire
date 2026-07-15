@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Fuentes{% endblock %}
+{% block content %}
+<div class="tabs" role="tablist">
+  <button class="tab active" data-tab="status" type="button">Estado</button>
+  <button class="tab" data-tab="files" type="button">Archivos</button>
+  <button class="tab" data-tab="runs" type="button">Ejecuciones</button>
+  <button class="tab" data-tab="aliases" type="button">Aliases</button>
+</div>
+<section id="status" class="tab-panel active">
+  <div class="sources-toolbar">
+    <label>Token administrativo <input id="sync-admin-token" type="password" autocomplete="current-password"></label>
+    <button id="sync-all-button" class="btn" type="button">Sincronizar</button>
+    <span id="sync-status" class="meta" aria-live="polite"></span>
+  </div>
+  <div id="sources-status" class="sources-grid">Cargando…</div>
+</section>
+<section id="files" class="tab-panel">
+  <div class="card">
+    <h3>Importar estadísticas</h3>
+    <form id="upload-form" class="upload-form">
+      <label>Token administrativo <input id="admin-token" type="password" autocomplete="current-password" required></label>
+      <label>Tipo <select name="type"><option value="oracle">Oracle's Elixir / estadísticas LoL</option><option value="manual_statistics">Estadísticas manuales</option><option value="manual_odds">Odds / cuotas manuales</option></select></label>
+      <label>Archivo <input id="upload-file" type="file" name="file" accept=".csv" required></label>
+      <div id="file-size" class="meta">Límite: 100 MB.</div>
+      <label class="replace-option"><input type="checkbox" name="replace_existing" value="true"> Actualizar y reemplazar los datos existentes de los años incluidos</label>
+      <p class="meta">Si el servidor ya contiene un archivo con el mismo nombre, se reemplaza automáticamente y se elimina la versión anterior.</p>
+      <div class="upload-actions">
+        <button id="preview-button" class="btn" type="button" disabled>Previsualizar</button>
+        <button id="save-button" class="btn" type="button" disabled>Guardar e importar</button>
+      </div>
+    </form>
+    <div id="preview" class="preview-result" aria-live="polite"></div>
+  </div>
+</section>
+<section id="runs" class="tab-panel"><div id="runs-list">Cargando…</div></section>
+<section id="aliases" class="tab-panel"><div id="aliases-list">Cargando…</div></section>
+<script>
+(function () {
+  const MAX_BYTES = 100 * 1024 * 1024;
+  const $ = (selector) => document.querySelector(selector);
+  const form = $('#upload-form');
+  const fileInput = $('#upload-file');
+  const previewButton = $('#preview-button');
+  const saveButton = $('#save-button');
+  const output = $('#preview');
+  const syncButton = $('#sync-all-button');
+  const syncStatus = $('#sync-status');
+  let previewValid = false;
+
+  document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach((item) => item.classList.remove('active'));
+    button.classList.add('active');
+    $('#' + button.dataset.tab).classList.add('active');
+  }));
+
+  async function json(url, options) {
+    const response = await fetch(url, options);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || ('HTTP ' + response.status));
+    return payload;
+  }
+
+  function loadRuns() {
+    json('/api/sources/runs').then((data) => {
+      $('#runs-list').innerHTML = data.runs.length
+        ? '<table><thead><tr><th>Fuente</th><th>Trabajo</th><th>Estado</th><th>Inicio</th><th>Insertados</th><th>Error</th></tr></thead><tbody>' + data.runs.map((run) => `<tr><td>${run.source_code}</td><td>${run.job}</td><td>${run.status}</td><td>${run.started_at}</td><td>${run.records_inserted}</td><td>${run.error_message || ''}</td></tr>`).join('') + '</tbody></table>'
+        : '<p class="empty-state">Aún no existen ejecuciones.</p>';
+    }).catch((error) => { $('#runs-list').textContent = 'Error: ' + error.message; });
+  }
+
+  json('/api/sources').then((data) => {
+    $('#sources-status').innerHTML = data.sources.map((source) => `<article class="source-card"><h3>${source.display_name}</h3><p>${source.status}</p><p>${source.configured ? 'Configurada' : 'Sin configurar'}</p><p>${source.last_error || ''}</p></article>`).join('');
+  }).catch((error) => { $('#sources-status').textContent = 'Error: ' + error.message; });
+  loadRuns();
+
+  async function monitorSynchronization(runId) {
+    while (true) {
+      const run = await json('/api/sources/runs/' + runId);
+      syncStatus.textContent = run.status === 'running' ? 'Sincronizando todos los datos…' : 'Sincronización: ' + run.status;
+      if (run.status === 'success') {
+        syncStatus.textContent = 'Sincronización completada.';
+        syncButton.disabled = false;
+        loadRuns();
+        return;
+      }
+      if (run.status === 'failed') throw new Error(run.error_message || 'Error interno durante la sincronización');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+
+  syncButton.addEventListener('click', async () => {
+    const token = $('#sync-admin-token').value || $('#admin-token').value;
+    if (!token) { syncStatus.textContent = 'Ingrese el token administrativo.'; return; }
+    if (!confirm('¿Sincronizar y reconstruir todos los datos desde los archivos más nuevos?')) return;
+    syncButton.disabled = true;
+    syncStatus.textContent = 'Iniciando sincronización…';
+    try {
+      const result = await json('/api/sources/synchronize', {method: 'POST', headers: {'X-Admin-Token': token}});
+      await monitorSynchronization(result.run_id);
+    } catch (error) {
+      syncStatus.textContent = 'No se pudo sincronizar: ' + error.message;
+      syncButton.disabled = false;
+      loadRuns();
+    }
+  });
+
+  json('/api/aliases/unresolved').then((data) => {
+    $('#aliases-list').innerHTML = data.aliases.length ? '<pre>' + JSON.stringify(data.aliases, null, 2) + '</pre>' : '<p class="empty-state">No hay aliases pendientes.</p>';
+  }).catch((error) => { $('#aliases-list').textContent = 'Error: ' + error.message; });
+
+  fileInput.addEventListener('change', () => {
+    previewValid = false;
+    saveButton.disabled = true;
+    output.textContent = '';
+    const file = fileInput.files[0];
+    if (!file) { previewButton.disabled = true; $('#file-size').textContent = 'Límite: 100 MB.'; return; }
+    const mib = (file.size / 1024 / 1024).toFixed(2);
+    $('#file-size').textContent = `Tamaño detectado: ${mib} MB (${file.size.toLocaleString('es-PY')} bytes). Límite: 100 MB.`;
+    const valid = file.size > 0 && file.size <= MAX_BYTES && file.name.toLowerCase().endsWith('.csv');
+    previewButton.disabled = !valid;
+    if (!valid) output.textContent = file.size > MAX_BYTES ? `El archivo mide ${mib} MB y supera el límite de 100 MB.` : 'Seleccione un CSV válido.';
+  });
+
+  previewButton.addEventListener('click', async () => {
+    output.textContent = 'Validando archivo…'; previewButton.disabled = true;
+    try {
+      const result = await json('/api/imports/preview', {method: 'POST', headers: {'X-Admin-Token': $('#admin-token').value}, body: new FormData(form)});
+      previewValid = true; saveButton.disabled = false;
+      output.innerHTML = '<p>Archivo válido. Filas detectadas: ' + result.valid_rows + '.</p><pre>' + JSON.stringify({headers: result.headers, rows: result.rows.slice(0, 5)}, null, 2) + '</pre>';
+    } catch (error) { previewValid = false; saveButton.disabled = true; output.textContent = 'No se pudo validar: ' + error.message; }
+    previewButton.disabled = false;
+  });
+
+  const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+  function showCompleted(batch) {
+    if (batch.type === 'manual_odds' || batch.source_code === 'manual_odds_csv') {
+      output.textContent = `Odds importadas correctamente: ${batch.inserted || 0} selecciones. El dashboard ya puede mostrarlas en los partidos vinculados.`;
+    } else {
+      output.textContent = `Importación completada. Juegos: ${batch.games || 0}, equipos: ${batch.teams || 0}, jugadores: ${batch.players || 0}.`;
+    }
+    previewValid = false;
+    saveButton.disabled = true;
+    previewButton.disabled = false;
+    loadRuns();
+  }
+
+  async function monitorBatch(batchId) {
+    const started = Date.now();
+    try {
+      while (true) {
+        const batch = await json('/api/imports/' + batchId);
+        if (batch.status === 'success') { showCompleted(batch); return; }
+        if (batch.status === 'failed') throw new Error(batch.error || 'Error interno durante la importación');
+        const elapsed = Math.max(1, Math.round((Date.now() - started) / 1000));
+        output.textContent = `Archivo recibido. Importación en segundo plano: ${batch.status} (${elapsed} s). Puede seguir usando la aplicación.`;
+        await delay(2000);
+      }
+    } catch (error) {
+      output.textContent = 'La importación falló: ' + error.message;
+      saveButton.disabled = false;
+      previewButton.disabled = false;
+      loadRuns();
+    }
+  }
+
+  saveButton.addEventListener('click', async () => {
+    if (!previewValid || !confirm('¿Guardar el archivo e importar y sincronizar todas sus estadísticas?')) return;
+    saveButton.disabled = true;
+    previewButton.disabled = true;
+    output.textContent = 'Subiendo archivo al servidor…';
+    try {
+      const result = await json('/api/imports/execute', {method: 'POST', headers: {'X-Admin-Token': $('#admin-token').value}, body: new FormData(form)});
+      if (result.status === 'success') { showCompleted(result); return; }
+      if (result.status === 'failed') throw new Error(result.error || 'La importación anterior de este archivo falló');
+      output.textContent = `Archivo recibido. Importación ${result.status} en segundo plano. Puede seguir usando la aplicación.`;
+      monitorBatch(result.batch_id);
+    } catch (error) {
+      output.textContent = 'No se pudo iniciar la importación: ' + error.message;
+      saveButton.disabled = false;
+      previewButton.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

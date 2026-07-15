@@ -14,3 +14,8 @@ async def dashboard(request: Request):
 @router.get("/lol/matches/{match_key}", response_class=HTMLResponse)
 async def match_detail(request: Request, match_key: str):
     return templates.TemplateResponse(request=request, name="match_detail.html", context={"page": "match-detail", "match_key": match_key})
+
+
+@router.get("/sources", response_class=HTMLResponse)
+async def sources_page(request: Request):
+    return templates.TemplateResponse(request=request, name="sources.html", context={"page": "sources"})

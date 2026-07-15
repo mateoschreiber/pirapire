@@ -87,6 +87,7 @@ class LolGameHistory(SQLModel, table=True):
     red_team: Optional[str] = None
     winner_team: Optional[str] = None
     source_key: str = Field(index=True)
+    series_id: Optional[int] = Field(default=None, foreign_key="lolseries.id", index=True)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
@@ -117,6 +118,10 @@ class LolTeamGameStat(SQLModel, table=True):
     first_blood: Optional[bool] = None
     first_tower: Optional[bool] = None
     gold: Optional[int] = None
+    final_gold: Optional[int] = None
+    earned_gold: Optional[int] = None
+    team_id: Optional[int] = Field(default=None, foreign_key="lolteam.id", index=True)
+    opponent_team_id: Optional[int] = Field(default=None, foreign_key="lolteam.id", index=True)
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
 
@@ -141,6 +146,9 @@ class LolPlayerGameStat(SQLModel, table=True):
     damage: Optional[int] = None
     gold: Optional[int] = None
     solo_kills: Optional[int] = None
+    final_gold: Optional[int] = None
+    team_id: Optional[int] = Field(default=None, foreign_key="lolteam.id", index=True)
+    player_id: Optional[int] = Field(default=None, foreign_key="lolplayer.id", index=True)
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
 
@@ -228,3 +236,102 @@ class LolMatchStatisticsReadModel(SQLModel, table=True):
     coverage_json: Optional[str] = Field(default=None, sa_column=Column(JSON))
     computed_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+# Operational source and stable-identity records.  Existing name fields remain for
+# backwards-compatible display; new IDs are used whenever an adapter provides them.
+class LolTeam(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    canonical_name: str = Field(index=True, unique=True)
+    normalized_name: str = Field(index=True, unique=True)
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class LolTeamExternalIdentity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="lolteam.id", index=True)
+    source_name: str = Field(index=True)
+    external_id: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now)
+
+
+class LolPlayer(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    canonical_name: str = Field(index=True)
+    normalized_name: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now)
+
+
+class LolPlayerExternalIdentity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="lolplayer.id", index=True)
+    source_name: str = Field(index=True)
+    external_id: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now)
+
+
+class DataSource(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    code: str = Field(index=True, unique=True)
+    display_name: str
+    enabled: bool = False
+    configured: bool = False
+    status: str = "degraded"
+    config_json: Optional[str] = None
+    last_run_at: Optional[datetime] = None
+    last_success_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    last_duration_ms: Optional[int] = None
+    records_received: int = 0
+    records_inserted: int = 0
+    records_updated: int = 0
+    records_skipped: int = 0
+    coverage: str = "unavailable"
+    next_run_at: Optional[datetime] = None
+
+
+class SourceRun(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_code: str = Field(index=True)
+    job: str
+    status: str = "running"
+    started_at: datetime = Field(default_factory=_now)
+    finished_at: Optional[datetime] = None
+    duration_ms: Optional[int] = None
+    records_received: int = 0
+    records_inserted: int = 0
+    records_updated: int = 0
+    records_skipped: int = 0
+    error_message: Optional[str] = None
+    details_json: Optional[str] = None
+
+
+class ImportBatch(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_code: str = Field(index=True)
+    filename: str
+    sha256: str = Field(index=True, unique=True)
+    status: str = "pending"
+    rows_received: int = 0
+    games_inserted: int = 0
+    teams_inserted: int = 0
+    players_inserted: int = 0
+    created_at: datetime = Field(default_factory=_now)
+    completed_at: Optional[datetime] = None
+
+
+class ImportError(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: Optional[int] = Field(default=None, foreign_key="importbatch.id", index=True)
+    row_number: Optional[int] = None
+    reason: str
+    raw_json: Optional[str] = None
+    created_at: datetime = Field(default_factory=_now)
+
+
+class WorkerHeartbeat(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    worker_name: str = Field(index=True, unique=True)
+    status: str = "healthy"
+    last_seen_at: datetime = Field(default_factory=_now)
+    detail: Optional[str] = None

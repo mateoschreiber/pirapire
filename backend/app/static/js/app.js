@@ -1,197 +1,297 @@
 (function () {
   "use strict";
   const API = "/api/lol/matches";
+  const DISPLAY_TIMEZONE = "America/Asuncion";
+  let dashboardData = null;
+  let activeCompetition = "ALL";
 
   function el(id) { return document.getElementById(id); }
-  function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
-  function qsa(sel, ctx) { return (ctx || document).querySelectorAll(sel); }
-
-  function hide(el) { if (el) el.classList.add("hidden"); }
-  function show(el) { if (el) el.classList.remove("hidden"); }
+  function hide(node) { if (node) node.classList.add("hidden"); }
+  function show(node) { if (node) node.classList.remove("hidden"); }
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
+      return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"}[char];
+    });
+  }
 
   function fmtTime(iso) {
     if (!iso) return "N/D";
-    const d = new Date(iso);
-    return d.toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString("es-PY", {
+      timeZone: DISPLAY_TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false
+    });
   }
 
   function fmtDate(iso) {
     if (!iso) return "N/D";
-    return new Date(iso).toLocaleDateString("es-PY", { day: "2-digit", month: "2-digit" });
+    return new Date(iso).toLocaleDateString("es-PY", {
+      timeZone: DISPLAY_TIMEZONE, day: "2-digit", month: "2-digit", year: "numeric"
+    });
   }
 
-  function fmtSeconds(s) {
-    if (s == null) return "N/D";
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    if (m >= 60) { const h = Math.floor(m / 60); return h + "h " + (m % 60) + "m"; }
-    return m + "m " + sec + "s";
+  function fmtSeconds(seconds) {
+    if (seconds == null) return "N/D";
+    var minutes = Math.floor(seconds / 60);
+    var remaining = Math.round(seconds % 60);
+    if (minutes >= 60) return Math.floor(minutes / 60) + "h " + (minutes % 60) + "m";
+    return minutes + "m " + remaining + "s";
   }
 
-  function fmtPct(v) {
-    if (v == null) return "N/D";
-    return v.toFixed(1) + "%";
-  }
+  function fmtPct(value) { return value == null ? "N/D" : Number(value).toFixed(1) + "%"; }
+  function fmtNumber(value) { return value == null ? "N/D" : Number(value).toLocaleString("es-PY"); }
+  function fmtOdds(value) { return value == null ? "N/D" : Number(value).toFixed(2); }
 
-  function fmtOdds(v) {
-    if (v == null) return '<span class="odds-nd">N/D</span>';
-    return '<span class="odds-value">' + v.toFixed(2) + "</span>";
-  }
-
-  async function fetchJSON(url, opts) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(function () { return ctrl.abort(); }, 15000);
+  async function fetchJSON(url, options) {
+    const controller = new AbortController();
+    const timer = setTimeout(function () { controller.abort(); }, 20000);
     try {
-      var res = await fetch(url, Object.assign({ signal: ctrl.signal }, opts || {}));
+      const response = await fetch(url, Object.assign({signal: controller.signal}, options || {}));
       clearTimeout(timer);
-      if (!res.ok) { throw new Error("HTTP " + res.status); }
-      return await res.json();
-    } catch (e) {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return await response.json();
+    } catch (error) {
       clearTimeout(timer);
-      throw e;
+      throw error;
     }
   }
 
-  // --- Dashboard ---
+  function initLiveClock() {
+    const node = el("live-clock");
+    if (!node || node.dataset.running === "true") return;
+    node.dataset.running = "true";
+    const format = new Intl.DateTimeFormat("es-PY", {
+      timeZone: DISPLAY_TIMEZONE,
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    });
+    function tick() { node.textContent = format.format(new Date()); }
+    tick();
+    window.setInterval(tick, 1000);
+  }
+
+  // Dashboard
   async function initDashboard() {
-    var container = el("matches-container");
-    var emptyEl = el("empty-state");
-    var errorEl = el("error-state");
+    const container = el("matches-container");
     if (!container) return;
+    container.innerHTML = '<div class="skeleton dashboard-skeleton"></div>';
+    hide(el("empty-state"));
+    hide(el("error-state"));
     try {
-      var data = await fetchJSON(API + "/upcoming?hours=48");
-      if (!data.matches || data.matches.length === 0) {
-        hide(container);
-        show(emptyEl);
-        hide(errorEl);
-        return;
-      }
-      hide(emptyEl);
-      hide(errorEl);
-      show(container);
-      renderMatches(container, data.matches);
-      el("last-update") && (el("last-update").textContent = new Date().toLocaleTimeString("es-PY"));
-    } catch (e) {
+      dashboardData = await fetchJSON(API + "/upcoming?hours=336");
+      renderDashboard();
+    } catch (error) {
       hide(container);
-      hide(emptyEl);
-      show(errorEl);
-      console.error("Dashboard load failed:", e);
+      hide(el("empty-state"));
+      show(el("error-state"));
+      console.error("Dashboard load failed:", error);
     }
+  }
+
+  function selectCompetition(code) {
+    activeCompetition = code;
+    renderDashboard();
+  }
+
+  function renderDashboard() {
+    if (!dashboardData) return;
+    renderCompetitionFilters(dashboardData.competitions || []);
+    renderCompetitionCards(dashboardData.competitions || []);
+    renderMatches(el("matches-container"), dashboardData.matches || []);
+  }
+
+  function renderCompetitionFilters(competitions) {
+    const container = el("competition-filter");
+    if (!container) return;
+    const items = [{code: "ALL", label: "Todos", upcoming_matches: dashboardData.count || 0}].concat(competitions);
+    container.innerHTML = items.map(function (item) {
+      const active = item.code === activeCompetition ? " active" : "";
+      return '<button type="button" class="competition-pill' + active + '" data-code="' + esc(item.code) + '">' +
+        esc(item.label) + '<span>' + Number(item.upcoming_matches || 0) + "</span></button>";
+    }).join("");
+    container.querySelectorAll("button").forEach(function (button) {
+      button.addEventListener("click", function () { selectCompetition(button.dataset.code); });
+    });
+  }
+
+  function renderCompetitionCards(competitions) {
+    const container = el("competitions-container");
+    if (!container) return;
+    const visible = activeCompetition === "ALL" ? competitions : competitions.filter(function (item) { return item.code === activeCompetition; });
+    container.innerHTML = visible.map(function (item) {
+      const teams = item.qualified_teams || [];
+      const teamHtml = teams.length
+        ? '<div class="team-chip-list">' + teams.map(function (team) { return '<span class="team-chip">' + esc(team) + "</span>"; }).join("") + "</div>"
+        : '<p class="competition-empty">Clasificación todavía no publicada en el calendario.</p>';
+      return '<article class="competition-card" data-code="' + esc(item.code) + '">' +
+        '<div class="competition-card-head"><div><span class="competition-code">' + esc(item.label) + "</span>" +
+        '<p>Temporada ' + esc(item.season) + "</p></div>" +
+        '<span class="badge badge-gray">' + item.team_count + " equipos</span></div>" + teamHtml + "</article>";
+    }).join("");
+    const available = competitions.filter(function (item) { return item.team_count > 0; }).length;
+    if (el("competition-coverage")) el("competition-coverage").textContent = available + " de 9 torneos con equipos publicados";
+  }
+
+  function oddsHtml(match) {
+    if (match.odds_available) {
+      return '<div class="match-odds available"><span>' + esc(match.team_a) + " <strong>" + fmtOdds(match.odds_a) + "</strong></span>" +
+        '<span>' + esc(match.team_b) + " <strong>" + fmtOdds(match.odds_b) + "</strong></span>" +
+        '<small>' + esc(match.odds_provider || "Proveedor externo") + (match.odds_captured_at ? " · " + esc(fmtTime(match.odds_captured_at)) : "") + "</small></div>";
+    }
+    return '<div class="match-odds unavailable"><strong>Sin cuotas capturadas</strong><small>Oracle’s Elixir no contiene odds.</small></div>';
   }
 
   function renderMatches(container, matches) {
-    container.innerHTML = "";
-    var tbl = document.createElement("table");
-    tbl.innerHTML = "<thead><tr><th>Liga</th><th>Equipo A</th><th>Equipo B</th><th>Fecha</th><th>Hora</th><th>Odd A</th><th>Odd B</th><th>Odds</th></tr></thead>";
-    var tbody = document.createElement("tbody");
-    matches.forEach(function (m) {
-      var tr = document.createElement("tr");
-      tr.setAttribute("tabindex", "0");
-      tr.setAttribute("role", "link");
-      tr.addEventListener("click", function () { window.location.href = "/lol/matches/" + m.match_key; });
-      tr.addEventListener("keydown", function (e) { if (e.key === "Enter") { window.location.href = "/lol/matches/" + m.match_key; } });
-      var oddStatus = m.odds_provider ? '<span class="badge badge-green">' + m.odds_provider + "</span>" : '<span class="badge badge-gray">N/D</span>';
-      tr.innerHTML = "<td>" + (m.league || m.tournament || "N/D") + "</td><td class='team-name'>" + m.team_a + "</td><td class='team-name'>" + m.team_b + "</td><td>" + fmtDate(m.start_time_utc) + "</td><td>" + fmtTime(m.start_time_utc) + "</td><td>" + fmtOdds(m.odds_a) + "</td><td>" + fmtOdds(m.odds_b) + "</td><td>" + oddStatus + "</td>";
-      tbody.appendChild(tr);
+    if (!container) return;
+    const visible = activeCompetition === "ALL" ? matches : matches.filter(function (match) { return match.competition_code === activeCompetition; });
+    if (el("matches-count")) el("matches-count").textContent = visible.length + (visible.length === 1 ? " partido" : " partidos");
+    if (!visible.length) {
+      hide(container);
+      show(el("empty-state"));
+      return;
+    }
+    hide(el("empty-state"));
+    show(container);
+    container.innerHTML = visible.map(function (match) {
+      return '<article class="match-card" tabindex="0" role="link" data-key="' + esc(match.match_key) + '">' +
+        '<div class="match-card-top"><span class="competition-code">' + esc(match.competition) + "</span>" +
+        '<span class="match-datetime">' + esc(fmtDate(match.start_time_utc)) + " · " + esc(fmtTime(match.start_time_utc)) + "</span></div>" +
+        '<div class="match-versus"><strong>' + esc(match.team_a) + '</strong><span>VS</span><strong>' + esc(match.team_b) + "</strong></div>" +
+        '<div class="match-meta"><span>' + (match.best_of ? "BO" + match.best_of : "Formato N/D") + "</span><span>Programado</span><span>Hora PY</span></div>" +
+        oddsHtml(match) + "</article>";
+    }).join("");
+    container.querySelectorAll(".match-card").forEach(function (card) {
+      function open() { window.location.href = "/lol/matches/" + encodeURIComponent(card.dataset.key); }
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", function (event) { if (event.key === "Enter" || event.key === " ") open(); });
     });
-    tbl.appendChild(tbody);
-    container.appendChild(tbl);
   }
 
-  // --- Match Detail ---
+  // Match detail
   async function initMatchDetail() {
     if (typeof MATCH_KEY === "undefined") return;
     try {
-      var match = await fetchJSON(API + "/" + MATCH_KEY);
+      const match = await fetchJSON(API + "/" + encodeURIComponent(MATCH_KEY));
       renderMatchHeader(match);
       renderMatchOdds(match);
       await loadStatistics();
-    } catch (e) {
-      el("match-title") && (el("match-title").textContent = "Error al cargar el encuentro");
-      console.error("Match detail load failed:", e);
+    } catch (error) {
+      if (el("match-title")) el("match-title").textContent = "Error al cargar el encuentro";
+      console.error("Match detail load failed:", error);
     }
   }
 
-  function renderMatchHeader(m) {
-    el("match-title") && (el("match-title").textContent = m.team_a + " vs " + m.team_b);
-    var hdr = el("match-header");
-    if (!hdr) return;
-    hdr.innerHTML += "<p>" + (m.league || "") + (m.tournament ? " - " + m.tournament : "") + "</p><p>" + fmtTime(m.start_time_utc) + " (America/Asuncion)" + (m.best_of ? " | BO" + m.best_of : "") + " | " + m.status + "</p>";
+  function renderMatchHeader(match) {
+    if (el("match-title")) el("match-title").textContent = match.team_a + " vs " + match.team_b;
+    const header = el("match-header");
+    if (!header) return;
+    let meta = header.querySelector(".match-detail-meta");
+    if (!meta) { meta = document.createElement("div"); meta.className = "match-detail-meta"; header.appendChild(meta); }
+    meta.innerHTML = '<span class="competition-code">' + esc(match.competition || match.league || "N/D") + "</span>" +
+      '<span>' + esc(fmtDate(match.start_time_utc)) + " · " + esc(fmtTime(match.start_time_utc)) + " PY</span>" +
+      '<span>' + (match.best_of ? "BO" + match.best_of : "Formato N/D") + "</span>";
   }
 
-  function renderMatchOdds(m) {
-    var c = el("odds-content");
-    if (!c) return;
-    c.innerHTML = "<p><strong>" + m.team_a + ":</strong> " + fmtOdds(m.odds_a) + " | <strong>" + m.team_b + ":</strong> " + fmtOdds(m.odds_b) + "</p>" + (m.odds_provider ? "<p class='meta'>Proveedor: " + m.odds_provider + " | " + (m.odds_captured_at ? fmtTime(m.odds_captured_at) : "") + "</p>" : "");
+  function renderMatchOdds(match) {
+    const container = el("odds-content");
+    if (!container) return;
+    if (!match.odds_available) {
+      container.innerHTML = '<div class="source-warning"><strong>No existen odds para este encuentro.</strong><p>' +
+        esc(match.odds_message || "Debe cargarse una captura de un proveedor externo.") + "</p></div>";
+      return;
+    }
+    container.innerHTML = '<div class="odds-grid"><div><span>' + esc(match.team_a) + '</span><strong>' + fmtOdds(match.odds_a) +
+      '</strong></div><div><span>' + esc(match.team_b) + '</span><strong>' + fmtOdds(match.odds_b) + "</strong></div></div>" +
+      '<p class="meta">Proveedor: ' + esc(match.odds_provider) + (match.odds_captured_at ? " · Captura " + esc(fmtTime(match.odds_captured_at)) : "") + "</p>";
   }
 
   async function loadStatistics() {
     try {
-      var stats = await fetchJSON(API + "/" + MATCH_KEY + "/statistics");
+      const stats = await fetchJSON(API + "/" + encodeURIComponent(MATCH_KEY) + "/statistics");
       renderStats(stats);
-    } catch (e) {
-      var s = el("stats-section");
-      if (s) s.innerHTML += "<p class='error-state'>Estadisticas no disponibles aun.</p>";
-      console.error("Stats load failed:", e);
+    } catch (error) {
+      const section = el("stats-section");
+      if (section) section.insertAdjacentHTML("beforeend", '<p class="error-state">Estadísticas no disponibles todavía.</p>');
+      console.error("Stats load failed:", error);
     }
   }
 
   function renderStats(stats) {
     if (!stats || !stats.payload) return;
-    var p = stats.payload;
-    var cov = stats.coverage || {};
-
-    renderTeamStats("team-a-stats", p.team_a, cov.team_a);
-    renderTeamStats("team-b-stats", p.team_b, cov.team_b);
-    renderPlayers("players-section", p);
+    const payload = stats.payload;
+    const coverage = stats.coverage || {};
+    renderTeamStats("team-a-stats", payload.team_a, coverage.team_a);
+    renderTeamStats("team-b-stats", payload.team_b, coverage.team_b);
+    renderPlayers("players-section", payload);
+    if (el("coverage-info")) {
+      const notes = payload.data_notes || {};
+      el("coverage-info").innerHTML = '<strong>Cobertura de datos</strong><ul>' + Object.keys(notes).map(function (key) {
+        return "<li>" + esc(notes[key]) + "</li>";
+      }).join("") + "</ul>";
+    }
   }
 
-  function renderTeamStats(elId, data, coverage) {
-    var c = el(elId);
-    if (!c || !data) return;
-    var covClass = coverage === "complete" ? "badge-green" : coverage === "partial" ? "badge-yellow" : "badge-red";
-    var covLabel = coverage === "complete" ? "Completa" : coverage === "partial" ? "Parcial" : "No disponible";
-    c.innerHTML = "<h4>" + data.team_name + ' <span class="badge ' + covClass + '">' + covLabel + "</span></h4>" +
-      "<table class='stats-table'><tr><th>Metrica</th><th>Valor</th></tr>" +
-      "<tr><td>Torretas %</td><td>" + fmtPct(data.towers_pct) + "</td></tr>" +
-      "<tr><td>Inhibidores %</td><td>" + fmtPct(data.inhibitors_pct) + "</td></tr>" +
-      "<tr><td>Asesinatos %</td><td>" + fmtPct(data.kills_pct) + "</td></tr>" +
-      "<tr><td>Muertes %</td><td>" + fmtPct(data.deaths_pct) + "</td></tr>" +
-      "<tr><td>Dragones %</td><td>" + fmtPct(data.dragons_pct) + "</td></tr>" +
-      "<tr><td>Barones %</td><td>" + fmtPct(data.barons_pct) + "</td></tr>" +
-      "<tr><td>Oro final %</td><td>" + fmtPct(data.final_gold_pct) + "</td></tr>" +
-      "<tr><td>Dur. media mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds) + "</td></tr>" +
-      "<tr><td>Dur. media serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds) + "</td></tr>" +
-      "</table>";
+  function averageValue(metric, decimals) {
+    if (!metric || metric.value == null) return "N/D";
+    return Number(metric.value).toLocaleString("es-PY", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
   }
 
-  function renderPlayers(elId, payload) {
-    var c = el(elId);
-    if (!c) return;
-    var html = "";
-    if (payload.players_a) { html += renderPlayerTable(payload.team_a_name || "Equipo A", payload.players_a); }
-    if (payload.players_b) { html += renderPlayerTable(payload.team_b_name || "Equipo B", payload.players_b); }
-    c.innerHTML = html;
+  function renderTeamStats(elementId, data, coverage) {
+    const container = el(elementId);
+    if (!container || !data) return;
+    const className = coverage === "complete" ? "badge-green" : coverage === "partial" ? "badge-yellow" : "badge-red";
+    const label = coverage === "complete" ? "Completa" : coverage === "partial" ? "Parcial" : "No disponible";
+    const averages = data.averages || {};
+    container.innerHTML = '<div class="stats-team-head"><div><h4>' + esc(data.team_name) + '</h4><p>' + data.series_used + " series · " + data.maps_used +
+      ' mapas</p></div><span class="badge ' + className + '">' + label + "</span></div>" +
+      "<table class='stats-table'><tbody>" +
+      "<tr><th>Métrica</th><th>Promedio por mapa</th></tr>" +
+      "<tr><td>Torretas destruidas</td><td>" + averageValue(averages.towers, 2) + "</td></tr>" +
+      "<tr><td>Inhibidores destruidos</td><td>" + averageValue(averages.inhibitors, 2) + "</td></tr>" +
+      "<tr><td>Asesinatos</td><td>" + averageValue(averages.kills, 2) + "</td></tr>" +
+      "<tr><td>Muertes</td><td>" + averageValue(averages.deaths, 2) + "</td></tr>" +
+      "<tr><td>Dragones asesinados</td><td>" + averageValue(averages.dragons, 2) + "</td></tr>" +
+      "<tr><td>Barones asesinados</td><td>" + averageValue(averages.barons, 2) + "</td></tr>" +
+      "<tr><td>Oro total</td><td>" + averageValue(averages.gold, 0) + "</td></tr>" +
+      "<tr><td>Duración media del mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds && data.avg_map_duration_seconds.value) + "</td></tr>" +
+      "<tr><td>Duración media de la serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds && data.avg_series_duration_seconds.value) + "</td></tr>" +
+      "</tbody></table>";
+  }
+
+  function renderPlayers(elementId, payload) {
+    const container = el(elementId);
+    if (!container) return;
+    let html = '<div class="section-heading player-heading"><div><p class="eyebrow">Detalle individual</p><h3>Jugadores</h3></div></div>';
+    html += renderPlayerTable(payload.team_a_name || "Equipo A", payload.players_a || []);
+    html += renderPlayerTable(payload.team_b_name || "Equipo B", payload.players_b || []);
+    container.innerHTML = html;
+  }
+
+  function valueAndShare(value, share) {
+    if (value == null) return "N/D";
+    return '<strong>' + fmtNumber(value) + "</strong><small>" + fmtPct(share) + " del equipo</small>";
   }
 
   function renderPlayerTable(teamName, players) {
-    var h = "<h4>" + teamName + "</h4><table><thead><tr><th>Jugador</th><th>Rol</th><th>Mapas</th><th>Kills%</th><th>Deaths%</th><th>Oro%</th><th>Solo Kills%</th><th>CS%</th></tr></thead><tbody>";
-    players.forEach(function (p) {
-      h += "<tr><td>" + p.player_name + "</td><td>" + (p.role || "N/D") + "</td><td>" + (p.maps_played || 0) + "</td>" +
-        "<td>" + fmtPct(p.kills_pct) + "</td><td>" + fmtPct(p.deaths_pct) + "</td>" +
-        "<td>" + fmtPct(p.final_gold_pct) + "</td><td>" + fmtPct(p.solo_kills_pct) + "</td>" +
-        "<td>" + fmtPct(p.cs_pct) + "</td></tr>";
+    let html = '<div class="player-table-block"><h4>' + esc(teamName) + '</h4><div class="table-scroll"><table><thead><tr>' +
+      "<th>Jugador</th><th>Rol</th><th>Mapas</th><th>Kills</th><th>Deaths</th><th>Oro promedio/mapa</th><th>CS promedio/mapa</th></tr></thead><tbody>";
+    players.forEach(function (player) {
+      const cs = player.cs_per_map == null ? '<span class="metric-unavailable">N/D</span>' : Number(player.cs_per_map).toFixed(1);
+      const gold = player.gold_per_map == null ? '<span class="metric-unavailable">N/D</span>' : fmtNumber(Math.round(player.gold_per_map));
+      html += "<tr><td><strong>" + esc(player.player_name) + "</strong></td><td>" + esc(player.role || "N/D") + "</td><td>" +
+        fmtNumber(player.maps_played) + "</td><td>" + fmtNumber(player.kills) + "</td><td>" + fmtNumber(player.deaths) +
+        "</td><td>" + gold + "</td><td>" + cs + "</td></tr>";
     });
-    h += "</tbody></table>";
-    return h;
+    if (!players.length) html += '<tr><td colspan="7" class="metric-unavailable">Sin historial estadístico para este equipo.</td></tr>';
+    return html + "</tbody></table></div></div>";
   }
 
   function refreshData() { initDashboard(); }
 
-  // Auto-init
-  var page = document.body.getAttribute("data-page");
-  if (page === "dashboard") { initDashboard(); }
-  else if (page === "match-detail") { initMatchDetail(); }
+  initLiveClock();
+  const page = document.body.getAttribute("data-page");
+  if (page === "dashboard") initDashboard();
+  else if (page === "match-detail") initMatchDetail();
 
   window.refreshData = refreshData;
   window.initDashboard = initDashboard;

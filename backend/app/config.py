@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_public_url: str = ""
     database_url: str = "sqlite:////app/data/pirapire.db"
     log_level: str = "INFO"
+    admin_token: str = ""
 
     # HTTP
     http_timeout_connect: float = 5.0
