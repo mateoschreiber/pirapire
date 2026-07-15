@@ -110,7 +110,9 @@ def test_dashboard_assets_include_requested_metrics():
     assert "Solo kills" not in js
     assert "CS promedio por mapa" in js
     assert "cs_per_map" in js
-    assert "Sin cuotas capturadas" in js
+    assert "loadPreviewOdds" in js
+    assert "data-odds-key" in js
+    assert "Cuotas calculadas no disponibles" in js
 
 
 def test_manual_odds_upload_and_match_response(tmp_path):

@@ -5,6 +5,7 @@
   let dashboardData = null;
   let activeCompetition = "ALL";
   let matchDetailData = null;
+  const previewOddsCache = new Map();
 
   function el(id) { return document.getElementById(id); }
   function hide(node) { if (node) node.classList.add("hidden"); }
@@ -139,13 +140,54 @@
     }
   }
 
-  function oddsHtml(match) {
+  function oddsHtml(match, estimated) {
+    if (estimated && estimated.available) {
+      const sideA = estimated.team_a;
+      const sideB = estimated.team_b;
+      return '<div class="match-odds available estimated-preview"><span>' + esc(sideA.name) + " <strong>" +
+        fmtOdds(sideA.decimal_odds) + "</strong></span><span>" + esc(sideB.name) + " <strong>" +
+        fmtOdds(sideB.decimal_odds) + '</strong></span><small>Cuotas calculadas · ' +
+        fmtPct(sideA.probability_pct) + " / " + fmtPct(sideB.probability_pct) + " · " +
+        sideA.series_used + " series</small></div>";
+    }
     if (match.odds_available) {
       return '<div class="match-odds available"><span>' + esc(match.team_a) + " <strong>" + fmtOdds(match.odds_a) + "</strong></span>" +
         '<span>' + esc(match.team_b) + " <strong>" + fmtOdds(match.odds_b) + "</strong></span>" +
         '<small>' + esc(match.odds_provider || "Proveedor externo") + (match.odds_captured_at ? " · " + esc(fmtTime(match.odds_captured_at)) : "") + "</small></div>";
     }
-    return '<div class="match-odds unavailable"><strong>Sin cuotas capturadas</strong><small>Oracle’s Elixir no contiene odds.</small></div>';
+    return '<div class="match-odds unavailable"><strong>Cuotas calculadas no disponibles</strong><small>No hay historial suficiente para ambos equipos.</small></div>';
+  }
+
+  function previewOddsLoadingHtml() {
+    return '<div class="match-odds preview-loading"><span class="skeleton"></span><small>Calculando cuotas con la forma reciente…</small></div>';
+  }
+
+  function updatePreviewOdds(match, estimated) {
+    document.querySelectorAll(".match-odds-slot").forEach(function (slot) {
+      if (slot.dataset.oddsKey === match.match_key) slot.innerHTML = oddsHtml(match, estimated);
+    });
+  }
+
+  async function loadPreviewOdds(matches) {
+    const queue = matches.slice();
+    async function worker() {
+      while (queue.length) {
+        const match = queue.shift();
+        try {
+          let estimated = previewOddsCache.get(match.match_key);
+          if (!estimated) {
+            const stats = await fetchJSON(API + "/" + encodeURIComponent(match.match_key) + "/statistics");
+            estimated = stats && stats.payload ? stats.payload.estimated_market : null;
+            if (estimated) previewOddsCache.set(match.match_key, estimated);
+          }
+          updatePreviewOdds(match, estimated);
+        } catch (error) {
+          updatePreviewOdds(match, null);
+          console.error("Preview odds load failed:", error);
+        }
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(4, queue.length)}, worker));
   }
 
   function renderMatches(container, matches) {
@@ -165,13 +207,14 @@
         '<span class="match-datetime">' + esc(fmtDate(match.start_time_utc)) + " · " + esc(fmtTime(match.start_time_utc)) + "</span></div>" +
         '<div class="match-versus"><strong>' + esc(match.team_a) + '</strong><span>VS</span><strong>' + esc(match.team_b) + "</strong></div>" +
         '<div class="match-meta"><span>' + (match.best_of ? "BO" + match.best_of : "Formato N/D") + "</span><span>Programado</span><span>Hora PY</span></div>" +
-        oddsHtml(match) + "</article>";
+        '<div class="match-odds-slot" data-odds-key="' + esc(match.match_key) + '">' + previewOddsLoadingHtml() + "</div></article>";
     }).join("");
     container.querySelectorAll(".match-card").forEach(function (card) {
       function open() { window.location.href = "/lol/matches/" + encodeURIComponent(card.dataset.key); }
       card.addEventListener("click", open);
       card.addEventListener("keydown", function (event) { if (event.key === "Enter" || event.key === " ") open(); });
     });
+    void loadPreviewOdds(visible);
   }
 
   // Match detail
