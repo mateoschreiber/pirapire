@@ -107,5 +107,6 @@ Note: `precompute_upcoming_stats()` is currently a stub — it returns `{"precom
 ## 6. Dashboard & API Serving
 
 - **Upcoming matches API** (`/api/lol/matches/upcoming`): Fetches `LolMatchEvent` records within configurable window, enriches with odds from `LolOddsSnapshot`/`LolTeamOdd`
+- **Match preview odds** — The dashboard page fires `loadPreviewOdds()` after rendering the match card grid. Up to 4 concurrent workers fetch `/api/lol/matches/{key}/statistics` per match, cache results in a module-scoped `previewOddsCache` Map, and render the same `estimated_market` data shown on the detail page. See [lol-metrics.md → Dashboard Preview Odds](../domain/lol-metrics.md#dashboard-preview-odds).
 - **Competition filtering:** Dashboard shows only tier-1 leagues and international events
 - **Competition classification** (`_competition_code()` in `lol_api.py`): Regex-based mapping of league/tournament strings to canonical codes (LCK, LPL, LEC, LCS, CBLOL, LCP, WORLDS, MSI, FIRST_STAND, EWC)

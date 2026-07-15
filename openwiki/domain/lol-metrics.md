@@ -114,6 +114,31 @@ Laplace smoothing avoids impossible 0% or 100% probabilities in a 5-series sampl
 
 **Data notes updated:** The `data_notes.odds` message now reads: "Las cuotas calculadas son una estimación estadística interna y no representan una casa de apuestas."
 
+### Dashboard Preview Odds
+
+**Source:** `backend/app/static/js/app.js` — `loadPreviewOdds()`, `previewOddsCache`
+
+Since commit `acf7802`, the upcoming matches dashboard card grid **loads and displays the same calculated form-based odds** as the match detail page. Every match card that rendered a placeholder skeleton (`"Calculando cuotas con la forma reciente…"`) now asynchronously fetches statistics from `/api/lol/matches/{key}/statistics` and populates the card with estimated odds.
+
+**Mechanism:**
+
+1. **Loading skeleton** — Each match card renders a dashed-border `.match-odds.preview-loading` div with a CSS skeleton placeholder immediately on page render.
+2. **Concurrent fetch** — `loadPreviewOdds(matches)` fans out across a pool of up to **4 concurrent workers** (`Promise.all` with `Array.from({length: Math.min(4, queue.length)}, worker)`). Each worker pops a match from the queue, fetches the statistics endpoint, and extracts `estimated_market` from the response payload.
+3. **Per-match cache** — The `previewOddsCache` Map (module-scoped `Map<string, estimated_market_payload>`) stores the first successful result per `match_key`. Subsequent renders or filter changes reuse cached values without a network round-trip. Cache lives for the dashboard page lifetime (in-memory, no persistence).
+4. **Fallback** — If `estimated_market.available` is false, the API returns no cached data, or the fetch fails, the slot renders `"Cuotas calculadas no disponibles"` with a note about insufficient history.
+
+**Rendered output** (when available):
+
+```
+<div class="match-odds available estimated-preview">
+  <span>T1 <strong>1.60</strong></span>
+  <span>Gen.G <strong>2.67</strong></span>
+  <small>Cuotas calculadas · 62.5% / 37.5% · 5 series</small>
+</div>
+```
+
+The preview and the match detail page share the same endpoint (`/api/lol/matches/{key}/statistics`) and the same `estimated_market` data, but use **different render functions**: the preview calls `oddsHtml()` (defined in `app.js`), while the detail page calls `renderMatchOdds()` for a richer layout with a market-source badge, model description, and external odds reference. The underlying data (decimal odds, probability percentages, series count) is identical.
+
 ### Precomputation (Stub)
 
 `precompute_upcoming_stats()` in `lol_metrics_engine.py` is currently a **stub** that returns `{"precomputed": 0, "total_scheduled": 0}` without actually computing or persisting any statistics. It is scheduled in the background worker every 30 minutes (`job_precompute_stats`) but does nothing yet.
