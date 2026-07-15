@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select, func
 from ..models_lol import (
     LolMatchEvent, LolGameHistory, LolTeamGameStat, LolPlayerGameStat,
-    LolMatchStatisticsReadModel, LolTeamAlias,
+    LolMatchStatisticsReadModel, LolSeries, LolTeamAlias,
 )
 
 
@@ -12,40 +12,41 @@ def _now():
 
 def _resolve_team(session: Session, team_name: str):
     alias = session.exec(select(LolTeamAlias).where(LolTeamAlias.alias == team_name)).first()
-    if alias:
-        return alias.canonical_team
-    # Also check if team_name is already a canonical name
-    canon = session.exec(select(LolTeamAlias).where(LolTeamAlias.canonical_team == team_name)).first()
-    if canon:
-        return canon.canonical_team
-    return team_name
+    return alias.canonical_team if alias else team_name
 
 
-def _get_recent_game_ids(session: Session, team_name: str, before_utc: datetime, limit: int = 50):
+def _get_last_series(session: Session, team_name: str, before_utc: datetime, limit: int = 10):
     team = _resolve_team(session, team_name)
-    # Try with resolved name first, then fall back to raw name
-    for name in (team, team_name):
-        rows = session.exec(
-            select(LolTeamGameStat)
-            .where(LolTeamGameStat.team_name == name)
-            .where(LolTeamGameStat.date < before_utc.strftime("%Y-%m-%d"))
-            .order_by(LolTeamGameStat.date.desc())
-            .limit(limit)
-        ).all()
-        if rows:
-            break
+    stmt = (
+        select(LolSeries)
+        .where(LolSeries.team_a == team)
+        .where(LolSeries.last_game_at < before_utc)
+        .order_by(LolSeries.last_game_at.desc())
+        .limit(limit)
+    )
+    series_a = list(session.exec(stmt).all())
+    stmt = (
+        select(LolSeries)
+        .where(LolSeries.team_b == team)
+        .where(LolSeries.last_game_at < before_utc)
+        .order_by(LolSeries.last_game_at.desc())
+        .limit(limit)
+    )
+    series_b = list(session.exec(stmt).all())
+    all_series = sorted(series_a + series_b, key=lambda s: s.last_game_at or "", reverse=True)[:limit]
+    return all_series
 
-    if not rows and team != team_name:
-        # Try partial match
-        rows = session.exec(
-            select(LolTeamGameStat)
-            .where(LolTeamGameStat.team_name.contains(team_name.replace(" (Vietnamese Team)", "").replace(" (Polish Team)", "")))
-            .where(LolTeamGameStat.date < before_utc.strftime("%Y-%m-%d"))
-            .order_by(LolTeamGameStat.date.desc())
-            .limit(limit)
-        ).all()
 
-    return rows
+def _get_game_ids_from_series(series_list):
+    ids = set()
+    for s in series_list:
+        if s.game_ids_json:
+            import json
+            try:
+                ids.update(json.loads(s.game_ids_json))
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return ids
 
 
 def _compute_team_stats(session: Session, team_name: str, match_key: str):
@@ -53,21 +54,26 @@ def _compute_team_stats(session: Session, team_name: str, match_key: str):
     if not match:
         return None
 
-    opponent_name = match.team_b if team_name == match.team_a else match.team_a
+    team = _resolve_team(session, team_name)
+    opponent = _resolve_team(session, match.team_b if team_name == match.team_a else match.team_a)
 
-    team_rows = _get_recent_game_ids(session, team_name, match.start_time_utc)
-    opp_rows = _get_recent_game_ids(session, opponent_name, match.start_time_utc)
+    series_list = _get_last_series(session, team, match.start_time_utc)
+    opponent_series = _get_last_series(session, opponent, match.start_time_utc)
 
-    if not team_rows:
+    game_ids = _get_game_ids_from_series(series_list)
+    opp_game_ids = _get_game_ids_from_series(opponent_series)
+
+    if not game_ids:
         return {
-            "team_name": _resolve_team(session, team_name),
-            "series_used": 0, "maps_used": 0,
+            "team_name": team, "series_used": 0, "maps_used": 0,
             "coverage": "unavailable",
             "towers_pct": None, "inhibitors_pct": None, "kills_pct": None,
             "deaths_pct": None, "dragons_pct": None, "barons_pct": None,
             "final_gold_pct": None, "avg_map_duration_seconds": None,
             "avg_series_duration_seconds": None,
         }
+
+    team_rows = session.exec(select(LolTeamGameStat).where(LolTeamGameStat.game_id.in_(game_ids))).all()
 
     towers_t = sum((r.towers or 0) for r in team_rows)
     inhibs_t = sum((r.inhibitors or 0) for r in team_rows)
@@ -77,25 +83,14 @@ def _compute_team_stats(session: Session, team_name: str, match_key: str):
     barons_t = sum((r.barons or 0) for r in team_rows)
     gold_t = sum((r.gold or 0) for r in team_rows)
 
-    opp_team = _resolve_team(session, opponent_name)
-    for name in (opp_team, opponent_name):
-        opp_rows = session.exec(
-            select(LolTeamGameStat)
-            .where(LolTeamGameStat.team_name == name)
-            .where(LolTeamGameStat.date < match.start_time_utc.strftime("%Y-%m-%d"))
-            .order_by(LolTeamGameStat.date.desc())
-            .limit(len(team_rows))
-        ).all()
-        if opp_rows:
-            break
-
-    towers_o = sum((r.towers or 0) for r in opp_rows) if opp_rows else 0
-    inhibs_o = sum((r.inhibitors or 0) for r in opp_rows) if opp_rows else 0
-    kills_o = sum((r.kills or 0) for r in opp_rows) if opp_rows else 0
-    deaths_o = sum((r.deaths or 0) for r in opp_rows) if opp_rows else 0
-    dragons_o = sum((r.dragons or 0) for r in opp_rows) if opp_rows else 0
-    barons_o = sum((r.barons or 0) for r in opp_rows) if opp_rows else 0
-    gold_o = sum((r.gold or 0) for r in opp_rows) if opp_rows else 0
+    opp_rows = session.exec(select(LolTeamGameStat).where(LolTeamGameStat.game_id.in_(opp_game_ids))).all()
+    towers_o = sum((r.towers or 0) for r in opp_rows)
+    inhibs_o = sum((r.inhibitors or 0) for r in opp_rows)
+    kills_o = sum((r.kills or 0) for r in opp_rows)
+    deaths_o = sum((r.deaths or 0) for r in opp_rows)
+    dragons_o = sum((r.dragons or 0) for r in opp_rows)
+    barons_o = sum((r.barons or 0) for r in opp_rows)
+    gold_o = sum((r.gold or 0) for r in opp_rows)
 
     def pct(t, o):
         denom = t + o
@@ -104,15 +99,23 @@ def _compute_team_stats(session: Session, team_name: str, match_key: str):
     durations = [r.game_length_seconds for r in team_rows if r.game_length_seconds]
     avg_map = round(sum(durations) / len(durations)) if durations else None
 
-    avg_series = None  # Simplified: use avg map duration as proxy
+    series_durations = []
+    for s in series_list:
+        gids = _get_game_ids_from_series([s])
+        g_rows = session.exec(select(LolGameHistory).where(LolGameHistory.id.in_(gids))).all()
+        dur = sum(r.game_length_seconds or 0 for r in g_rows)
+        if dur > 0:
+            series_durations.append(dur)
+    avg_series = round(sum(series_durations) / len(series_durations)) if series_durations else None
 
+    has_data = bool(durations)
     incomplete = any(r is None for row in team_rows for r in [row.towers, row.inhibitors, row.kills, row.deaths])
 
     return {
-        "team_name": _resolve_team(session, team_name),
-        "series_used": len(team_rows),
+        "team_name": team,
+        "series_used": len(series_list),
         "maps_used": len(team_rows),
-        "coverage": "complete" if not incomplete and team_rows else "partial" if team_rows else "unavailable",
+        "coverage": "complete" if has_data and not incomplete else "partial" if has_data else "unavailable",
         "towers_pct": pct(towers_t, towers_o),
         "inhibitors_pct": pct(inhibs_t, inhibs_o),
         "kills_pct": pct(kills_t, kills_o),
@@ -121,7 +124,7 @@ def _compute_team_stats(session: Session, team_name: str, match_key: str):
         "barons_pct": pct(barons_t, barons_o),
         "final_gold_pct": pct(gold_t, gold_o),
         "avg_map_duration_seconds": avg_map,
-        "avg_series_duration_seconds": avg_map,
+        "avg_series_duration_seconds": avg_series,
     }
 
 
@@ -131,11 +134,8 @@ def _compute_player_stats(session: Session, team_name: str, match_key: str):
         return []
 
     team = _resolve_team(session, team_name)
-    team_rows = _get_recent_game_ids(session, team_name, match.start_time_utc)
-    if not team_rows:
-        return []
-
-    game_ids = [r.game_id for r in team_rows if r.game_id]
+    series_list = _get_last_series(session, team, match.start_time_utc)
+    game_ids = _get_game_ids_from_series(series_list)
     if not game_ids:
         return []
 

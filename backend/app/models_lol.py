@@ -156,6 +156,30 @@ class LolDataCoverage(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
+# Series model (groups games into best-of series)
+# ---------------------------------------------------------------------------
+class LolSeries(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    series_key: str = Field(index=True, unique=True)
+    source_name: str = Field(index=True)
+    source_match_id: Optional[str] = Field(default=None, index=True)
+    team_a: str = Field(index=True)
+    team_b: str = Field(index=True)
+    score_a: Optional[int] = None
+    score_b: Optional[int] = None
+    league: Optional[str] = Field(default=None, index=True)
+    tournament: Optional[str] = None
+    best_of: Optional[int] = None
+    first_game_at: Optional[str] = None
+    last_game_at: Optional[str] = None
+    game_ids_json: Optional[str] = None
+    maps_count: int = 0
+    complete: bool = False
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+# ---------------------------------------------------------------------------
 # New LoL-only models (Phase 1 refactor)
 # ---------------------------------------------------------------------------
 class LolMatchEvent(SQLModel, table=True):
