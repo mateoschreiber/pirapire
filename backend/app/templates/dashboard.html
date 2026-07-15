@@ -1,15 +1,21 @@
 {% extends "base.html" %}
+{% block title %}Dashboard - Pirapire{% endblock %}
 {% block content %}
 <section class="dashboard">
-    <h2>Proximos encuentros LoL <span class="timezone">(America/Asuncion)</span></h2>
-    <div id="matches-container">
-        <p class="loading">Cargando encuentros...</p>
-    </div>
-    <div id="empty-state" class="empty hidden">
-        <p>No hay encuentros programados para las proximas 48 horas.</p>
-    </div>
-    <div id="error-state" class="error hidden">
-        <p>Error al cargar los encuentros. Reintentando...</p>
+    <div class="card">
+        <div class="topbar" style="padding:0;margin-bottom:16px;border:none;background:transparent">
+            <h3>Proximos encuentros de League of Legends</h3>
+            <button class="btn" onclick="refreshData()">Actualizar</button>
+        </div>
+        <p class="meta" style="margin-bottom:12px">Ventana: proximas 48 horas (America/Asuncion)</p>
+        <div id="matches-container"><p class="skeleton" style="height:200px"></p></div>
+        <div id="empty-state" class="empty-state hidden">
+            <p>No hay encuentros programados para las proximas 48 horas.</p>
+        </div>
+        <div id="error-state" class="error-state hidden">
+            <p>Error al cargar los encuentros.</p>
+            <button class="btn" onclick="refreshData()">Reintentar</button>
+        </div>
     </div>
 </section>
 {% endblock %}

@@ -6,14 +6,24 @@
     <title>Pirapire - LoL Stats</title>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-<body>
-    <nav class="top-nav">
+<body data-page="{{ page }}">
+
+<div class="app-shell">
+    <nav class="sidebar">
         <h1><a href="/">Pirapire</a></h1>
-        <span class="nav-subtitle">League of Legends</span>
+        <a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}">Dashboard</a>
     </nav>
-    <main>
-        {% block content %}{% endblock %}
-    </main>
-    <script src="/static/js/app.js"></script>
+    <div class="main-area">
+        <header class="topbar">
+            <h2>{% block title %}Pirapire{% endblock %}</h2>
+            <span class="meta" id="last-update"></span>
+        </header>
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
 </body>
 </html>

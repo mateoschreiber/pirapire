@@ -1,133 +1,149 @@
-"""Import historical LoL esports CSV (Oracle's Elixir format).
-
-Team rows (``position`` == ``team``) become LolOracleGame; player rows become
-LolOraclePlayerStat. Missing columns are tolerated; unknown columns are warned.
-"""
-
-from sqlmodel import Session
-
-from . import csv_utils
-from ...models_imports import LolOracleGame, LolOraclePlayerStat, ManualImportBatch
-
-KNOWN_COLUMNS = {
-    "gameid", "datacompleteness", "url", "league", "year", "split", "playoffs",
-    "date", "game", "patch", "participantid", "side", "position", "playername",
-    "playerid", "teamname", "teamid", "champion", "ban1", "ban2", "ban3", "ban4",
-    "ban5", "gamelength", "result", "kills", "deaths", "assists", "teamkills",
-    "teamdeaths", "doublekills", "triplekills", "quadrakills", "pentakills",
-    "firstblood", "firstbloodkill", "firstbloodassist", "firstbloodvictim",
-    "team kpm", "ckpm", "firstdragon", "dragons", "opp_dragons", "elementaldrakes",
-    "opp_elementaldrakes", "infernals", "mountains", "clouds", "oceans", "chemtechs",
-    "hextechs", "dragons_type_unknown", "elders", "opp_elders", "firstherald",
-    "heralds", "opp_heralds", "void_grubs", "opp_void_grubs", "firstbaron", "barons",
-    "opp_barons", "firsttower", "towers", "opp_towers", "firstmidtower",
-    "firsttothreetowers", "inhibitors", "opp_inhibitors", "damagetochampions", "dpm",
-    "damageshare", "earnedgold", "earned gpm", "earnedgoldshare", "total cs",
-    "minionkills", "monsterkills", "cspm",
-}
+import os, csv, hashlib
+from datetime import datetime, timezone
+from sqlmodel import Session, select
+from ..models_lol import LolGameHistory, LolTeamGameStat, LolPlayerGameStat, LolSeries, LolDataCoverage
+from .lol_team_aliases import resolve_team_alias
 
 
-def _total_cs(row: dict) -> int | None:
-    total = csv_utils.safe_int(csv_utils.col(row, "total cs"))
-    if total is not None:
-        return total
-    minions = csv_utils.safe_int(csv_utils.col(row, "minionkills")) or 0
-    monsters = csv_utils.safe_int(csv_utils.col(row, "monsterkills")) or 0
-    combined = minions + monsters
-    return combined or None
+def _now():
+    return datetime.now(timezone.utc)
 
 
-def import_csv(session: Session, batch: ManualImportBatch, csv_text: str) -> ManualImportBatch:
-    try:
-        rows = csv_utils.read_rows(csv_text)
-    except Exception as exc:
-        return csv_utils.finish_batch(session, batch, "error", f"failed to parse CSV: {exc}")
+def import_oracles_inbox(session: Session):
+    from ..config import settings
+    inbox = os.path.join(settings.lol_history_import_dir, "inbox")
+    processed = os.path.join(settings.lol_history_import_dir, "processed")
+    os.makedirs(inbox, exist_ok=True)
+    os.makedirs(processed, exist_ok=True)
+    total_games = 0
+    if not os.path.isdir(inbox):
+        return {"inserted": 0}
+    for fname in os.listdir(inbox):
+        if not fname.endswith(".csv"):
+            continue
+        fpath = os.path.join(inbox, fname)
+        count = _import_oracles_csv(session, fpath)
+        total_games += count
+        os.rename(fpath, os.path.join(processed, fname))
+    return {"inserted": total_games}
 
-    team_rows = 0
-    player_rows = 0
-    skipped = 0
-    seen: set = set()
-    warned_unknown = False
 
-    for i, row in enumerate(rows, start=2):
-        try:
-            gameid = (csv_utils.col(row, "gameid") or "").strip()
-            if not gameid:
-                csv_utils.log_import_error(session, batch, i, "missing gameid", row, "error")
+def _import_oracles_csv(session: Session, filepath: str):
+    inserted = 0
+    with open(filepath, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                if _upsert_oracles_row(session, row):
+                    inserted += 1
+            except Exception:
                 continue
-            position = (csv_utils.col(row, "position") or "").strip().lower()
-            teamname = (csv_utils.col(row, "teamname") or "").strip()
+        session.commit()
+    return inserted
 
-            if not warned_unknown:
-                unknown = [k for k in row if k and k.strip().lower() not in KNOWN_COLUMNS]
-                if unknown:
-                    warned_unknown = True
-                    csv_utils.log_import_error(
-                        session, batch, i, f"unrecognized columns ignored: {unknown[:10]}", None, "warning"
-                    )
 
-            if position == "team":
-                key = ("team", gameid, teamname)
-                if key in seen:
-                    skipped += 1
-                    continue
-                seen.add(key)
-                session.add(
-                    LolOracleGame(
-                        batch_id=batch.id,
-                        source_game_id=gameid,
-                        date=csv_utils.col(row, "date"),
-                        league=csv_utils.col(row, "league"),
-                        split=csv_utils.col(row, "split"),
-                        playoffs=csv_utils.safe_bool(csv_utils.col(row, "playoffs")),
-                        game_number=csv_utils.safe_int(csv_utils.col(row, "game")),
-                        patch=csv_utils.col(row, "patch"),
-                        team_name=teamname or "?",
-                        side=csv_utils.col(row, "side"),
-                        result=csv_utils.safe_int(csv_utils.col(row, "result")),
-                        game_length_seconds=csv_utils.parse_game_length_seconds(csv_utils.col(row, "gamelength")),
-                        team_kills=csv_utils.safe_int(csv_utils.col(row, "teamkills")),
-                        team_deaths=csv_utils.safe_int(csv_utils.col(row, "teamdeaths")),
-                        towers=csv_utils.safe_int(csv_utils.col(row, "towers")),
-                        inhibitors=csv_utils.safe_int(csv_utils.col(row, "inhibitors")),
-                        dragons=csv_utils.safe_int(csv_utils.col(row, "dragons")),
-                        barons=csv_utils.safe_int(csv_utils.col(row, "barons")),
-                        gold=csv_utils.safe_int(csv_utils.col(row, "earnedgold")),
-                    )
-                )
-                team_rows += 1
-            else:
-                playername = (csv_utils.col(row, "playername") or "").strip()
-                key = ("player", gameid, playername, position)
-                if key in seen:
-                    skipped += 1
-                    continue
-                seen.add(key)
-                session.add(
-                    LolOraclePlayerStat(
-                        batch_id=batch.id,
-                        source_game_id=gameid,
-                        date=csv_utils.col(row, "date"),
-                        league=csv_utils.col(row, "league"),
-                        team_name=teamname or None,
-                        player_name=playername or None,
-                        role=position or None,
-                        champion=csv_utils.col(row, "champion"),
-                        kills=csv_utils.safe_int(csv_utils.col(row, "kills")),
-                        deaths=csv_utils.safe_int(csv_utils.col(row, "deaths")),
-                        assists=csv_utils.safe_int(csv_utils.col(row, "assists")),
-                        cs=_total_cs(row),
-                        gold=csv_utils.safe_int(csv_utils.col(row, "earnedgold")),
-                        damage=csv_utils.safe_int(csv_utils.col(row, "damagetochampions")),
-                    )
-                )
-                player_rows += 1
-            session.commit()
-        except Exception as exc:
-            csv_utils.log_import_error(session, batch, i, f"row parse error: {exc}", row, "error")
+def _upsert_oracles_row(session: Session, row):
+    gameid = (row.get("gameid") or row.get("game_id") or "").strip()
+    if not gameid:
+        return False
+    source_key = f"oracles_elixir:{gameid}"
+    existing = session.exec(select(LolGameHistory).where(LolGameHistory.source_key == source_key)).first()
+    if existing:
+        return False
 
-    batch.imported_rows = team_rows + player_rows
-    batch.skipped_rows = skipped
-    status = "success" if batch.error_rows == 0 else ("partial" if batch.imported_rows > 0 else "error")
-    message = f"team_rows={team_rows} player_rows={player_rows}"
-    return csv_utils.finish_batch(session, batch, status, message)
+    date = (row.get("date") or "").strip()
+    league = (row.get("league") or "").strip()
+    patch = (row.get("patch") or "").strip()
+    side = (row.get("side") or "").strip().lower()
+    position = (row.get("position") or "").strip().lower()
+    team = (row.get("teamname") or row.get("team") or "").strip()
+    opponent = (row.get("opponent") or "").strip()
+    player = (row.get("playername") or row.get("player") or "").strip()
+    champion = (row.get("champion") or "").strip()
+
+    def _int(val):
+        try: return int(float(val))
+        except: return None
+
+    kills = _int(row.get("kills", 0))
+    deaths = _int(row.get("deaths", 0))
+    assists = _int(row.get("assists", 0))
+    team_kills = _int(row.get("teamkills", row.get("team_kills", 0)))
+    team_deaths = _int(row.get("teamdeaths", row.get("team_deaths", 0)))
+    dragons = _int(row.get("dragons", row.get("elementaldrakes", 0)))
+    barons = _int(row.get("barons", 0))
+    towers = _int(row.get("towers", 0))
+    inhibitors = _int(row.get("inhibitors", 0))
+    cs = _int(row.get("totalcs", row.get("cs", 0)))
+    gold = _int(row.get("totalgold", row.get("gold", 0)))
+    game_length = _int(row.get("gamelength", row.get("game_length", 0)))
+    result = 1 if int(float(row.get("result", 0))) == 1 else 0
+    side = "blue" if side == "blue" else "red"
+
+    game = LolGameHistory(
+        source_name="oracles_elixir",
+        source_game_id=gameid,
+        source_key=source_key,
+        year=int(date[:4]) if len(date) >= 4 else None,
+        league=league,
+        date=date,
+        patch=patch,
+        game_length_seconds=game_length,
+        blue_team=team if side == "blue" else opponent,
+        red_team=team if side == "red" else opponent,
+    )
+    session.add(game)
+    session.commit()
+    session.refresh(game)
+
+    stat = LolTeamGameStat(
+        game_id=game.id,
+        source_name="oracles_elixir",
+        source_game_id=gameid,
+        source_key=f"{source_key}:{team}",
+        year=game.year,
+        league=league,
+        date=date,
+        patch=patch,
+        team_name=team,
+        opponent_name=opponent,
+        side=side,
+        result=result,
+        kills=kills,
+        deaths=deaths,
+        assists=assists,
+        team_kills=team_kills,
+        team_deaths=team_deaths,
+        dragons=dragons,
+        barons=barons,
+        towers=towers,
+        inhibitors=inhibitors,
+        game_length_seconds=game_length,
+        gold=gold,
+    )
+    session.add(stat)
+
+    if player:
+        pstat = LolPlayerGameStat(
+            game_id=game.id,
+            source_name="oracles_elixir",
+            source_game_id=gameid,
+            source_key=f"{source_key}:{player}",
+            year=game.year,
+            league=league,
+            date=date,
+            patch=patch,
+            team_name=team,
+            player_name=player,
+            role=position,
+            champion=champion,
+            kills=kills,
+            deaths=deaths,
+            assists=assists,
+            cs=cs,
+            gold=gold,
+            solo_kills=_int(row.get("solokills", None)),
+        )
+        session.add(pstat)
+
+    return True
