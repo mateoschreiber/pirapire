@@ -10,7 +10,14 @@ backend/
 │   ├── main.py                   # FastAPI entrypoint. Lifespan: init_db() + synchronize_known_aliases(), 4 routers, static mount
 │   ├── config.py                 # Pydantic BaseSettings: all .env vars documented
 │   ├── database.py               # SQLModel engine + init_db() + get_session()
-│   ├── migrations.py             # Idempotent ALTER TABLE ADD COLUMN for SQLite schema evolution
+│   ├── migrations.py             # Idempotent ALTER TABLE ADD COLUMN for SQLite schema evolution.
+│   │                             #   Also renames incompatible legacy tables (datasource→legacy_datasource,
+│   │                             #   sourcerun→legacy_sourcerun) using PRAGMA column detection.
+│   ├── worker_main.py            # APScheduler entrypoint. 7 recurring jobs (heartbeat, sync_schedule,
+│   │                             #   sync_datadragon, import_odds, import_oracles,
+│   │                             #   process_queued_oracle_uploads, precompute_stats).
+│   │                             #   All jobs skip while an Oracle import is active. Web uploads are
+│   │                             #   processed durably here instead of via BackgroundTasks.
 │   ├── seed.py                   # Stale football-only seed (pre-refactor). Not used in LoL-only setup.
 │   ├── models_lol.py             # All ORM models (~300 lines). Reference data, game history, series,
 │   │                             #   match events, odds snapshots, stats cache, operational tracking.
@@ -21,14 +28,20 @@ backend/
 │   │   ├── health.py             # GET /health → {"status": "ok"}
 │   │   ├── pages.py              # HTML template routes: /, /lol/matches/{key}, /sources
 │   │   ├── lol_api.py            # JSON API: /api/lol/matches/*. Competition classification,
-│   │   │                         #   odds enrichment, statistics retrieval.
+│   │   │                         #   odds enrichment, statistics retrieval. Uses _utc_iso() to
+│   │   │                         #   serialize SQLite naive datetimes with explicit +00:00 offset.
 │   │   └── sources.py            # Source status, config GET/PUT, custom sources, alias sync,
 │   │                             #   CSV upload, connectivity test, import/run history. Admin-auth.
+│   │                             #   execute_import (POST /api/imports/execute) no longer uses
+│   │                             #   BackgroundTasks — uploads are queued and processed durably
+│   │                             #   by the worker's process_queued_oracle_uploads job.
 │   │
 │   ├── services/
 │   │   ├── http_client.py        # Shared httpx wrapper: timeout, retry, structured JSON
 │   │   ├── series_builder.py     # Groups LolGameHistory → LolSeries. rebuild_series() entrypoint
-│   │   ├── lol_metrics_engine.py # Team + player statistics from last 5 series. precompute_upcoming_stats()
+│   │   ├── lol_metrics_engine.py # Team + player statistics from last 5 series. precompute_upcoming_stats().
+│   │   │                         #   Player stats now report kills_per_map and deaths_per_map
+│   │   │                         #   (per-map averages) instead of absolute kills/deaths totals.
 │   │   ├── lol_odds_importer.py  # CSV odds import: validation, team resolution, snapshots
 │   │   ├── lol_team_aliases.py   # Team name normalization: NFKD alias resolution, upsert,
     │   │   │                             #   KNOWN_TEAM_ALIASES, EXHIBITION_TEAMS, synchronize_known_aliases()
@@ -63,7 +76,9 @@ backend/
 │   │   ├── dashboard.html      # Competitive dashboard: filters, competition grid, match list
 │   │   ├── match_detail.html   # Match detail: hero, odds, team stats, player stats, coverage
 │   │   └── sources.html        # Source admin: status, file upload, run history, aliases tabs,
-    │   │                             #   source config form, custom API registration
+    │   │                             #   source config form, custom API registration.
+    │   │                             #   Upload progress bar via XMLHttpRequest; durable queue
+    │   │                             #   via POST /api/imports/execute → worker process.
 │   │
 │   └── utils/
 │       └── datetime_utils.py   # Timezone helpers: UTC↔local conversion, format

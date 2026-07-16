@@ -54,7 +54,10 @@ APScheduler `BackgroundScheduler` with six recurring jobs:
 | `sync_datadragon` | 1440 min | Data Dragon champion/version sync |
 | `import_odds` | 5 min | Polls odds CSV inbox |
 | `import_oracles` | 30 min | Polls Oracle's Elixir CSV inbox |
+| `process_queued_oracle_uploads` | 15 s | Durably processes Oracle CSV uploads queued via the web API (see Sources router below) |
 | `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` (currently a stub) |
+
+All jobs except `heartbeat` skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"`) to avoid SQLite `database is locked` errors. `sync_schedule` and `sync_datadragon` no longer use `next_run_time=now` — they start on their first natural interval.
 
 ## Database Layer
 
@@ -112,6 +115,8 @@ The sources router (23279 bytes — largest router) provides:
 - `GET /api/aliases/unresolved` — List exhibition team aliases
 - `POST /api/aliases/synchronize` — Manually trigger alias reconciliation (admin)
 
+The `execute_import` endpoint (`POST /api/imports/execute`) no longer runs import processing via FastAPI `BackgroundTasks`. Uploads are written to inbox/uploads/ and a queued `ImportBatch` is persisted; the worker's `job_process_queued_oracle_uploads` (polling every 15 s) picks up queued batches and processes them durably. This survives application restarts and avoids holding the SQLite connection from the web process during long imports.
+
 All write operations require `X-Admin-Token` header matching `settings.admin_token`.
 
 ### Timezone Handling (`/backend/app/utils/datetime_utils.py`)
@@ -123,7 +128,7 @@ All write operations require `X-Admin-Token` header matching `settings.admin_tok
 
 When modifying this codebase, watch for:
 
-1. **SQLite concurrent access:** The worker and web app share the same SQLite file. `check_same_thread=False` is critical. No WAL mode is configured currently — be aware of potential `database is locked` under heavy concurrent writes.
+1. **SQLite concurrent access:** The worker and web app share the same SQLite file. `check_same_thread=False` is critical. No WAL mode is configured currently — be aware of potential `database is locked` under heavy concurrent writes. All worker jobs skip while an Oracle import is active (`_oracle_import_active()`), and upload processing was moved from `BackgroundTasks` to a dedicated durable worker job to avoid holding the SQLite connection from the web process.
 2. **APScheduler in-process:** The worker uses `BackgroundScheduler` without an external broker. It is not distributed and restarts on container restart.
 3. **Functional service pattern:** Services are modules of free functions, not classes. All take `Session` as first argument.
 4. **No Alembic:** Schema migrations are done via `PRAGMA table_info` + `ALTER TABLE ADD COLUMN` in `migrations.py`. New models need both a SQLModel class and potentially a migration entry.

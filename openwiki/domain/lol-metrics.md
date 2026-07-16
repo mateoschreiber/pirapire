@@ -73,8 +73,8 @@ Computed per player from the same recent series. The engine computes several int
 
 | Metric | UI Column | Value Type |
 |--------|-----------|------------|
-| Kills | Asesinatos | Absolute total across maps |
-| Deaths | Muertes | Absolute total across maps |
+| Kills | Asesinatos promedio por mapa | Average per map (total kills / maps played) |
+| Deaths | Muertes promedio por mapa | Average per map (total deaths / maps played) |
 | Gold Per Map | Oro promedio por mapa | Total gold / maps played |
 | CS Per Map | CS promedio por mapa | Total creep score / maps with valid CS |
 | Maps Played | Mapas jugados | Number of maps where this player appears |
