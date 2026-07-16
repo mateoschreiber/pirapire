@@ -351,12 +351,14 @@
 
   function renderPlayerTable(teamName, players) {
     let html = '<div class="player-table-block"><h4>' + esc(teamName) + '</h4><div class="table-scroll"><table><thead><tr>' +
-      "<th>Jugador</th><th>Rol</th><th>Mapas jugados</th><th>Asesinatos</th><th>Muertes</th><th>Oro promedio por mapa</th><th>CS promedio por mapa</th></tr></thead><tbody>";
+      "<th>Jugador</th><th>Rol</th><th>Mapas jugados</th><th>Asesinatos promedio por mapa</th><th>Muertes promedio por mapa</th><th>Oro promedio por mapa</th><th>CS promedio por mapa</th></tr></thead><tbody>";
     players.forEach(function (player) {
       const cs = player.cs_per_map == null ? '<span class="metric-unavailable">N/D</span>' : Number(player.cs_per_map).toFixed(1);
       const gold = player.gold_per_map == null ? '<span class="metric-unavailable">N/D</span>' : fmtNumber(Math.round(player.gold_per_map));
+      const kills = player.kills_per_map == null ? '<span class="metric-unavailable">N/D</span>' : Number(player.kills_per_map).toFixed(2);
+      const deaths = player.deaths_per_map == null ? '<span class="metric-unavailable">N/D</span>' : Number(player.deaths_per_map).toFixed(2);
       html += "<tr><td><strong>" + esc(player.player_name) + "</strong></td><td>" + esc(player.role || "N/D") + "</td><td>" +
-        fmtNumber(player.maps_played) + "</td><td>" + fmtNumber(player.kills) + "</td><td>" + fmtNumber(player.deaths) +
+        fmtNumber(player.maps_played) + "</td><td>" + kills + "</td><td>" + deaths +
         "</td><td>" + gold + "</td><td>" + cs + "</td></tr>";
     });
     if (!players.length) html += '<tr><td colspan="7" class="metric-unavailable">Sin historial estadístico para este equipo.</td></tr>';

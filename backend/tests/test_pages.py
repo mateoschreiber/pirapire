@@ -25,6 +25,9 @@ def test_sources_html_has_upload_flow():
     assert 'name="replace_existing"' in response.text
     assert 'id="source-config-form"' in response.text
     assert 'id="custom-source-form"' in response.text
+    assert 'id="upload-progress-bar"' in response.text
+    assert "XMLHttpRequest" in response.text
+    assert "process_queued_oracle_uploads" not in response.text
 
 
 def test_match_detail_html():
@@ -44,6 +47,13 @@ def test_upcoming_api():
 
 def test_upcoming_timezone():
     assert client.get("/api/lol/matches/upcoming").json()["timezone"] == "America/Asuncion"
+
+
+def test_api_serializes_naive_sqlite_match_times_as_utc():
+    from datetime import datetime
+    from app.routers.lol_api import _utc_iso
+
+    assert _utc_iso(datetime(2026, 7, 16, 9, 0)) == "2026-07-16T09:00:00+00:00"
 
 
 def test_match_not_found():
@@ -111,6 +121,10 @@ def test_dashboard_assets_include_requested_metrics():
     assert "solo_kills_status" not in js
     assert "Solo kills" not in js
     assert "CS promedio por mapa" in js
+    assert "Asesinatos promedio por mapa" in js
+    assert "Muertes promedio por mapa" in js
+    assert "player.kills_per_map" in js
+    assert "player.deaths_per_map" in js
     assert "cs_per_map" in js
     assert "loadPreviewOdds" in js
     assert "data-odds-key" in js

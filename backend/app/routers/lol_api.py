@@ -114,6 +114,15 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _utc_iso(value: datetime) -> str:
+    """Serialize SQLite datetimes as explicit UTC instants for the browser."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat()
+
+
 def _competition_code(league: str | None, tournament: str | None = None) -> str | None:
     league_text = (league or "").strip().upper()
     combined = f"{league_text} {(tournament or '').strip().upper()}"
@@ -171,7 +180,7 @@ def _match_view(session: Session, match: LolMatchEvent) -> dict:
         "tournament": match.tournament,
         "team_a": match.team_a,
         "team_b": match.team_b,
-        "start_time_utc": match.start_time_utc.isoformat(),
+        "start_time_utc": _utc_iso(match.start_time_utc),
         "best_of": match.best_of,
         "status": match.status,
         **_odds_for_match(session, match),

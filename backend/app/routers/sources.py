@@ -618,7 +618,6 @@ async def odds_upload(file: UploadFile = File(...), session: Session = Depends(g
 
 @router.post("/imports/execute", dependencies=[Depends(_admin)])
 async def execute_import(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     type: str = Form(default="oracle"),
     replace_existing: bool = Form(default=False),
@@ -671,7 +670,6 @@ async def execute_import(
             duplicate.completed_at = None
             session.add(duplicate)
             session.commit()
-            background_tasks.add_task(_process_import_batch, duplicate.id, str(target), True)
             return {"batch_id": duplicate.id, "status": "queued", "filename": safe, "replace_existing": True, "duplicate": True}
         temporary.replace(target)
         batch = ImportBatch(
@@ -684,13 +682,13 @@ async def execute_import(
         session.add(batch)
         session.commit()
         session.refresh(batch)
-        background_tasks.add_task(_process_import_batch, batch.id, str(target), force_replace)
         return {
             "batch_id": batch.id,
             "status": "queued",
             "filename": safe,
             "file_size": size,
             "replace_existing": force_replace,
+            "message": "Archivo recibido. La importación se iniciará en breve y continuará aunque se reinicie la aplicación.",
         }
     except Exception:
         temporary.unlink(missing_ok=True)

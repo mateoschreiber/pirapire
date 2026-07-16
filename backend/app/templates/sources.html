@@ -53,6 +53,10 @@
         <button id="save-button" class="btn" type="button" disabled>Guardar e importar</button>
       </div>
     </form>
+    <div id="upload-progress" class="upload-progress hidden" role="status" aria-live="polite">
+      <div class="upload-progress-header"><strong id="upload-progress-label">Preparando carga…</strong><span id="upload-progress-percent">0%</span></div>
+      <progress id="upload-progress-bar" max="100" value="0">0%</progress>
+    </div>
     <div id="preview" class="preview-result" aria-live="polite"></div>
   </div>
 </section>
@@ -69,6 +73,10 @@
   const output = $('#preview');
   const syncButton = $('#sync-all-button');
   const syncStatus = $('#sync-status');
+  const progress = $('#upload-progress');
+  const progressBar = $('#upload-progress-bar');
+  const progressLabel = $('#upload-progress-label');
+  const progressPercent = $('#upload-progress-percent');
   let previewValid = false;
 
   document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
@@ -83,6 +91,37 @@
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || ('HTTP ' + response.status));
     return payload;
+  }
+
+  function setUploadProgress(percent, label) {
+    const value = Math.max(0, Math.min(100, Math.round(percent)));
+    progress.classList.remove('hidden');
+    progressBar.value = value;
+    progressPercent.textContent = value + '%';
+    progressLabel.textContent = label;
+  }
+
+  function uploadImport(formData, token) {
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open('POST', '/api/imports/execute');
+      request.setRequestHeader('X-Admin-Token', token);
+      request.upload.addEventListener('loadstart', () => setUploadProgress(0, 'Iniciando carga…'));
+      request.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) setUploadProgress(event.loaded * 100 / event.total, 'Subiendo archivo al servidor…');
+        else setUploadProgress(0, 'Subiendo archivo al servidor…');
+      });
+      request.upload.addEventListener('load', () => setUploadProgress(100, 'Archivo recibido; preparando importación…'));
+      request.addEventListener('error', () => reject(new Error('Error de red durante la carga. El archivo no se confirmó en el servidor.')));
+      request.addEventListener('timeout', () => reject(new Error('La carga agotó el tiempo de espera. Verifique la conexión e intente nuevamente.')));
+      request.addEventListener('load', () => {
+        let payload = {};
+        try { payload = JSON.parse(request.responseText || '{}'); } catch (_) { /* handled below */ }
+        if (request.status >= 200 && request.status < 300) resolve(payload);
+        else reject(new Error(payload.detail || ('HTTP ' + request.status)));
+      });
+      request.send(formData);
+    });
   }
 
   function loadRuns() {
@@ -259,7 +298,9 @@
         if (batch.status === 'success') { showCompleted(batch); return; }
         if (batch.status === 'failed') throw new Error(batch.error || 'Error interno durante la importación');
         const elapsed = Math.max(1, Math.round((Date.now() - started) / 1000));
-        output.textContent = `Archivo recibido. Importación en segundo plano: ${batch.status} (${elapsed} s). Puede seguir usando la aplicación.`;
+        const label = batch.status === 'queued' ? 'Archivo confirmado y en cola segura.' : 'Importación en curso en el servidor.';
+        setUploadProgress(100, label);
+        output.textContent = `${label} Estado: ${batch.status} (${elapsed} s). Puede seguir usando la aplicación.`;
         await delay(2000);
       }
     } catch (error) {
@@ -276,12 +317,14 @@
     previewButton.disabled = true;
     output.textContent = 'Subiendo archivo al servidor…';
     try {
-      const result = await json('/api/imports/execute', {method: 'POST', headers: {'X-Admin-Token': $('#admin-token').value}, body: new FormData(form)});
+      const result = await uploadImport(new FormData(form), $('#admin-token').value);
       if (result.status === 'success') { showCompleted(result); return; }
       if (result.status === 'failed') throw new Error(result.error || 'La importación anterior de este archivo falló');
-      output.textContent = `Archivo recibido. Importación ${result.status} en segundo plano. Puede seguir usando la aplicación.`;
+      setUploadProgress(100, 'Archivo cargado correctamente. Esperando al procesador…');
+      output.textContent = result.message || `Archivo cargado correctamente. Importación ${result.status} en segundo plano.`;
       monitorBatch(result.batch_id);
     } catch (error) {
+      setUploadProgress(0, 'La carga o importación no pudo iniciarse.');
       output.textContent = 'No se pudo iniciar la importación: ' + error.message;
       saveButton.disabled = false;
       previewButton.disabled = false;

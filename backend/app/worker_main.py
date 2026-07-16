@@ -1,5 +1,6 @@
 import sys, os, time, logging
 from datetime import datetime, timezone
+from pathlib import Path
 from sqlmodel import Session, select
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,7 +23,19 @@ def _session():
     return Session(engine)
 
 
+def _oracle_import_active() -> bool:
+    from app.models_lol import ImportBatch
+    with _session() as session:
+        return session.exec(select(ImportBatch).where(
+            ImportBatch.source_code == "oracles_elixir",
+            ImportBatch.status == "running",
+        )).first() is not None
+
+
 def job_sync_schedule():
+    if _oracle_import_active():
+        log.info("sync_schedule: skipped while an Oracle import holds the database")
+        return
     log.info("sync_schedule: start")
     try:
         from app.services.sync.lol_sync import sync_leaguepedia_schedule
@@ -34,6 +47,9 @@ def job_sync_schedule():
 
 
 def job_sync_datadragon():
+    if _oracle_import_active():
+        log.info("sync_datadragon: skipped while an Oracle import holds the database")
+        return
     log.info("sync_datadragon: start")
     try:
         from app.services.sync.lol_sync import sync_datadragon
@@ -45,6 +61,9 @@ def job_sync_datadragon():
 
 
 def job_import_odds():
+    if _oracle_import_active():
+        log.info("import_odds: skipped while an Oracle import holds the database")
+        return
     log.info("import_odds: start")
     try:
         from app.services.lol_odds_importer import import_odds_directory
@@ -66,7 +85,40 @@ def job_import_oracles():
         log.exception(f"import_oracles: failed {e}")
 
 
+def job_process_queued_oracle_uploads():
+    """Process UI uploads durably from the worker instead of the web process."""
+    try:
+        from app.models_lol import ImportBatch
+        from app.routers.sources import _process_import_batch
+
+        with _session() as session:
+            batches = session.exec(select(ImportBatch).where(
+                ImportBatch.source_code == "oracles_elixir",
+                ImportBatch.status == "queued",
+            ).order_by(ImportBatch.created_at)).all()
+
+        uploads = Path(settings.lol_history_import_dir) / "inbox" / "uploads"
+        for batch in batches:
+            target = uploads / f"{batch.sha256[:12]}-{batch.filename}"
+            if not target.is_file():
+                log.error("queued Oracle batch %s has no upload file: %s", batch.id, target)
+                continue
+            with _session() as session:
+                replacement = session.exec(select(ImportBatch).where(
+                    ImportBatch.source_code == "oracles_elixir",
+                    ImportBatch.filename == batch.filename,
+                    ImportBatch.id != batch.id,
+                    ImportBatch.status == "success",
+                )).first() is not None
+            log.info("processing queued Oracle batch %s: %s", batch.id, batch.filename)
+            _process_import_batch(batch.id, str(target), replacement)
+    except Exception as e:
+        log.exception(f"process_queued_oracle_uploads: failed {e}")
+
+
 def job_heartbeat():
+    if _oracle_import_active():
+        return
     from app.models_lol import WorkerHeartbeat
     with _session() as session:
         row = session.exec(select(WorkerHeartbeat).where(WorkerHeartbeat.worker_name == "pirapire_worker")).first()
@@ -80,6 +132,9 @@ def job_heartbeat():
 
 
 def job_precompute_stats():
+    if _oracle_import_active():
+        log.info("precompute_stats: skipped while an Oracle import holds the database")
+        return
     log.info("precompute_stats: start")
     try:
         from app.services.lol_metrics_engine import precompute_upcoming_stats
@@ -94,10 +149,11 @@ init_db()
 log.info("Worker started. Scheduling jobs...")
 
 scheduler.add_job(job_heartbeat, "interval", minutes=1, id="heartbeat", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
-scheduler.add_job(job_sync_schedule, "interval", minutes=settings.lol_schedule_interval_minutes, id="sync_schedule", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
-scheduler.add_job(job_sync_datadragon, "interval", minutes=settings.datadragon_interval_minutes, id="sync_datadragon", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
+scheduler.add_job(job_sync_schedule, "interval", minutes=settings.lol_schedule_interval_minutes, id="sync_schedule", coalesce=True, max_instances=1)
+scheduler.add_job(job_sync_datadragon, "interval", minutes=settings.datadragon_interval_minutes, id="sync_datadragon", coalesce=True, max_instances=1)
 scheduler.add_job(job_import_odds, "interval", minutes=5, id="import_odds", coalesce=True, max_instances=1)
 scheduler.add_job(job_import_oracles, "interval", minutes=30, id="import_oracles", coalesce=True, max_instances=1)
+scheduler.add_job(job_process_queued_oracle_uploads, "interval", seconds=15, id="process_queued_oracle_uploads", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
 scheduler.add_job(job_precompute_stats, "interval", minutes=30, id="precompute_stats", coalesce=True, max_instances=1)
 
 scheduler.start()
