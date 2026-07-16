@@ -66,14 +66,17 @@ The database is created automatically on first startup via `init_db()`.
 | `LOL_HISTORY_INCLUDE_LEGACY` | `true` | Include legacy leagues |
 | `LOL_HISTORY_IMPORT_DIR` | `/app/data/imports/oracles` | Import directory |
 | `LOL_HISTORY_ALLOW_DOWNLOAD` | `false` | Allow auto-download |
+| `LOL_HISTORY_REMOTE_MAX_MB` | `100` | Max MB for remote Oracle CSV download |
 | `LOL_HISTORY_MIN_GAMES_TEAM` | `8` | Min games for model confidence (team) |
 | `LOL_HISTORY_MIN_GAMES_PLAYER` | `5` | Min games for model confidence (player) |
 | `LOL_HISTORY_RECENT_GAMES_WINDOW` | `20` | Window size for recent games |
 | `LOL_ODDS_IMPORT_DIR` | `/app/data/imports/lol_odds` | Odds CSV import directory |
 | `LOL_SCHEDULE_INTERVAL_MINUTES` | `30` | Leaguepedia sync interval |
-| `LOL_HISTORY_INTERVAL_MINUTES` | `240` | OE history import interval |
+| `LOL_HISTORY_INTERVAL_MINUTES` | `60` | OE history import interval |
+| `LOL_HISTORY_REMOTE_POLL_MINUTES` | `60` | Remote Oracle CSV poll interval |
 | `DATADRAGON_INTERVAL_MINUTES` | `1440` | Data Dragon sync interval |
 | `LOL_IMPORT_POLL_INTERVAL_MINUTES` | `30` | CSV import poll interval |
+| `TEAM_LOGO_SYNC_INTERVAL_MINUTES` | `1440` | Official team logo sync interval |
 
 ## Data Directories
 
@@ -86,7 +89,7 @@ data/
 │   │   ├── inbox/       → Worker polls for new odds CSVs (every 5 min)
 │   │   └── processed/   → Successfully imported files move here
 │   └── oracles/
-│       ├── inbox/       → Worker polls for new OE CSVs (every 30 min)
+│       ├── inbox/       → Worker polls for new OE CSVs (every 30 min); also holds web uploads under inbox/uploads/
 │       ├── processed/   → Successfully imported files move here
 │       └── errors/      → Failed imports move here
 └── pirapire.db          → SQLite database (auto-created)

@@ -5,7 +5,7 @@ import os
 from sqlalchemy import delete
 from sqlmodel import Session, select
 
-from ...models_lol import LolDataCoverage, LolGameHistory, LolPlayerGameStat, LolTeamGameStat
+from ...models_lol import LolGameHistory, LolPlayerGameStat, LolTeamGameStat
 
 log = logging.getLogger(__name__)
 
@@ -54,8 +54,13 @@ def import_oracles_inbox(session: Session):
     return total
 
 
-def _import_csv_file(session: Session, filepath: str, replace: bool = False):
-    """Import an OE CSV; replacement mode is atomic and removes stale maps for its years."""
+def _import_csv_file(
+    session: Session,
+    filepath: str,
+    replace: bool = False,
+    prune_missing: bool | None = None,
+):
+    """Import an OE CSV, optionally updating existing games and pruning missing maps."""
     from itertools import groupby
 
     result = {"games": 0, "teams": 0, "players": 0}
@@ -93,7 +98,7 @@ def _import_csv_file(session: Session, filepath: str, replace: bool = False):
                 if not replace and processed_groups % 250 == 0:
                     session.commit()
 
-        if replace:
+        if replace and (prune_missing is None or prune_missing):
             if not years:
                 raise ValueError("No se detectó un año válido para reemplazar")
             existing = session.exec(

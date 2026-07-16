@@ -27,6 +27,10 @@ def test_sources_html_has_upload_flow():
     assert 'id="custom-source-form"' in response.text
     assert 'id="upload-progress-bar"' in response.text
     assert "XMLHttpRequest" in response.text
+    assert "Eventos programados:" in response.text
+    assert "configuration_note" in response.text
+    assert "Comprobación automática cada 60 minutos" in response.text
+    assert "Actualizar automáticamente (60 min)" in response.text
     assert "process_queued_oracle_uploads" not in response.text
 
 

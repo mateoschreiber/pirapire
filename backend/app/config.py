@@ -40,14 +40,18 @@ class Settings(BaseSettings):
     lol_history_recent_games_window: int = 20
     lol_history_import_dir: str = "/app/data/imports/oracles"
     lol_history_allow_download: bool = False
+    lol_history_remote_max_mb: int = 100
 
     # LoL odds
     lol_odds_import_dir: str = "/app/data/imports/lol_odds"
 
     # Worker
     lol_schedule_interval_minutes: int = 30
-    lol_history_interval_minutes: int = 240
+    lol_history_remote_poll_minutes: int = 60
+    # Legacy setting retained for local inbox imports and existing deployments.
+    lol_history_interval_minutes: int = 60
     datadragon_interval_minutes: int = 1440
+    team_logo_sync_interval_minutes: int = 1440
     lol_import_poll_interval_minutes: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

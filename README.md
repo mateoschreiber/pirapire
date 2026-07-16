@@ -90,13 +90,10 @@ pirapire/
 │   │   │   └── lol_api.py       JSON API
 │   │   ├── services/
 │   │   │   ├── lol_metrics_engine.py
-│   │   │   ├── lol_historical_importer.py
 │   │   │   ├── lol_team_aliases.py
 │   │   │   ├── lol_league_catalog.py
-│   │   │   ├── features/lol_features.py
 │   │   │   ├── imports/
 │   │   │   │   ├── oracles_elixir_importer.py
-│   │   │   │   └── csv_utils.py
 │   │   │   └── sync/lol_sync.py
 │   │   ├── sources/lol/datadragon.py
 │   │   ├── templates/           Jinja2 templates
@@ -106,7 +103,6 @@ pirapire/
 │   └── requirements.txt
 ├── docker-compose.yml
 ├── .env.example
-└── migrate_phase1.sql
 ```
 
 ## Development

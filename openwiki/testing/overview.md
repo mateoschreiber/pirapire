@@ -5,8 +5,9 @@
 ```
 backend/tests/
 ├── conftest.py           # Test setup: temp SQLite DB, init_db()
-├── test_health.py        # Health, sources API, removed-domain checks
-├── test_pages.py         # HTML pages, API endpoints, static assets
+├── test_health.py        # Health, favicon, sources API, removed-domain checks
+├── test_pages.py         # HTML pages, API endpoints, static assets, per-map metrics
+├── test_remote_oracles.py # Remote CSV download, URL conversion, validation
 └── test_timezone.py      # Timezone conversion tests
 ```
 
@@ -39,7 +40,8 @@ The conftest creates a **temporary SQLite database** in the system temp director
 |------|-------------------|
 | `test_health()` | `GET /health` returns `{"status": "ok"}` |
 | `test_docs()` | FastAPI `/docs` returns 200 |
-| `test_sources_api()` | `/api/sources` returns configured sources |
+| `test_favicon_is_served()` | `/favicon.ico` returns SVG with correct content-type |
+| `test_sources_api()` | `/api/sources` returns configured sources with `managed_by` and `base_url` for leaguepedia_schedule |
 | `test_removed_domains_stay_removed()` | Legacy routes (`/odds/analyze`, `/combo/analyze`) return 404 |
 
 ### test_pages.py
@@ -47,15 +49,16 @@ The conftest creates a **temporary SQLite database** in the system temp director
 | Test | What it validates |
 |------|-------------------|
 | `test_dashboard_html()` | `/` renders competitive title, live clock |
-| `test_sources_html_has_upload_flow()` | `/sources` has preview/save buttons, upload validation |
-| `test_match_detail_html()` | `/lol/matches/{key}` renders loading state, estimated market heading, `market-source-badge` |
+| `test_sources_html_has_upload_flow()` | `/sources` has preview/save buttons, upload validation, `upload-progress-bar`, XMLHttpRequest upload, auto_refresh and configuration_note strings |
+| `test_match_detail_html()` | `/lol/matches/{key}` renders loading state, estimated market heading, `market-source-badge`, recent matchups section |
 | `test_upcoming_api()` | `/api/lol/matches/upcoming` returns correct window_hours |
 | `test_upcoming_timezone()` | API response contains `America/Asuncion` timezone |
+| `test_api_serializes_naive_sqlite_match_times_as_utc()` | `_utc_iso()` converts naive SQLite datetimes to explicit `+00:00` offset |
 | `test_match_not_found()` | Non-existent match returns 404 |
 | `test_static_assets()` | CSS serves Inter font; JS includes `el("live-clock")`; Inter font file served |
 | `test_competition_classifier_excludes_academies()` | Academy leagues (LCK CL) excluded; LTA North→LCS, LTA South→CBLOL mapping verified; bare LTA returns None |
 | `test_upcoming_api_exposes_only_allowed_competitions()` | Only 10 competition codes appear (LCS, CBLOL replace LTA) |
-| `test_dashboard_assets_include_requested_metrics()` | JS contains expected display strings including `loadPreviewOdds`, `data-odds-key`, `"Cuotas calculadas no disponibles"` (replaces previous `"Sin cuotas capturadas"`), plus win rate, estimated odds, per-map labels |
+| `test_dashboard_assets_include_requested_metrics()` | JS contains `loadPreviewOdds`, `data-odds-key`, `"Cuotas calculadas no disponibles"`, per-map labels, `kills_per_map`, `deaths_per_map`, `"Asesinatos promedio por mapa"`, `"Muertes promedio por mapa"` |
 | `test_manual_odds_upload_and_match_response()` | Full odds upload → API response integration test |
 | `test_estimated_market_uses_both_teams_recent_series()` | `_estimated_market(4-1, 2-3)` returns p=62.5%, odds=1.60 / 2.67 with Laplace smoothing |
 | `test_2026_official_competition_rosters_are_complete()` | 2026 rosters: counts (LCK=10, LPL=14, LEC=10, LCS=8, CBLOL=8, LCP=8, MSI=11, FIRST_STAND=8, EWC=16), all `roster_status="official"` except WORLDS (`not_published`), LCK teams match published list |

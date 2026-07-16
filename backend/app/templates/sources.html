@@ -23,7 +23,8 @@
       <label><span>URL de API o web</span><input id="source-config-url" type="url" placeholder="https://api.ejemplo.com"></label>
       <label><span>Clave API</span><input id="source-config-key" type="password" autocomplete="off" placeholder="Se conserva si queda vacío"></label>
       <label class="replace-option"><input id="source-config-enabled" type="checkbox" checked> Fuente habilitada</label>
-      <div class="upload-actions"><button class="btn" type="submit">Guardar configuración</button><button id="source-config-test" class="btn btn-ghost" type="button">Probar conexión</button></div>
+      <label id="source-config-auto-row" class="replace-option hidden"><input id="source-config-auto" type="checkbox"> Comprobación automática cada 60 minutos</label>
+      <div class="upload-actions"><button class="btn" type="submit">Guardar configuración</button><button id="source-config-test" class="btn btn-ghost" type="button">Probar conexión</button><button id="source-config-sync" class="btn btn-ghost hidden" type="button">Importar ahora</button></div>
     </form>
     <p id="source-config-message" class="meta"></p>
   </section>
@@ -140,7 +141,15 @@
 
   function loadSources() {
     json('/api/sources').then((data) => {
-      $('#sources-status').innerHTML = data.sources.map((source) => `<article class="source-card"><h3>${escapeHtml(source.display_name)}</h3><p>${source.status}</p><p>${source.configured ? 'Configurada' : 'Sin configurar'}</p><p>${escapeHtml(source.base_url || source.last_error || '')}</p><button class="btn btn-ghost" type="button" data-config-source="${escapeHtml(source.code)}">Configurar</button></article>`).join('');
+      $('#sources-status').innerHTML = data.sources.map((source) => {
+        const runtime = source.managed_by === 'runtime';
+        const automatic = source.code === 'oracles_elixir' ? ` · Automática: ${source.auto_refresh ? 'activa' : 'desactivada'}` : '';
+        const details = runtime ? `Eventos programados: ${Number(source.records_received || 0).toLocaleString('es-PY')}` : ((source.configured ? 'Configurada' : 'Sin configurar') + automatic);
+        const autoToggle = source.code === 'oracles_elixir' && source.base_url
+          ? `<label class="replace-option source-auto-toggle"><input type="checkbox" data-auto-source="${escapeHtml(source.code)}" data-base-url="${escapeHtml(source.base_url)}" data-enabled="${source.enabled}" ${source.auto_refresh ? 'checked' : ''}> Actualizar automáticamente (60 min)</label>`
+          : '';
+        return `<article class="source-card"><h3>${escapeHtml(source.display_name)}</h3><p>${source.status}</p><p>${escapeHtml(details)}</p><p>${escapeHtml(source.base_url || source.last_error || '')}</p>${autoToggle}<button class="btn btn-ghost" type="button" data-config-source="${escapeHtml(source.code)}">${runtime ? 'Ver estado' : 'Configurar'}</button></article>`;
+      }).join('');
     }).catch((error) => { $('#sources-status').textContent = 'Error: ' + error.message; });
   }
 
@@ -154,7 +163,14 @@
       $('#source-config-url').value = source.base_url || '';
       $('#source-config-key').value = '';
       $('#source-config-enabled').checked = source.enabled;
-      configMessage.textContent = source.api_key_configured ? 'Clave API configurada; déjela vacía para conservarla.' : '';
+      $('#source-config-auto').checked = Boolean(source.auto_refresh);
+      const runtimeManaged = source.managed_by === 'runtime';
+      ['#source-config-url', '#source-config-key', '#source-config-enabled', '#source-config-auto', '#source-config-form button[type="submit"]', '#source-config-test'].forEach((selector) => {
+        $(selector).disabled = runtimeManaged;
+      });
+      $('#source-config-auto-row').classList.toggle('hidden', source.code !== 'oracles_elixir');
+      $('#source-config-sync').classList.toggle('hidden', source.code !== 'oracles_elixir' || runtimeManaged || !source.auto_refresh);
+      configMessage.textContent = source.configuration_note || (source.api_key_configured ? 'Clave API configurada; déjela vacía para conservarla.' : '');
       configCard.classList.remove('hidden');
       configCard.scrollIntoView({behavior: 'smooth', block: 'nearest'});
     } catch (error) {
@@ -163,7 +179,31 @@
     }
   }
 
-  $('#sources-status').addEventListener('click', (event) => {
+  $('#sources-status').addEventListener('click', async (event) => {
+    const autoSource = event.target.dataset.autoSource;
+    if (autoSource) {
+      const token = sourceToken();
+      const checkbox = event.target;
+      if (!token) {
+        checkbox.checked = !checkbox.checked;
+        configMessage.textContent = 'Ingrese el token administrativo para cambiar la actualización automática.';
+        configCard.classList.remove('hidden');
+        return;
+      }
+      try {
+        await json('/api/sources/' + encodeURIComponent(autoSource) + '/configuration', {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json', 'X-Admin-Token': token},
+          body: JSON.stringify({base_url: checkbox.dataset.baseUrl, enabled: checkbox.dataset.enabled === 'true', auto_refresh: checkbox.checked})
+        });
+        loadSources();
+      } catch (error) {
+        checkbox.checked = !checkbox.checked;
+        configMessage.textContent = 'No se pudo cambiar: ' + error.message;
+        configCard.classList.remove('hidden');
+      }
+      return;
+    }
     const code = event.target.dataset.configSource;
     if (code) openSourceConfig(code);
   });
@@ -178,11 +218,16 @@
       const result = await json('/api/sources/' + encodeURIComponent($('#source-config-code').value) + '/configuration', {
         method: 'PUT',
         headers: {'Content-Type': 'application/json', 'X-Admin-Token': token},
-        body: JSON.stringify({base_url: $('#source-config-url').value, api_key: $('#source-config-key').value || null, enabled: $('#source-config-enabled').checked})
+        body: JSON.stringify({base_url: $('#source-config-url').value, api_key: $('#source-config-key').value || null, enabled: $('#source-config-enabled').checked, auto_refresh: $('#source-config-code').value === 'oracles_elixir' ? $('#source-config-auto').checked : null})
       });
       configMessage.textContent = result.configured ? 'Configuración guardada.' : 'Configuración guardada; indique una URL para activarla.';
       loadSources();
     } catch (error) { configMessage.textContent = 'No se pudo guardar: ' + error.message; }
+  });
+
+  $('#source-config-auto').addEventListener('change', () => {
+    const isOracle = $('#source-config-code').value === 'oracles_elixir';
+    $('#source-config-sync').classList.toggle('hidden', !isOracle || !$('#source-config-auto').checked);
   });
 
   $('#source-config-test').addEventListener('click', async () => {
@@ -194,6 +239,17 @@
       configMessage.textContent = result.status === 'healthy' ? 'Conexión verificada.' : 'No se pudo verificar: ' + (result.reason || 'sin detalles');
       loadSources(); loadRuns();
     } catch (error) { configMessage.textContent = 'No se pudo probar: ' + error.message; }
+  });
+
+  $('#source-config-sync').addEventListener('click', async () => {
+    const token = sourceToken();
+    if (!token) { configMessage.textContent = 'Ingrese el token administrativo.'; return; }
+    configMessage.textContent = 'La importación remota fue encolada; el worker la procesará en breve.';
+    try {
+      const result = await json('/api/sources/' + encodeURIComponent($('#source-config-code').value) + '/sync', {method: 'POST', headers: {'X-Admin-Token': token}});
+      configMessage.textContent = result.already_running ? 'Ya existe una importación remota en curso.' : 'Importación remota encolada.';
+      loadRuns();
+    } catch (error) { configMessage.textContent = 'No se pudo iniciar: ' + error.message; }
   });
 
   $('#custom-source-form').addEventListener('submit', async (event) => {

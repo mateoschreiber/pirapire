@@ -6,6 +6,8 @@
   let activeCompetition = "ALL";
   let matchDetailData = null;
   const previewOddsCache = new Map();
+  let teamLogos = {};
+  let teamLogosLoaded = false;
 
   function el(id) { return document.getElementById(id); }
   function hide(node) { if (node) node.classList.add("hidden"); }
@@ -14,6 +16,28 @@
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
       return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"}[char];
     });
+  }
+
+  function teamKey(name) {
+    return String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
+  async function loadTeamLogos() {
+    if (teamLogosLoaded) return;
+    try {
+      const response = await fetch("/static/team-logos/manifest.json", {cache: "no-cache"});
+      teamLogos = response.ok ? await response.json() : {};
+    } catch (_) { teamLogos = {}; }
+    teamLogosLoaded = true;
+  }
+
+  function teamLogo(name, sizeClass) {
+    const src = teamLogos[teamKey(name)];
+    const label = esc(name || "?");
+    const klass = "team-logo " + (sizeClass || "");
+    if (!src) return '<span class="' + klass + ' team-logo-fallback" aria-label="' + label + '">' + esc(String(name || "?").slice(0, 1)) + "</span>";
+    return '<span class="' + klass + '"><img src="/static/team-logos/' + esc(src) + '" alt="' + label + '" loading="lazy" onerror="this.parentElement.classList.add(\'team-logo-fallback\');this.remove()"></span>';
   }
 
   function fmtTime(iso) {
@@ -77,7 +101,8 @@
     hide(el("empty-state"));
     hide(el("error-state"));
     try {
-      dashboardData = await fetchJSON(API + "/upcoming?hours=336");
+      const loaded = await Promise.all([fetchJSON(API + "/upcoming?hours=336"), loadTeamLogos()]);
+      dashboardData = loaded[0];
       renderDashboard();
     } catch (error) {
       hide(container);
@@ -126,7 +151,7 @@
         ? '<a class="competition-source" href="' + esc(item.official_source_url) + '" target="_blank" rel="noopener noreferrer">Fuente oficial</a>'
         : "";
       const teamHtml = teams.length
-        ? '<div class="team-chip-list">' + teams.map(function (team) { return '<span class="team-chip">' + esc(team) + "</span>"; }).join("") + "</div>"
+        ? '<div class="team-chip-list">' + teams.map(function (team) { return '<span class="team-chip">' + teamLogo(team, "team-logo-xs") + esc(team) + "</span>"; }).join("") + "</div>"
         : '<p class="competition-empty">Los participantes oficiales todavía no fueron publicados.</p>';
       return '<article class="competition-card" data-code="' + esc(item.code) + '">' +
         '<div class="competition-card-head"><div><span class="competition-code">' + esc(item.label) + "</span>" +
@@ -205,7 +230,7 @@
       return '<article class="match-card" tabindex="0" role="link" data-key="' + esc(match.match_key) + '">' +
         '<div class="match-card-top"><span class="competition-code">' + esc(match.competition) + "</span>" +
         '<span class="match-datetime">' + esc(fmtDate(match.start_time_utc)) + " · " + esc(fmtTime(match.start_time_utc)) + "</span></div>" +
-        '<div class="match-versus"><strong>' + esc(match.team_a) + '</strong><span>VS</span><strong>' + esc(match.team_b) + "</strong></div>" +
+        '<div class="match-versus"><strong>' + teamLogo(match.team_a, "team-logo-sm") + esc(match.team_a) + '</strong><span>VS</span><strong>' + teamLogo(match.team_b, "team-logo-sm") + esc(match.team_b) + "</strong></div>" +
         '<div class="match-meta"><span>' + (match.best_of ? "BO" + match.best_of : "Formato N/D") + "</span><span>Programado</span><span>Hora PY</span></div>" +
         '<div class="match-odds-slot" data-odds-key="' + esc(match.match_key) + '">' + previewOddsLoadingHtml() + "</div></article>";
     }).join("");
@@ -221,7 +246,8 @@
   async function initMatchDetail() {
     if (typeof MATCH_KEY === "undefined") return;
     try {
-      const match = await fetchJSON(API + "/" + encodeURIComponent(MATCH_KEY));
+      const loaded = await Promise.all([fetchJSON(API + "/" + encodeURIComponent(MATCH_KEY)), loadTeamLogos()]);
+      const match = loaded[0];
       matchDetailData = match;
       renderMatchHeader(match);
       renderMatchOdds(match);
@@ -233,7 +259,7 @@
   }
 
   function renderMatchHeader(match) {
-    if (el("match-title")) el("match-title").textContent = match.team_a + " vs " + match.team_b;
+    if (el("match-title")) el("match-title").innerHTML = teamLogo(match.team_a, "team-logo-lg") + esc(match.team_a) + " vs " + teamLogo(match.team_b, "team-logo-lg") + esc(match.team_b);
     const header = el("match-header");
     if (!header) return;
     let meta = header.querySelector(".match-detail-meta");
@@ -296,6 +322,7 @@
     renderMatchOdds(matchDetailData, payload.estimated_market);
     renderTeamStats("team-a-stats", payload.team_a, coverage.team_a);
     renderTeamStats("team-b-stats", payload.team_b, coverage.team_b);
+    renderRecentMatchups(payload.team_a, payload.team_b);
     renderPlayers("players-section", payload);
     if (el("coverage-info")) {
       const notes = payload.data_notes || {};
@@ -319,7 +346,7 @@
     const className = coverage === "complete" ? "badge-green" : coverage === "partial" ? "badge-yellow" : "badge-red";
     const label = coverage === "complete" ? "Completa" : coverage === "partial" ? "Parcial" : "No disponible";
     const averages = data.averages || {};
-    container.innerHTML = '<div class="stats-team-head"><div><h4>' + esc(data.team_name) + '</h4><p>' + data.series_used + " series · " + data.maps_used +
+    container.innerHTML = '<div class="stats-team-head"><div><h4>' + teamLogo(data.team_name, "team-logo-sm") + esc(data.team_name) + '</h4><p>' + data.series_used + " series · " + data.maps_used +
       ' mapas</p></div><span class="badge ' + className + '">' + label + "</span></div>" +
       "<div class='table-scroll'><table class='stats-table'><thead><tr><th>Indicador</th><th>Valor · últimas 5 series</th></tr></thead><tbody>" +
       "<tr class='highlight-row'><td>Porcentaje de victorias</td><td><strong>" + fmtPct(data.win_rate_pct) + "</strong><small>" + data.series_wins + " victorias · " + data.series_losses + " derrotas</small></td></tr>" +
@@ -333,6 +360,29 @@
       "<tr><td>Duración promedio del mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds && data.avg_map_duration_seconds.value) + "</td></tr>" +
       "<tr><td>Duración promedio de la serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds && data.avg_series_duration_seconds.value) + "</td></tr>" +
       "</tbody></table></div>";
+  }
+
+  function matchupMetric(label, own, opponent) {
+    return '<div><span>' + label + '</span><strong>' + fmtNumber(own) + ' <small>—</small> ' + fmtNumber(opponent) + '</strong></div>';
+  }
+
+  function recentMatchupCard(team, matchup) {
+    const own = matchup.team || {};
+    const opponent = matchup.opponent_stats || {};
+    const ownClass = matchup.result === "win" ? "matchup-winner" : matchup.result === "loss" ? "matchup-loser" : "";
+    const oppClass = matchup.result === "loss" ? "matchup-winner" : matchup.result === "win" ? "matchup-loser" : "";
+    return '<article class="recent-matchup-card"><div class="recent-matchup-head"><span>' + esc(fmtDate(matchup.date)) + '</span><strong class="' + ownClass + '">' + teamLogo(own.name || team, "team-logo-xs") + esc(own.name || team) + ' ' + esc(matchup.score || "N/D") + '</strong><strong class="' + oppClass + '">' + esc(matchup.score ? matchup.score.split("-").reverse().join("-") : "N/D") + ' ' + teamLogo(opponent.name, "team-logo-xs") + esc(opponent.name || matchup.opponent || "N/D") + '</strong></div><div class="recent-matchup-meta"><span>Duración: ' + fmtSeconds(matchup.duration_seconds) + '</span>' + matchupMetric("Kills", own.kills, opponent.kills) + matchupMetric("Torres", own.towers, opponent.towers) + matchupMetric("Inhibs.", own.inhibitors, opponent.inhibitors) + '</div></article>';
+  }
+
+  function recentMatchupPanel(team) {
+    const items = team.recent_matchups || [];
+    return '<section class="recent-matchups-panel"><div class="section-heading"><div><p class="eyebrow">Últimos enfrentamientos</p><h4>' + teamLogo(team.team_name, "team-logo-sm") + esc(team.team_name) + '</h4></div></div>' + (items.length ? items.map(function (item) { return recentMatchupCard(team.team_name, item); }).join("") : '<p class="metric-unavailable">Sin tres enfrentamientos con datos disponibles.</p>') + '</section>';
+  }
+
+  function renderRecentMatchups(teamA, teamB) {
+    const container = el("recent-matchups");
+    if (!container || !teamA || !teamB) return;
+    container.innerHTML = recentMatchupPanel(teamA) + recentMatchupPanel(teamB);
   }
 
   function renderPlayers(elementId, payload) {

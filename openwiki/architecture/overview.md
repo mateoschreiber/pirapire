@@ -40,12 +40,13 @@ app.mount("/static", ...)             # CSS + JS
 
 - **Lifespan handler** calls `init_db()` then `synchronize_known_aliases()` on startup (creates tables, runs migrations, reconciles team aliases)
 - **Templates** rendered via Jinja2 from `app/templates/`
-- **Static assets** served from `app/static/` (CSS, JS, fonts)
-- **Match detail page** (`match_detail.html`) now renders estimated market odds with a dynamic `market-source-badge` that updates between "Calculando", "Modelo estadístico", "Fuente externa", or "Datos insuficientes" based on available data
+- **Static assets** served from `app/static/` (CSS, JS, fonts, favicon, team logos)
+- **Favicon** served at `/favicon.ico` from `static/favicon.svg` via `FileResponse`
+- **Match detail page** (`match_detail.html`) now renders estimated market odds with a dynamic `market-source-badge` that updates between "Calculando", "Modelo estadístico", "Fuente externa", or "Datos insuficientes" based on available data. Also renders `#recent-matchups` section with the last 3 series summaries per team.
 
 ## Background Worker (`app/worker_main.py`)
 
-APScheduler `BackgroundScheduler` with six recurring jobs:
+APScheduler `BackgroundScheduler` with eight recurring jobs:
 
 | Job | Interval | Description |
 |-----|----------|-------------|
@@ -55,16 +56,17 @@ APScheduler `BackgroundScheduler` with six recurring jobs:
 | `import_odds` | 5 min | Polls odds CSV inbox |
 | `import_oracles` | 30 min | Polls Oracle's Elixir CSV inbox |
 | `process_queued_oracle_uploads` | 15 s | Durably processes Oracle CSV uploads queued via the web API (see Sources router below) |
+| `team_logo_sync` | 1440 min | Downloads official team logos from lolesports.com |
 | `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` (currently a stub) |
 
-All jobs except `heartbeat` skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"`) to avoid SQLite `database is locked` errors. `sync_schedule` and `sync_datadragon` no longer use `next_run_time=now` — they start on their first natural interval.
+All data-processing jobs (`sync_schedule`, `sync_datadragon`, `import_odds`, `import_oracles`, `precompute_stats`) skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"`) to avoid SQLite `database is locked` errors. `sync_schedule` and `sync_datadragon` no longer use `next_run_time=now` — they start on their first natural interval.
 
 ## Database Layer
 
 - **SQLModel** ORM over SQLite (configurable via `DATABASE_URL`)
 - `connect_args = {"check_same_thread": False}` for SQLite concurrent access
 - `init_db()`: creates all tables from SQLModel metadata, then runs `migrations.upgrade()`
-- **Migrations** (`app/migrations.py`): idempotent `ALTER TABLE ADD COLUMN` for schema evolution without Alembic
+- **Migrations** (`app/migrations.py`): idempotent `ALTER TABLE ADD COLUMN` for schema evolution without Alembic. Also renames incompatible legacy tables (`datasource→legacy_datasource`, `sourcerun→legacy_sourcerun`) using PRAGMA column detection when pre-LoL tables reuse current model names.
 - **Session management:** `get_session()` FastAPI dependency yields `Session(engine)`
 
 ## Database Models
@@ -115,6 +117,8 @@ The sources router (23279 bytes — largest router) provides:
 - `GET /api/aliases/unresolved` — List exhibition team aliases
 - `POST /api/aliases/synchronize` — Manually trigger alias reconciliation (admin)
 
+Per-source views are dispatched via `_source_view()`: `leaguepedia_schedule` uses `_leaguepedia_schedule_view()` which reads real scheduler state from `LolMatchEvent` and env settings rather than the generic `DataSource` config row. Oracle's Elixir source config now includes `auto_refresh` (toggles remote URL polling) and `configuration_note` describing the auto-refresh behavior.
+
 The `execute_import` endpoint (`POST /api/imports/execute`) no longer runs import processing via FastAPI `BackgroundTasks`. Uploads are written to inbox/uploads/ and a queued `ImportBatch` is persisted; the worker's `job_process_queued_oracle_uploads` (polling every 15 s) picks up queued batches and processes them durably. This survives application restarts and avoids holding the SQLite connection from the web process during long imports.
 
 All write operations require `X-Admin-Token` header matching `settings.admin_token`.
@@ -133,8 +137,8 @@ When modifying this codebase, watch for:
 3. **Functional service pattern:** Services are modules of free functions, not classes. All take `Session` as first argument.
 4. **No Alembic:** Schema migrations are done via `PRAGMA table_info` + `ALTER TABLE ADD COLUMN` in `migrations.py`. New models need both a SQLModel class and potentially a migration entry.
 5. **Frontend is vanilla JS:** No framework. Template rendering is server-side Jinja2 with JavaScript fetching JSON from `/api/lol/matches/*` endpoints. The UI received a **Corporate v3 refresh** (styles.css): Inter font (self-hosted woff2), `--bg`/`--surface`/`--primary` CSS variables, rounded cards, gradient buttons, skeleton loading states, responsive breakpoints at 980px and 680px, and `theme-color` meta. The font file is preloaded in `base.html` and served from `/static/fonts/inter-latin.woff2`.
-6. **Stale seed.py:** `/backend/app/seed.py` references deleted football models and will fail if called. It is a pre-Phase-1 artifact.
-7. **Duplicate standalone scripts:** `/backend/lol_metrics_engine.py` and `/backend/oracles_elixir_importer.py` exist at the backend root — these are older versions superseded by the app package versions. Do not import them.
+6. **Stale seed.py:** `/backend/app/seed.py` references deleted football models and will fail if called. It is a pre-Phase-1 artifact and has been removed from the working tree (still tracked in git history).
+7. **Duplicate standalone scripts:** `/backend/lol_metrics_engine.py` and `/backend/oracles_elixir_importer.py` exist at the backend root — these are older versions superseded by the app package versions. Do not import them. These have been removed from the working tree (still tracked in git history).
 
 ## Service Layer Detail
 
@@ -142,7 +146,8 @@ When modifying this codebase, watch for:
 Core statistics engine. Computes team and player metrics from the last 5 complete Oracle's Elixir series per team. Key functions:
 - `_recent_series()` — Fetches last 5 complete series from LolSeries (Oracle's Elixir only)
 - `_team_payload()` — Computes both percentage shares (in `metrics`) and absolute per-map averages (in `averages`) for towers, inhibitors, kills, deaths, dragons, barons, and gold. Also computes **series win rate** (`series_wins`, `series_losses`, `win_rate_pct`), average map/series duration, and coverage labels. The match detail UI renders the absolute per-map averages, not percentages.
-- `_players()` — Computes per-player absolute kills/deaths totals, gold per map, and CS per map. (Percentage shares — `kills_pct`, `deaths_pct` — are computed internally for compatibility but not rendered by the current UI.)
+- `_players()` — Computes per-player kills_per_map and deaths_per_map, gold per map, and CS per map. (Percentage shares — `kills_pct`, `deaths_pct` — are computed internally for compatibility but not rendered by the current UI.)
+- `_recent_matchups()` — Returns the last 3 completed series for a team, each with opponent, score, result, duration, and per-side kills/towers/inhibitors. Rendered as `#recent-matchups` cards on the match detail page.
 - `_estimated_market()` — Computes probabilistic market odds from both teams' recent series records using Laplace-smoothed relative probability. Returns fair decimal odds and win probability per team, or `available: false` with a reason when data is insufficient.
 - `precompute_upcoming_stats()` — Stub. Returns `{"precomputed": 0, "total_scheduled": 0}`. Scheduled in the worker every 30 min but does not yet compute or persist anything.
 
@@ -165,6 +170,12 @@ Team name normalization. `canonical_team()` uses a multi-step resolution:
 
 ### `lol_league_catalog.py`
 Defines 9 active tier-1 leagues (LCK, LPL, LEC, LCS, CBLOL, LCP, MSI, WORLDS, FIRST_STAND) and 8 legacy leagues (LTA, LLA, PCS, VCS, LJL, LCO, TCL, LCL). `canonical_league()` maps any input string to a canonical slug.
+
+### `remote_oracles_elixir.py`
+Downloads Oracle's Elixir-compatible CSV from a remote URL (Google Drive share links auto-converted to direct download URLs). Validates required headers (`gameid`, `position`, `teamname`), streams to the local inbox with SHA-256 checksumming, and enforces `lol_history_remote_max_mb` size limit. Used by the sources admin UI's `auto_refresh` feature for periodic remote pulls.
+
+### `team_logo_sync.py`
+Downloads official team logos from lolesports.com tournament and league overview pages into `static/team-logos/`. Runs as a daily worker job (`team_logo_sync_interval_minutes`, default 1440). Scrapes `alt` attributes for team names and `f=` query params for logo URLs from 12 official LoL Esports pages. Logo keys are NFKD-normalized team names with ASCII transliteration.
 
 ## Key Git History
 

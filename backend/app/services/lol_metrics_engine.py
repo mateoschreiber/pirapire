@@ -62,6 +62,50 @@ def _series_games(session: Session, series):
     return session.exec(select(LolGameHistory).where(LolGameHistory.id.in_(ids))).all() if ids else []
 
 
+def _recent_matchups(session: Session, team: str, series: list[LolSeries]) -> list[dict]:
+    """Summarise the last three completed series for concise match-detail cards."""
+    output = []
+    for item in series[:3]:
+        own_rows, opponent_rows = [], []
+        for game in _series_games(session, item):
+            rows = session.exec(select(LolTeamGameStat).where(LolTeamGameStat.game_id == game.id)).all()
+            own = next((row for row in rows if _resolve(session, row.team_name) == team), None)
+            opponent = next((row for row in rows if own and row.id != own.id), None)
+            if own and opponent:
+                own_rows.append(own)
+                opponent_rows.append(opponent)
+        if not own_rows:
+            continue
+
+        wins = sum(row.result == 1 for row in own_rows)
+        losses = sum(row.result == 0 for row in own_rows)
+
+        def total(rows, field):
+            values = [getattr(row, field) for row in rows if getattr(row, field) is not None]
+            return sum(values) if values else None
+
+        output.append({
+            "date": item.last_game_at,
+            "opponent": opponent_rows[0].team_name,
+            "score": f"{wins}-{losses}",
+            "result": "win" if wins > losses else "loss" if losses > wins else "draw",
+            "duration_seconds": total(own_rows, "game_length_seconds"),
+            "team": {
+                "name": own_rows[0].team_name,
+                "kills": total(own_rows, "kills"),
+                "towers": total(own_rows, "towers"),
+                "inhibitors": total(own_rows, "inhibitors"),
+            },
+            "opponent_stats": {
+                "name": opponent_rows[0].team_name,
+                "kills": total(opponent_rows, "kills"),
+                "towers": total(opponent_rows, "towers"),
+                "inhibitors": total(opponent_rows, "inhibitors"),
+            },
+        })
+    return output
+
+
 def _team_payload(session: Session, team_name: str, before: datetime):
     team = _resolve(session, team_name)
     series = _recent_series(session, team, before)
@@ -156,6 +200,7 @@ def _team_payload(session: Session, team_name: str, before: datetime):
             }
             for item in series
         ],
+        "recent_matchups": _recent_matchups(session, team, series),
         "metrics": {
             key: percent(key)
             for key in ("towers", "inhibitors", "kills", "deaths", "dragons", "barons", "gold")

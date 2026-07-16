@@ -14,10 +14,20 @@ def test_docs():
     assert client.get("/docs").status_code == 200
 
 
+def test_favicon_is_served():
+    response = client.get("/favicon.ico")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/svg+xml"
+
+
 def test_sources_api():
     response = client.get("/api/sources")
     assert response.status_code == 200
     assert any(item["code"] == "oracles_elixir" for item in response.json()["sources"])
+    leaguepedia = next(item for item in response.json()["sources"] if item["code"] == "leaguepedia_schedule")
+    assert leaguepedia["managed_by"] == "runtime"
+    assert leaguepedia["configured"] is True
+    assert leaguepedia["base_url"].endswith("/Special:CargoExport")
 
 
 def test_removed_domains_stay_removed():

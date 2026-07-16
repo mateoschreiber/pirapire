@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 from ..config import settings
 from ..database import engine, get_session
-from ..models_lol import DataSource, ImportBatch, ImportError, LolTeamAlias, SourceRun
+from ..models_lol import DataSource, ImportBatch, ImportError, LolMatchEvent, LolTeamAlias, SourceRun
 
 router = APIRouter(prefix="/api")
 SOURCES = {
@@ -31,6 +31,7 @@ class SourceConfiguration(BaseModel):
     api_key: str | None = None
     clear_api_key: bool = False
     enabled: bool = True
+    auto_refresh: bool | None = None
 
 
 class CustomSourceConfiguration(SourceConfiguration):
@@ -79,13 +80,42 @@ def _view(row):
     config = _config(row)
     view["base_url"] = config.get("base_url", "")
     view["api_key_configured"] = bool(config.get("api_key"))
+    view["auto_refresh"] = bool(config.get("auto_refresh", bool(view["base_url"]))) if row.code == "oracles_elixir" else None
     view["custom"] = row.code not in SOURCES
     return view
 
 
+def _leaguepedia_schedule_view(session: Session, row: DataSource) -> dict:
+    """Show the scheduler's real state instead of the unused generic config row."""
+    events = session.exec(select(LolMatchEvent).where(
+        LolMatchEvent.source_name == "leaguepedia",
+    )).all()
+    latest = max((event.observed_at for event in events if event.observed_at), default=None)
+    scheduled = sum(event.status == "scheduled" for event in events)
+    return {
+        **_view(row),
+        "enabled": settings.leaguepedia_sync_enabled,
+        "configured": bool(settings.leaguepedia_base_url),
+        "status": "healthy" if settings.leaguepedia_sync_enabled and latest else "degraded",
+        "base_url": settings.leaguepedia_base_url,
+        "last_run_at": latest,
+        "last_success_at": latest,
+        "last_error": None,
+        "records_received": scheduled,
+        "managed_by": "runtime",
+        "configuration_note": "La agenda se configura mediante LEAGUEPEDIA_BASE_URL y LEAGUEPEDIA_SYNC_ENABLED en .env.",
+    }
+
+
+def _source_view(session: Session, row: DataSource) -> dict:
+    if row.code == "leaguepedia_schedule":
+        return _leaguepedia_schedule_view(session, row)
+    return _view(row)
+
+
 def _configuration_view(row: DataSource) -> dict:
     config = _config(row)
-    return {
+    view = {
         "code": row.code,
         "display_name": row.display_name,
         "base_url": config.get("base_url", ""),
@@ -93,7 +123,11 @@ def _configuration_view(row: DataSource) -> dict:
         "enabled": row.enabled,
         "configured": row.configured,
         "custom": row.code not in SOURCES,
+        "auto_refresh": bool(config.get("auto_refresh", bool(config.get("base_url")))) if row.code == "oracles_elixir" else None,
     }
+    if row.code == "oracles_elixir":
+        view["configuration_note"] = "Con la comprobación automática activa, Pirapire consulta esta URL cada 60 minutos y actualiza o agrega partidas."
+    return view
 
 
 def _validate_url(url: str) -> str:
@@ -105,6 +139,27 @@ def _validate_url(url: str) -> str:
     return value
 
 
+def _queue_remote_oracle_sync(session: Session) -> tuple[SourceRun, bool]:
+    source = _source(session, "oracles_elixir")
+    config = _config(source)
+    if not source.enabled or not config.get("base_url"):
+        raise HTTPException(409, "Configure y habilite la URL remota de Oracle's Elixir antes de sincronizar")
+    if not config.get("auto_refresh", True):
+        raise HTTPException(409, "Active la comprobación automática de Oracle's Elixir antes de sincronizar")
+    active = session.exec(select(SourceRun).where(
+        SourceRun.source_code == "oracles_elixir",
+        SourceRun.job == "remote_sync",
+        SourceRun.status.in_(["queued", "running"]),
+    ).order_by(SourceRun.id.desc())).first()
+    if active:
+        return active, True
+    run = SourceRun(source_code="oracles_elixir", job="remote_sync", status="queued", started_at=_now())
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run, False
+
+
 @router.get("/sources")
 def sources(session: Session = Depends(get_session)):
     builtin = [_source(session, code) for code in SOURCES]
@@ -112,17 +167,24 @@ def sources(session: Session = Depends(get_session)):
         row for row in session.exec(select(DataSource).order_by(DataSource.display_name)).all()
         if row.code not in SOURCES
     ]
-    return {"sources": [_view(row) for row in builtin + custom]}
+    return {"sources": [_source_view(session, row) for row in builtin + custom]}
 
 
 @router.get("/sources/detail/{code}")
 def source(code: str, session: Session = Depends(get_session)):
-    return _view(_source(session, code))
+    return _source_view(session, _source(session, code))
 
 
 @router.get("/sources/{code}/configuration", dependencies=[Depends(_admin)])
 def source_configuration(code: str, session: Session = Depends(get_session)):
-    return _configuration_view(_source(session, code))
+    row = _source(session, code)
+    if code == "leaguepedia_schedule":
+        view = _leaguepedia_schedule_view(session, row)
+        return {key: view[key] for key in (
+            "code", "display_name", "base_url", "enabled", "configured", "custom",
+            "api_key_configured", "managed_by", "configuration_note",
+        )}
+    return _configuration_view(row)
 
 
 @router.put("/sources/{code}/configuration", dependencies=[Depends(_admin)])
@@ -131,9 +193,13 @@ def save_source_configuration(
     payload: SourceConfiguration,
     session: Session = Depends(get_session),
 ):
+    if code == "leaguepedia_schedule":
+        raise HTTPException(409, "Leaguepedia Schedule se configura mediante .env; esta pantalla solo muestra su estado real")
     row = _source(session, code)
     config = _config(row)
     config["base_url"] = _validate_url(payload.base_url)
+    if code == "oracles_elixir" and payload.auto_refresh is not None:
+        config["auto_refresh"] = payload.auto_refresh
     if payload.clear_api_key:
         config.pop("api_key", None)
     elif payload.api_key is not None and payload.api_key.strip():
@@ -221,6 +287,9 @@ def test(code: str, session: Session = Depends(get_session)):
 
 @router.post("/sources/{code}/sync", dependencies=[Depends(_admin)])
 def sync(code: str, session: Session = Depends(get_session)):
+    if code == "oracles_elixir":
+        run, already_running = _queue_remote_oracle_sync(session)
+        return {"status": run.status, "run_id": run.id, "already_running": already_running}
     row = _source(session, code)
     run = SourceRun(
         source_code=code,
@@ -236,6 +305,7 @@ def sync(code: str, session: Session = Depends(get_session)):
     session.add_all([row, run])
     session.commit()
     return {"status": "degraded", "run_id": run.id, "reason": run.error_message}
+
 
 @router.get("/sources/runs")
 def runs(session:Session=Depends(get_session)): return {"runs":session.exec(select(SourceRun).order_by(SourceRun.id.desc()).limit(100)).all()}

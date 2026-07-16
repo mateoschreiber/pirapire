@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -29,5 +31,11 @@ app.include_router(health.router)
 app.include_router(lol_api.router)
 app.include_router(pages.router)
 app.include_router(sources.router)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(Path(__file__).parent / "static" / "favicon.svg", media_type="image/svg+xml")
+
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

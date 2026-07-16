@@ -114,6 +114,21 @@ Laplace smoothing avoids impossible 0% or 100% probabilities in a 5-series sampl
 
 **Data notes updated:** The `data_notes.odds` message now reads: "Las cuotas calculadas son una estimación estadística interna y no representan una casa de apuestas."
 
+### Recent Matchups
+
+**Source:** `_recent_matchups()` in `backend/app/services/lol_metrics_engine.py`
+
+The `_team_payload()` response now includes `recent_matchups`: a list of the last 3 completed series for each team, with per-series summary data. Each entry contains:
+
+- `date` — Last game timestamp of the series
+- `opponent` — The opposing team name
+- `score` — Map score string (e.g., `"2-1"`)
+- `result` — `"win"`, `"loss"`, or `"draw"`
+- `duration_seconds` — Total game time across all maps
+- `team` / `opponent_stats` — Per-side aggregates: `name`, `kills`, `towers`, `inhibitors`
+
+The match detail page renders this data in a `#recent-matchups` section below the team stats grid. Each series renders a card with the date, opponent icon, score, and quick stat summaries.
+
 ### Dashboard Preview Odds
 
 **Source:** `backend/app/static/js/app.js` — `loadPreviewOdds()`, `previewOddsCache`
