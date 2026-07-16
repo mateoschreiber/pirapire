@@ -57,14 +57,10 @@ backend/
 │   │   ├── lol_team_aliases.py   # Team name normalization: NFKD alias resolution, upsert,
     │   │   │                             #   KNOWN_TEAM_ALIASES, EXHIBITION_TEAMS, synchronize_known_aliases()
 │   │   ├── lol_league_catalog.py # League definitions, alias catalog, seed function
-│   │   ├── team_logo_sync.py     # New. Downloads official team logos from lolesports.com
-│   │   │                         #   tournament/league overview pages into static/team-logos/.
-│   │   │                         #   Runs as a daily worker job (team_logo_sync_interval_minutes).
+│   │   ├── team_logo_sync.py     # Downloads official team logos from lolesports.com pages
+│   │   │                         #   + DISPLAY_ALIASES (17 provider->official mappings), OFFICIAL_TEAM_ASSETS
+│   │   │                         #   (direct-url fallback for cnb-legends, mibr). Runs daily worker job.
 │   │   ├── lol_historical_importer.py  # (removed in refactor — merged into imports/)
-│   │   │
-│   │   ├── features/
-│   │   │   └── lol_features.py   # Feature engineering for probability estimation.
-│   │   │                         #   Not wired into current API. Legacy from betting pipeline.
 │   │   │
 │   │   ├── imports/
 │   │   │   ├── oracles_elixir_importer.py  # Oracle's Elixir CSV import → game/team/player stats.
@@ -87,13 +83,14 @@ backend/
 │   │   ├── css/
 │   │   │   └── styles.css       # Dashboard/match detail CSS + source-config forms. Sidebar layout, cards, tables.
 │   │   └── js/
-│   │       └── app.js           # Vanilla JS: dashboard rendering, match detail, data fetch.
+│   │       └── app.js           # Vanilla JS: dashboard + match detail rendering, preview odds,
+    │   │                           #   shortened labels (Torres, Dragones, Barones, Oro), per-map matchups.
 │   │                           #   Uses es-PY locale, America/Asuncion timezone.
 │   │
 │   ├── templates/
 │   │   ├── base.html           # Base template: sidebar nav, topbar with live clock, content slot,
 │   │   │                       #   favicon link, cache-busted CSS/JS version query strings
-│   │   ├── dashboard.html      # Competitive dashboard: filters, competition grid, match list
+│   │   ├── dashboard.html      # Competitive dashboard: collapsible disclosure sections, filters, grid
 │   │   ├── match_detail.html   # Match detail: hero, odds, team stats, recent matchups card,
 │   │   └── sources.html        # Source admin: status, file upload, run history, aliases tabs,
     │   │                             #   source config form, custom API registration.
@@ -126,15 +123,13 @@ backend/
 
 ```
 pirapire/
-├── docker-compose.yml           # Two-container Compose (app + worker)
+├── docker-compose.yml           # Two-container Compose (app + worker); mounts team-logos volume
 ├── docker-compose.override.yml  # (example) Local development override
 ├── .env.example                 # Environment variable template
 ├── install.sh                   # Auto-install script (clone + docker compose)
 ├── README.md                    # Public README
-├── migrate_phase1.sql           # SQL migration: drop legacy tables
 ├── data/                        # Volume mount for DB + imports
 ├── logs/                        # Volume mount for logs
-└── docs/                        # Historical phase documentation (pre-refactor)
 ```
 
 ## Cross-Reference: Key Entry Points
@@ -156,14 +151,14 @@ pirapire/
 | File | What Changed |
 |------|-------------|
 | `services/imports/remote_oracles_elixir.py` | **New** — Downloads OE CSV from remote URL (Google Drive support) |
-| `services/team_logo_sync.py` | **New** — Caches official team logos from lolesports.com |
-| `services/lol_metrics_engine.py` | **Added** `_recent_matchups()` — last 3 series summaries per team |
+| `services/team_logo_sync.py` | **New** — Caches official team logos from lolesports.com. DISPLAY_ALIASES maps provider names to cached assets; OFFICIAL_TEAM_ASSETS with direct-url fallback for cnb-legends, mibr |
+| `services/lol_metrics_engine.py` | **Added** `_recent_matchups()` — last 3 individual maps (not series) per team with per-map score, game_number |
 | `routers/sources.py` | **Enhanced** — `_leaguepedia_schedule_view()`, `_source_view()`, auto_refresh for OE, configuration_note |
 | `routers/lol_api.py` | **Added** `_utc_iso()` — naive SQLite datetime → explicit UTC ISO |
 | `templates/base.html` | **Added** favicon link, cache-busted version query strings |
 | `templates/match_detail.html` | **Added** `#recent-matchups` section after team stats |
 | `templates/sources.html` | **Added** upload progress bar, `uploadImport()` JS, configuration_note, auto_refresh |
-| `static/js/app.js` | **Updated** player kills/deaths to per-map averages; XHR upload with progress |
+| `static/js/app.js` | **Updated** player kills/deaths to per-map averages; shortened metric labels (Torres, Dragones, Barones, Oro); per-map matchup cards; XHR upload |
 | `static/css/styles.css` | **Added** `.upload-progress` styles |
 | `static/favicon.svg` | **New** — SVG favicon |
 | `static/team-logos/` | **New** — Local team logo cache directory |
@@ -173,6 +168,7 @@ pirapire/
 | `tests/test_health.py` | **Added** `test_favicon_is_served()`, richer sources API assertion |
 | `tests/test_pages.py` | **Added** upload progress, `_utc_iso`, per-map kill/death assertions |
 | `tests/test_remote_oracles.py` | **New** — Remote CSV download + validation tests |
+| `docker-compose.yml` | **Updated** — mounts team-logos volume for both containers |
 | `migrations.py` | **Added** `_rename_incompatible_legacy_table()` — renames pre-LoL datasource/sourcerun tables |
 | `backend/scripts/` | **New** — Admin/utility scripts directory |
 
@@ -181,7 +177,9 @@ pirapire/
 | File | Note |
 |------|------|
 | `backend/app/seed.py` | Pre-refactor football seed; no longer needed |
-| `backend/app/services/features/` | Feature engineering (never wired into current API) |
+| `backend/app/services/features/` | Feature engineering directory (deleted from working tree) |
 | `backend/app/services/imports/csv_utils.py` | Stale CSV helpers referencing removed models |
 | `backend/lol_metrics_engine.py` | Standalone script (superseded by app package version) |
 | `backend/oracles_elixir_importer.py` | Standalone script (superseded by app package version) |
+| `docs/` | Historical phase documentation (pre-refactor) |
+| `migrate_phase1.sql` | One-time migration script (already run) |

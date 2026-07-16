@@ -70,8 +70,4 @@ Data Dragon API         ──►  LolPatch + LolChampion
 
 The following areas are not yet documented in this wiki:
 
-| Area | Source Anchor | Reason |
-|------|--------------|--------|
-| Legacy docs in /docs/ | `/docs/` | Historical phase docs (4a–4d2) from pre-refactor; largely obsolete for current LoL-only codebase |
-| Phase 1 migration SQL | `/migrate_phase1.sql` | One-time cleanup script for dropping legacy tables |
-| seed.py | `/backend/app/seed.py` | Stale football-only seed from pre-refactor era; not relevant to LoL-only setup |
+_No current backlog items. All previously identified areas from prior refactors have been cleaned from the working tree._

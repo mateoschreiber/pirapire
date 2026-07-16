@@ -2,7 +2,8 @@
 
 ## Two-Container Deployment
 
-Pirapire uses a single Docker image (`pirapire_app`) running as two services in Docker Compose:
+Pirapire uses a single Docker image (`pirapire_app`) running as two services in Docker Compose. Both containers mount `./backend/app/static/team-logos` as a shared volume for persistent team logo assets downloaded by the worker.
+
 
 ```
 pirapire/
@@ -42,7 +43,7 @@ app.mount("/static", ...)             # CSS + JS
 - **Templates** rendered via Jinja2 from `app/templates/`
 - **Static assets** served from `app/static/` (CSS, JS, fonts, favicon, team logos)
 - **Favicon** served at `/favicon.ico` from `static/favicon.svg` via `FileResponse`
-- **Match detail page** (`match_detail.html`) now renders estimated market odds with a dynamic `market-source-badge` that updates between "Calculando", "Modelo estadístico", "Fuente externa", or "Datos insuficientes" based on available data. Also renders `#recent-matchups` section with the last 3 series summaries per team.
+- **Match detail page** (`match_detail.html`) now renders estimated market odds with a dynamic `market-source-badge` that updates between "Calculando", "Modelo estadístico", "Fuente externa", or "Datos insuficientes" based on available data. Also renders `#recent-matchups` section with the last 3 individual maps per team.
 
 ## Background Worker (`app/worker_main.py`)
 
@@ -56,7 +57,7 @@ APScheduler `BackgroundScheduler` with eight recurring jobs:
 | `import_odds` | 5 min | Polls odds CSV inbox |
 | `import_oracles` | 30 min | Polls Oracle's Elixir CSV inbox |
 | `process_queued_oracle_uploads` | 15 s | Durably processes Oracle CSV uploads queued via the web API (see Sources router below) |
-| `team_logo_sync` | 1440 min | Downloads official team logos from lolesports.com |
+| `team_logo_sync` | 1440 min | Downloads official team logos from lolesports.com + direct-url fallback (cnb-legends, mibr); applies DISPLAY_ALIASES |
 | `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` (currently a stub) |
 
 All data-processing jobs (`sync_schedule`, `sync_datadragon`, `import_odds`, `import_oracles`, `precompute_stats`) skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"`) to avoid SQLite `database is locked` errors. `sync_schedule` and `sync_datadragon` no longer use `next_run_time=now` — they start on their first natural interval.
@@ -200,4 +201,4 @@ Pirapire was originally a multi-sport analytics platform (football + LoL) with b
 - **`d89b75b`:** Corrected duplicate service files left at root level
 - **`bb62c14`:** Sources admin UI + API, migrations module, series_builder, refined metrics
 
-The migration SQL script (`migrate_phase1.sql`) drops all legacy tables and runs integrity checks.
+The migration SQL script (`migrate_phase1.sql`, since deleted) dropped all legacy tables and ran integrity checks.

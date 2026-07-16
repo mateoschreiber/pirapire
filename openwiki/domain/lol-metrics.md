@@ -55,15 +55,15 @@ The **match detail UI displays only the absolute per-map averages** plus win rat
 | Metric | UI Label | Displayed Value |
 |--------|----------|-----------------|
 | Win Rate % | Porcentaje de victorias | `W / (W + L)`, where W = series won, L = series lost |
-| Towers destroyed | Torretas destruidas · promedio por mapa | Absolute per-map average |
-| Inhibitors destroyed | Inhibidores destruidos · promedio por mapa | Absolute per-map average |
-| Kills | Asesinatos · promedio por mapa | Absolute per-map average |
-| Deaths | Muertes · promedio por mapa | Absolute per-map average |
-| Dragons killed | Dragones asesinados · promedio por mapa | Absolute per-map average |
-| Barons killed | Barones asesinados · promedio por mapa | Absolute per-map average |
-| Total Gold | Oro total · promedio por mapa | Absolute per-map average |
-| Avg Map Duration | Duración promedio del mapa | Mean of `game_length_seconds` |
-| Avg Series Duration | Duración promedio de la serie | Sum of game durations per series |
+| Towers destroyed | Torres destruidas | Absolute per-map average |
+| Inhibitors destroyed | Inhibidores destruidos | Absolute per-map average |
+| Kills | Kills | Absolute per-map average |
+| Deaths | Muertes | Absolute per-map average |
+| Dragons killed | Dragones | Absolute per-map average |
+| Barons killed | Barones | Absolute per-map average |
+| Total Gold | Oro | Absolute per-map average |
+| Avg Map Duration | Duración del mapa | Mean of `game_length_seconds` |
+| Avg Series Duration | Duración de la serie | Sum of game durations per series |
 
 Win rate is computed at the series level, not the map level. A series is "decided" when one team wins more maps than the other — tied series (e.g., 1-1 in BO2) are excluded from win-rate computation. The series-level win/loss is determined by comparing map results within each series. See `_team_payload()` in `backend/app/services/lol_metrics_engine.py` for the map-to-series aggregation logic.
 
@@ -118,16 +118,17 @@ Laplace smoothing avoids impossible 0% or 100% probabilities in a 5-series sampl
 
 **Source:** `_recent_matchups()` in `backend/app/services/lol_metrics_engine.py`
 
-The `_team_payload()` response now includes `recent_matchups`: a list of the last 3 completed series for each team, with per-series summary data. Each entry contains:
+The `_team_payload()` response includes `recent_matchups`: the last 3 individual maps (not series aggregates) for each team, sorted by date descending. Each entry contains:
 
-- `date` — Last game timestamp of the series
+- `date` — Game date
+- `game_number` — Map index within the original series
 - `opponent` — The opposing team name
-- `score` — Map score string (e.g., `"2-1"`)
+- `score` — Per-map result (e.g., `"1-0"` or `"0-1"`)
 - `result` — `"win"`, `"loss"`, or `"draw"`
-- `duration_seconds` — Total game time across all maps
-- `team` / `opponent_stats` — Per-side aggregates: `name`, `kills`, `towers`, `inhibitors`
+- `duration_seconds` — Game duration for this map
+- `team` / `opponent_stats` — Per-side values: `name`, `kills`, `towers`, `inhibitors`
 
-The match detail page renders this data in a `#recent-matchups` section below the team stats grid. Each series renders a card with the date, opponent icon, score, and quick stat summaries.
+The match detail page renders this data in a `#recent-matchups` section labeled "\u00daltimos mapas". Each card shows the date, map number, opponent logo, per-map score, and side-by-side stat comparisons for kills, towers, and inhibitors.
 
 ### Dashboard Preview Odds
 

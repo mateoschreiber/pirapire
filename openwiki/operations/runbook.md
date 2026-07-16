@@ -116,14 +116,6 @@ curl -X POST http://localhost:8090/api/sources/oracles/upload \
 
 Place CSV files in `data/imports/lol_odds/inbox/`. The worker picks them up within 5 minutes.
 
-### PHASE 1 Migration (already run)
-
-If upgrading from a pre-Phase-1 installation, run:
-```bash
-docker compose exec pirapire_app sqlite3 /app/data/pirapire.db < /app/migrate_phase1.sql
-```
-This drops all legacy football/betting tables and runs integrity checks.
-
 ## Troubleshooting
 
 | Symptom | Likely Cause | Check |

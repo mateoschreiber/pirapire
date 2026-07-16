@@ -13,27 +13,27 @@
 
     <div class="competition-filter" id="competition-filter" aria-label="Filtrar por torneo"></div>
 
-    <section class="dashboard-section" aria-labelledby="teams-title">
-        <div class="section-heading">
+    <details class="dashboard-section dashboard-disclosure" aria-labelledby="teams-title">
+        <summary class="section-heading">
             <div>
                 <p class="eyebrow">Temporada actual</p>
                 <h3 id="teams-title">Participantes oficiales / equipos clasificados</h3>
             </div>
             <span id="competition-coverage" class="meta"></span>
-        </div>
+        </summary>
         <div id="competitions-container" class="competition-grid">
             <div class="skeleton dashboard-skeleton"></div>
         </div>
-    </section>
+    </details>
 
-    <section class="dashboard-section" aria-labelledby="matches-title">
-        <div class="section-heading">
+    <details class="dashboard-section dashboard-disclosure" aria-labelledby="matches-title">
+        <summary class="section-heading">
             <div>
                 <p class="eyebrow">Agenda</p>
                 <h3 id="matches-title">Partidos programados</h3>
             </div>
             <span id="matches-count" class="badge badge-gray">Cargando</span>
-        </div>
+        </summary>
         <div id="matches-container" class="match-card-grid"><div class="skeleton dashboard-skeleton"></div></div>
         <div id="empty-state" class="empty-state hidden">
             <p>No hay encuentros programados para el filtro seleccionado dentro de los próximos 14 días.</p>
@@ -42,6 +42,6 @@
             <p>Error al cargar los encuentros.</p>
             <button class="btn" type="button" onclick="refreshData()">Reintentar</button>
         </div>
-    </section>
+    </details>
 </section>
 {% endblock %}

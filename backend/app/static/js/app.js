@@ -348,17 +348,17 @@
     const averages = data.averages || {};
     container.innerHTML = '<div class="stats-team-head"><div><h4>' + teamLogo(data.team_name, "team-logo-sm") + esc(data.team_name) + '</h4><p>' + data.series_used + " series · " + data.maps_used +
       ' mapas</p></div><span class="badge ' + className + '">' + label + "</span></div>" +
-      "<div class='table-scroll'><table class='stats-table'><thead><tr><th>Indicador</th><th>Valor · últimas 5 series</th></tr></thead><tbody>" +
+      "<div class='table-scroll'><table class='stats-table'><thead><tr><th>Indicador</th><th>Valor</th></tr></thead><tbody>" +
       "<tr class='highlight-row'><td>Porcentaje de victorias</td><td><strong>" + fmtPct(data.win_rate_pct) + "</strong><small>" + data.series_wins + " victorias · " + data.series_losses + " derrotas</small></td></tr>" +
-      "<tr><td>Torretas destruidas · promedio por mapa</td><td>" + averageValue(averages.towers, 2) + "</td></tr>" +
-      "<tr><td>Inhibidores destruidos · promedio por mapa</td><td>" + averageValue(averages.inhibitors, 2) + "</td></tr>" +
-      "<tr><td>Asesinatos · promedio por mapa</td><td>" + averageValue(averages.kills, 2) + "</td></tr>" +
-      "<tr><td>Muertes · promedio por mapa</td><td>" + averageValue(averages.deaths, 2) + "</td></tr>" +
-      "<tr><td>Dragones asesinados · promedio por mapa</td><td>" + averageValue(averages.dragons, 2) + "</td></tr>" +
-      "<tr><td>Barones asesinados · promedio por mapa</td><td>" + averageValue(averages.barons, 2) + "</td></tr>" +
-      "<tr><td>Oro total · promedio por mapa</td><td>" + averageValue(averages.gold, 0) + "</td></tr>" +
-      "<tr><td>Duración promedio del mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds && data.avg_map_duration_seconds.value) + "</td></tr>" +
-      "<tr><td>Duración promedio de la serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds && data.avg_series_duration_seconds.value) + "</td></tr>" +
+      "<tr><td>Torres destruidas</td><td>" + averageValue(averages.towers, 2) + "</td></tr>" +
+      "<tr><td>Inhibidores destruidos</td><td>" + averageValue(averages.inhibitors, 2) + "</td></tr>" +
+      "<tr><td>Kills</td><td>" + averageValue(averages.kills, 2) + "</td></tr>" +
+      "<tr><td>Muertes</td><td>" + averageValue(averages.deaths, 2) + "</td></tr>" +
+      "<tr><td>Dragones</td><td>" + averageValue(averages.dragons, 2) + "</td></tr>" +
+      "<tr><td>Barones</td><td>" + averageValue(averages.barons, 2) + "</td></tr>" +
+      "<tr><td>Oro</td><td>" + averageValue(averages.gold, 0) + "</td></tr>" +
+      "<tr><td>Duración del mapa</td><td>" + fmtSeconds(data.avg_map_duration_seconds && data.avg_map_duration_seconds.value) + "</td></tr>" +
+      "<tr><td>Duración de la serie</td><td>" + fmtSeconds(data.avg_series_duration_seconds && data.avg_series_duration_seconds.value) + "</td></tr>" +
       "</tbody></table></div>";
   }
 
@@ -371,12 +371,13 @@
     const opponent = matchup.opponent_stats || {};
     const ownClass = matchup.result === "win" ? "matchup-winner" : matchup.result === "loss" ? "matchup-loser" : "";
     const oppClass = matchup.result === "loss" ? "matchup-winner" : matchup.result === "win" ? "matchup-loser" : "";
-    return '<article class="recent-matchup-card"><div class="recent-matchup-head"><span>' + esc(fmtDate(matchup.date)) + '</span><strong class="' + ownClass + '">' + teamLogo(own.name || team, "team-logo-xs") + esc(own.name || team) + ' ' + esc(matchup.score || "N/D") + '</strong><strong class="' + oppClass + '">' + esc(matchup.score ? matchup.score.split("-").reverse().join("-") : "N/D") + ' ' + teamLogo(opponent.name, "team-logo-xs") + esc(opponent.name || matchup.opponent || "N/D") + '</strong></div><div class="recent-matchup-meta"><span>Duración: ' + fmtSeconds(matchup.duration_seconds) + '</span>' + matchupMetric("Kills", own.kills, opponent.kills) + matchupMetric("Torres", own.towers, opponent.towers) + matchupMetric("Inhibs.", own.inhibitors, opponent.inhibitors) + '</div></article>';
+    const mapLabel = matchup.game_number ? "Mapa " + matchup.game_number : "Mapa";
+    return '<article class="recent-matchup-card"><div class="recent-matchup-head"><span>' + esc(fmtDate(matchup.date)) + ' · ' + mapLabel + '</span><strong class="' + ownClass + '">' + teamLogo(own.name || team, "team-logo-xs") + esc(own.name || team) + ' ' + esc(matchup.score || "N/D") + '</strong><strong class="' + oppClass + '">' + esc(matchup.score ? matchup.score.split("-").reverse().join("-") : "N/D") + ' ' + teamLogo(opponent.name, "team-logo-xs") + esc(opponent.name || matchup.opponent || "N/D") + '</strong></div><div class="recent-matchup-meta"><span>Duración: ' + fmtSeconds(matchup.duration_seconds) + '</span>' + matchupMetric("Kills", own.kills, opponent.kills) + matchupMetric("Torres", own.towers, opponent.towers) + matchupMetric("Inhibs.", own.inhibitors, opponent.inhibitors) + '</div></article>';
   }
 
   function recentMatchupPanel(team) {
     const items = team.recent_matchups || [];
-    return '<section class="recent-matchups-panel"><div class="section-heading"><div><p class="eyebrow">Últimos enfrentamientos</p><h4>' + teamLogo(team.team_name, "team-logo-sm") + esc(team.team_name) + '</h4></div></div>' + (items.length ? items.map(function (item) { return recentMatchupCard(team.team_name, item); }).join("") : '<p class="metric-unavailable">Sin tres enfrentamientos con datos disponibles.</p>') + '</section>';
+    return '<section class="recent-matchups-panel"><div class="section-heading"><div><p class="eyebrow">Últimos mapas</p><h4>' + teamLogo(team.team_name, "team-logo-sm") + esc(team.team_name) + '</h4></div></div>' + (items.length ? items.map(function (item) { return recentMatchupCard(team.team_name, item); }).join("") : '<p class="metric-unavailable">Sin tres mapas con datos disponibles.</p>') + '</section>';
   }
 
   function renderRecentMatchups(teamA, teamB) {

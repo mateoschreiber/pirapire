@@ -63,11 +63,6 @@ The worker job `import_oracles` (every 30 min) polls the Oracle's Elixir inbox d
 
 **Replacement mode:** The upload API supports `replace_existing=true` which atomically deletes all existing data for the file's years before re-importing.
 
-**Dedup service** (`backend/oracles_elixir_importer.py`):
-- Separate standalone deduplication script (not wired into the current pipeline)
-- Groups games by `(league, date, team_a, team_b)` and keeps only the first 5 maps per pair
-- Renames encountered duplicates with a `.processed` suffix
-
 ## 4. Series Builder
 
 **Service:** `backend/app/services/series_builder.py`

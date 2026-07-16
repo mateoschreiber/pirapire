@@ -10,6 +10,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./backend/app/static/team-logos:/app/app/static/team-logos
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -28,6 +29,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./backend/app/static/team-logos:/app/app/static/team-logos
     restart: unless-stopped
     depends_on:
       pirapire_app:

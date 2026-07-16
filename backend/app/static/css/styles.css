@@ -140,6 +140,11 @@ table tbody tr:hover { background: #F8F9FA; }
 .eyebrow { color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .dashboard-hero .eyebrow { color: #93c5fd; }
 .dashboard-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.dashboard-disclosure > summary { cursor:pointer; list-style:none; }
+.dashboard-disclosure > summary::-webkit-details-marker { display:none; }
+.dashboard-disclosure > summary::after { content:"Mostrar"; color:var(--primary); font-size:12px; font-weight:700; white-space:nowrap; }
+.dashboard-disclosure[open] > summary { margin-bottom:16px; }
+.dashboard-disclosure[open] > summary::after { content:"Ocultar"; }
 .section-heading { margin-bottom: 16px; }
 .section-heading h3 { font-size: 18px; margin-top: 2px; }
 .competition-filter { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 14px; scrollbar-width: thin; }
@@ -340,6 +345,7 @@ table tbody tr { cursor: default; transition: background .12s; }
 @media (max-width: 520px) {
   .competition-card-head { gap: 10px; }
   .competition-card-badges { max-width: 46%; }
+  .dashboard-disclosure > summary { gap:8px; }
 }
 
 .match-odds.preview-loading { display: flex; align-items: center; gap: 9px; background: #f8fafc; border: 1px dashed #cbd5e1; color: #64748b; }

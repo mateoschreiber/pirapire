@@ -13,6 +13,7 @@ def test_dashboard_html():
     assert response.status_code == 200
     assert "Próximos encuentros" in response.text
     assert 'data-testid="live-clock"' in response.text
+    assert 'class="dashboard-section dashboard-disclosure"' in response.text
 
 
 def test_sources_html_has_upload_flow():
@@ -74,6 +75,17 @@ def test_static_assets():
     assert 'el("live-clock")' in js.text
     assert "el(live-clock)" not in js.text
 
+
+def test_logo_aliases_use_downloaded_official_assets():
+    import json
+    from pathlib import Path
+
+    from app.services.team_logo_sync import DISPLAY_ALIASES, apply_display_aliases
+
+    manifest = json.loads((Path(__file__).parents[1] / "app/static/team-logos/manifest.json").read_text())
+    apply_display_aliases(manifest)
+    assert all(manifest.get(alias) == manifest.get(official) for alias, official in DISPLAY_ALIASES.items())
+
 def test_competition_classifier_excludes_academies():
     from app.routers.lol_api import _competition_code
     assert _competition_code("LCK/2026 Season/Rounds 3-4") == "LCK"
@@ -114,14 +126,14 @@ def test_2026_official_competition_rosters_are_complete():
 
 def test_dashboard_assets_include_requested_metrics():
     js = client.get("/static/js/app.js").text
-    assert "Torretas destruidas" in js
+    assert "Torres destruidas" in js
     assert "Inhibidores destruidos" in js
-    assert "Dragones asesinados" in js
-    assert "Barones asesinados" in js
-    assert "Oro total" in js
+    assert "Dragones" in js
+    assert "Barones" in js
+    assert "Oro" in js
     assert "Porcentaje de victorias" in js
     assert "Cuotas justas estimadas" in js
-    assert "Valor · últimas 5 series" in js
+    assert '<th>Valor</th>' in js
     assert "solo_kills_status" not in js
     assert "Solo kills" not in js
     assert "CS promedio por mapa" in js

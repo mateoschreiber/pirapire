@@ -48,7 +48,7 @@ The conftest creates a **temporary SQLite database** in the system temp director
 
 | Test | What it validates |
 |------|-------------------|
-| `test_dashboard_html()` | `/` renders competitive title, live clock |
+| `test_dashboard_html()` | `/` renders competitive title, live clock, `dashboard-disclosure` collapsible sections |
 | `test_sources_html_has_upload_flow()` | `/sources` has preview/save buttons, upload validation, `upload-progress-bar`, XMLHttpRequest upload, auto_refresh and configuration_note strings |
 | `test_match_detail_html()` | `/lol/matches/{key}` renders loading state, estimated market heading, `market-source-badge`, recent matchups section |
 | `test_upcoming_api()` | `/api/lol/matches/upcoming` returns correct window_hours |
@@ -58,7 +58,8 @@ The conftest creates a **temporary SQLite database** in the system temp director
 | `test_static_assets()` | CSS serves Inter font; JS includes `el("live-clock")`; Inter font file served |
 | `test_competition_classifier_excludes_academies()` | Academy leagues (LCK CL) excluded; LTA North→LCS, LTA South→CBLOL mapping verified; bare LTA returns None |
 | `test_upcoming_api_exposes_only_allowed_competitions()` | Only 10 competition codes appear (LCS, CBLOL replace LTA) |
-| `test_dashboard_assets_include_requested_metrics()` | JS contains `loadPreviewOdds`, `data-odds-key`, `"Cuotas calculadas no disponibles"`, per-map labels, `kills_per_map`, `deaths_per_map`, `"Asesinatos promedio por mapa"`, `"Muertes promedio por mapa"` |
+| `test_logo_aliases_use_downloaded_official_assets()` | `DISPLAY_ALIASES` map to already-downloaded official logos in manifest |
+| `test_dashboard_assets_include_requested_metrics()` | JS contains `loadPreviewOdds`, `data-odds-key`, `"Cuotas calculadas no disponibles"`, shortened labels (`"Torres destruidas"`, `"Dragones"`, `"Barones"`, `"Oro"`), `"Porcentaje de victorias"`, `<th>Valor</th>` column header |
 | `test_manual_odds_upload_and_match_response()` | Full odds upload → API response integration test |
 | `test_estimated_market_uses_both_teams_recent_series()` | `_estimated_market(4-1, 2-3)` returns p=62.5%, odds=1.60 / 2.67 with Laplace smoothing |
 | `test_2026_official_competition_rosters_are_complete()` | 2026 rosters: counts (LCK=10, LPL=14, LEC=10, LCS=8, CBLOL=8, LCP=8, MSI=11, FIRST_STAND=8, EWC=16), all `roster_status="official"` except WORLDS (`not_published`), LCK teams match published list |
