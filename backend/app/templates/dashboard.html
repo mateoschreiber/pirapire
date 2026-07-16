@@ -13,20 +13,7 @@
 
     <div class="competition-filter" id="competition-filter" aria-label="Filtrar por torneo"></div>
 
-    <details class="dashboard-section dashboard-disclosure" aria-labelledby="teams-title">
-        <summary class="section-heading">
-            <div>
-                <p class="eyebrow">Temporada actual</p>
-                <h3 id="teams-title">Participantes oficiales / equipos clasificados</h3>
-            </div>
-            <span id="competition-coverage" class="meta"></span>
-        </summary>
-        <div id="competitions-container" class="competition-grid">
-            <div class="skeleton dashboard-skeleton"></div>
-        </div>
-    </details>
-
-    <details class="dashboard-section dashboard-disclosure" aria-labelledby="matches-title">
+    <details class="dashboard-section dashboard-disclosure" aria-labelledby="matches-title" open>
         <summary class="section-heading">
             <div>
                 <p class="eyebrow">Agenda</p>
@@ -41,6 +28,19 @@
         <div id="error-state" class="error-state hidden">
             <p>Error al cargar los encuentros.</p>
             <button class="btn" type="button" onclick="refreshData()">Reintentar</button>
+        </div>
+    </details>
+
+    <details class="dashboard-section dashboard-disclosure" aria-labelledby="teams-title">
+        <summary class="section-heading">
+            <div>
+                <p class="eyebrow">Temporada actual</p>
+                <h3 id="teams-title">Participantes oficiales / equipos clasificados</h3>
+            </div>
+            <span id="competition-coverage" class="meta"></span>
+        </summary>
+        <div id="competitions-container" class="competition-grid">
+            <div class="skeleton dashboard-skeleton"></div>
         </div>
     </details>
 </section>

@@ -148,7 +148,7 @@ Core statistics engine. Computes team and player metrics from the last 5 complet
 - `_recent_series()` — Fetches last 5 complete series from LolSeries (Oracle's Elixir only)
 - `_team_payload()` — Computes both percentage shares (in `metrics`) and absolute per-map averages (in `averages`) for towers, inhibitors, kills, deaths, dragons, barons, and gold. Also computes **series win rate** (`series_wins`, `series_losses`, `win_rate_pct`), average map/series duration, and coverage labels. The match detail UI renders the absolute per-map averages, not percentages.
 - `_players()` — Computes per-player kills_per_map and deaths_per_map, gold per map, and CS per map. (Percentage shares — `kills_pct`, `deaths_pct` — are computed internally for compatibility but not rendered by the current UI.)
-- `_recent_matchups()` — Returns the last 3 completed series for a team, each with opponent, score, result, duration, and per-side kills/towers/inhibitors. Rendered as `#recent-matchups` cards on the match detail page.
+- `_recent_matchups()` — Returns the last 3 individual maps (not series aggregates) for a team, sorted by date descending. Each entry has `date`, `game_number` (map index), `opponent`, per-map `score` (e.g., "1-0" or "0-1"), `result`, per-map `duration_seconds`, and per-side `team`/`opponent_stats` (kills, towers, inhibitors). Rendered as `#recent-matchups` cards on the match detail page.
 - `_estimated_market()` — Computes probabilistic market odds from both teams' recent series records using Laplace-smoothed relative probability. Returns fair decimal odds and win probability per team, or `available: false` with a reason when data is insufficient.
 - `precompute_upcoming_stats()` — Stub. Returns `{"precomputed": 0, "total_scheduled": 0}`. Scheduled in the worker every 30 min but does not yet compute or persist anything.
 
@@ -177,6 +177,10 @@ Downloads Oracle's Elixir-compatible CSV from a remote URL (Google Drive share l
 
 ### `team_logo_sync.py`
 Downloads official team logos from lolesports.com tournament and league overview pages into `static/team-logos/`. Runs as a daily worker job (`team_logo_sync_interval_minutes`, default 1440). Scrapes `alt` attributes for team names and `f=` query params for logo URLs from 12 official LoL Esports pages. Logo keys are NFKD-normalized team names with ASCII transliteration.
+
+Key supporting declarations:
+- **`DISPLAY_ALIASES`** — 17 provider spelling → official logo key mappings (e.g., `"cloud9"` → `"cloud9-kia"`, `"pain-legends"` → `"pain-gaming"`). Applied via `apply_display_aliases()` before and after the feed scrape so manifest entries use the canonical key.
+- **`OFFICIAL_TEAM_ASSETS`** — Direct-url fallback assets for teams absent from Riot's current feed (cnb-legends, mibr). Cached by `sync_known_official_assets()` before the main scrape loop.
 
 ## Key Git History
 

@@ -14,6 +14,7 @@ def test_dashboard_html():
     assert "Próximos encuentros" in response.text
     assert 'data-testid="live-clock"' in response.text
     assert 'class="dashboard-section dashboard-disclosure"' in response.text
+    assert response.text.index('aria-labelledby="matches-title" open') < response.text.index('aria-labelledby="teams-title"')
 
 
 def test_sources_html_has_upload_flow():
