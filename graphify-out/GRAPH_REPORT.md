@@ -1,7 +1,7 @@
 # Graph Report - pirapire  (2026-07-23)
 
 ## Corpus Check
-- 68 files · ~181,203 words
+- 68 files · ~181,450 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `217b3a8a`
+- Built from commit: `82ed8821`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -150,7 +150,7 @@ Nodes (18): Graphify add URL Command, Graphify Watch Mode (--watch), Graphify To
 
 ### Community 11 - "Match Statistics Engine"
 Cohesion: 0.33
-Nodes (5): Cross-Reference: Key Entry Points, Key External Files, Latest Additions (commits `56d9fe8` + uncommitted), Removed from working tree, Source Map
+Nodes (5): Cross-Reference: Key Entry Points, Key External Files, Latest Additions (commits `56d9fe8`, uncommitted caching + KESPA), Removed from working tree, Source Map
 
 ### Community 12 - "Team Logos (Worlds Batch)"
 Cohesion: 0.30
@@ -245,7 +245,7 @@ Cohesion: 0.20
 Nodes (9): Conftest Setup, Coverage Areas Not Yet Tested, Key Tests, test_health.py, test_pages.py, Test Structure, test_timezone.py, Testing (+1 more)
 
 ## Knowledge Gaps
-- **174 isolated node(s):** `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree`, `$schema`, `.opencode/plugins/graphify.js` (+169 more)
+- **174 isolated node(s):** `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree`, `Test Structure`, `Conftest Setup` (+169 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 

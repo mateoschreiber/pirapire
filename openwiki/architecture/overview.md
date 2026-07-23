@@ -153,7 +153,10 @@ Core statistics engine. Computes team and player metrics from the last 5 complet
 - `_players()` — Computes per-player kills_per_map and deaths_per_map, gold per map, and CS per map. (Percentage shares — `kills_pct`, `deaths_pct` — are computed internally for compatibility but not rendered by the current UI.)
 - `_recent_matchups()` — Returns the last 3 individual maps (not series aggregates) for a team, sorted by date descending. Each entry has `date`, `game_number` (map index), `opponent`, per-map `score` (e.g., "1-0" or "0-1"), `result`, per-map `duration_seconds`, and per-side `team`/`opponent_stats` (kills, towers, inhibitors). Rendered as `#recent-matchups` cards on the match detail page.
 - `_estimated_market()` — Computes probabilistic market odds from both teams' recent series records using Laplace-smoothed relative probability. Returns fair decimal odds and win probability per team, or `available: false` with a reason when data is insufficient.
-- `precompute_upcoming_stats()` — Stub. Returns `{"precomputed": 0, "total_scheduled": 0}`. Scheduled in the worker every 30 min but does not yet compute or persist anything.
+- `precompute_upcoming_stats()` — Iterates scheduled matches, calls `compute_match_statistics()`, and persists results to `LolMatchStatisticsReadModel` via `store_match_statistics()`. Subsequent calls skip already-computed matches. Returns `{"precomputed": N, "skipped": M}`.
+- `cached_match_statistics()` / `cached_statistics_from_record()` — Validates cached results by comparing `input_fingerprint` (SHA-256 of match key + teams + timestamps); returns cached payload if still fresh.
+- `store_match_statistics()` — Upserts a `LolMatchStatisticsReadModel` row with payload, coverage, fingerprint, and timestamps.
+- `invalidate_statistics_cache()` — Deletes all cached rows. Called by `rebuild_series()`, `sync_leaguepedia_schedule()`, and `import_oracles_inbox()` after data changes.
 
 ### `series_builder.py`
 Groups LolGameHistory records into LolSeries. `rebuild_series()`:
@@ -161,6 +164,7 @@ Groups LolGameHistory records into LolSeries. `rebuild_series()`:
 2. Creates series with scores, best_of (1/3/5), game_ids_json
 3. Links games to series via series_id FK
 4. Wipes and rebuilds all series atomically
+5. Invalidates statistics cache (`invalidate_statistics_cache()`) so downstream consumers see fresh data
 
 ### `lol_team_aliases.py`
 Team name normalization. `canonical_team()` uses a multi-step resolution:

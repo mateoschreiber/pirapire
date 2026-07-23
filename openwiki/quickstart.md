@@ -45,7 +45,7 @@ Open **http://localhost:8090**.
 - **Statistics Engine** — Computes team and player metrics from the last 5 completed series per team (strictly before match kickoff). Produces absolute per-map averages for towers, inhibitors, kills, deaths, dragons, barons, and gold, plus series win rate, average map/series duration, and form-based market odds.
 - **Coverage Labels** — Metrics are tagged `complete`, `partial`, or `unavailable` based on how many recent series had usable data.
 - **Team Aliases** — Normalizes team names across sources (Leaguepedia, Oracle's Elixir manual CSV) using a flexible alias table with NFKD normalization.
-- **Competition Classification** — Matches are classified into 10 standard league codes (`LCK`, `LPL`, `LEC`, `LCS`, `CBLOL`, `LCP`, `WORLDS`, `MSI`, `FIRST_STAND`, `EWC`). Former LTA (Americas) split into LCS (North) and CBLOL (South) for 2026.
+- **Competition Classification** — Matches are classified into 11 standard league codes (`LCK`, `LPL`, `LEC`, `LCS`, `CBLOL`, `LCP`, `WORLDS`, `MSI`, `FIRST_STAND`, `EWC`, `KESPA`). Former LTA (Americas) split into LCS (North) and CBLOL (South) for 2026.
 
 > **Note:** The project README outdatedly says "last 10 completed series" — the actual code uses 5. The wiki is canonical for implementation details.
 

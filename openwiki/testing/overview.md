@@ -58,7 +58,7 @@ The conftest creates a **temporary SQLite database** in the system temp director
 | `test_match_not_found()` | Non-existent match returns 404 |
 | `test_static_assets()` | CSS serves Inter font; JS includes `el("live-clock")`; Inter font file served |
 | `test_competition_classifier_excludes_academies()` | Academy leagues (LCK CL) excluded; LTA North→LCS, LTA South→CBLOL mapping verified; bare LTA returns None |
-| `test_upcoming_api_exposes_only_allowed_competitions()` | Only 10 competition codes appear (LCS, CBLOL replace LTA) |
+| `test_upcoming_api_exposes_only_allowed_competitions()` | Only 11 competition codes appear (LCS, CBLOL replace LTA; KESPA added) |
 | `test_logo_aliases_use_downloaded_official_assets()` | `DISPLAY_ALIASES` map to already-downloaded official logos in manifest |
 | `test_dashboard_assets_include_requested_metrics()` | JS contains `loadPreviewOdds`, `data-odds-key`, `"Cuotas calculadas no disponibles"`, shortened labels (`"Torres destruidas"`, `"Dragones"`, `"Barones"`, `"Oro"`), `"Porcentaje de victorias"`, `<th>Valor</th>` column header |
 | `test_manual_odds_upload_and_match_response()` | Full odds upload → API response integration test |
