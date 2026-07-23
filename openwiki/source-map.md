@@ -167,11 +167,11 @@ pirapire/
 | `services/lol_metrics_engine.py` | **Added** `_recent_matchups()` — last 3 individual maps per team; **added statistics caching layer** — `cached_match_statistics()`, `store_match_statistics()`, `invalidate_statistics_cache()`, `cached_statistics_from_record()`, `_cache_fingerprint()`. `precompute_upcoming_stats()` now persists to `LolMatchStatisticsReadModel` |
 | `routers/lol_api.py` | **Added** `_utc_iso()` — naive SQLite datetime → explicit UTC ISO; **batch odds loading** via `_current_odds_by_match()` (2 queries vs 2N); **KESPA** added to COMPETITIONS (11 total); `/statistics` endpoint serves from cache; `/upcoming` loads cached stats inline |
 | `models_lol.py` | **Changed** `LolMatchStatisticsReadModel.payload_json`/`coverage_json` from `Optional[str]` to `Optional[dict]` |
-| `migrations.py` | **Added** performance indexes: `ix_lolmatchevent_status_start`, `ix_lolseries_team_a_stats`, `ix_lolseries_team_b_stats` |
+| `migrations.py` | **Added** `_rename_incompatible_legacy_table()` — renames pre-LoL datasource/sourcerun tables; **added** performance indexes `ix_lolmatchevent_status_start`, `ix_lolseries_team_a_stats`, `ix_lolseries_team_b_stats` |
 | `services/series_builder.py` | **Added** `invalidate_statistics_cache()` call after rebuild |
 | `services/sync/lol_sync.py` | **Added** early-exit skip detection (no-op if match unchanged); `invalidate_statistics_cache()` after schedule sync |
 | `services/imports/oracles_elixir_importer.py` | **Added** `rebuild_series()` call after inbox import |
-| `worker_main.py` | **Changed** `precompute_stats` job now uses `next_run_time=now` (runs immediately on worker start) |
+| `worker_main.py` | **Added** `_oracle_import_active()` guard; `job_process_queued_oracle_uploads()`; `job_team_logo_sync()`; removed `next_run_time=now` from sync jobs; `precompute_stats` now uses `next_run_time=now` |
 | `static/js/app.js` | **Removed** `loadPreviewOdds()`, `previewOddsCache`, concurrent fetcher; preview odds now rendered server-side from `match.estimated_market`; added `pending` status handling for statistics endpoint |
 | `tests/test_statistics_cache.py` | **New** — Cache precompute persist + reuse, API serves from cache without recomputing |
 | `services/imports/remote_oracles_elixir.py` | **New** — Downloads OE CSV from remote URL (Google Drive support) |
@@ -182,12 +182,10 @@ pirapire/
 | `static/team-logos/` | **New** — Local team logo cache directory |
 | `config.py` | **Extended** — `lol_history_remote_max_mb`, `lol_history_remote_poll_minutes`, `team_logo_sync_interval_minutes` |
 | `main.py` | **Added** `/favicon.ico` route serving `favicon.svg` |
-| `worker_main.py` | **Added** `_oracle_import_active()` guard; `job_process_queued_oracle_uploads()`; `job_team_logo_sync()`; removed `next_run_time=now` from sync jobs |
 | `tests/test_health.py` | **Added** `test_favicon_is_served()`, richer sources API assertion |
-| `tests/test_pages.py` | **Added** upload progress, `_utc_iso`, per-map kill/death assertions |
+| `tests/test_pages.py` | **Added** upload progress, `_utc_iso`, per-map kill/death assertions; 11 competitions (KESPA added) |
 | `tests/test_remote_oracles.py` | **New** — Remote CSV download + validation tests |
 | `docker-compose.yml` | **Updated** — mounts team-logos volume for both containers |
-| `migrations.py` | **Added** `_rename_incompatible_legacy_table()` — renames pre-LoL datasource/sourcerun tables |
 | `backend/scripts/` | **New** — Admin/utility scripts directory |
 
 ### Removed from working tree
