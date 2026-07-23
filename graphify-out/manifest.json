@@ -225,8 +225,8 @@
     "semantic_hash": "3a9487bfbe7ac0deef5adcefdca7da08"
   },
   "openwiki/.last-update.json": {
-    "mtime": 1784810005.3077633,
-    "ast_hash": "8af8382b34a3bfef1672bc59bfa9a90b",
+    "mtime": 1784828215.4006395,
+    "ast_hash": "c0f41004a106aa9d72651641c62696bc",
     "semantic_hash": ""
   },
   ".github/workflows/openwiki-update.yml": {
