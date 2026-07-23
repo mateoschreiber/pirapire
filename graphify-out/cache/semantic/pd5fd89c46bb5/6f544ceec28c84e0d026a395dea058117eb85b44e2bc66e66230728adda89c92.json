@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_suzhou_lng_esports_image", "label": "Suzhou LNG Esports Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/suzhou-lng-esports.png", "metadata": {"team": "LNG Esports", "league": "LPL", "region": "China", "city": "Suzhou"}}], "edges": [], "hyperedges": []}

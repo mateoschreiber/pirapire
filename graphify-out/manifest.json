@@ -1,0 +1,682 @@
+{
+  ".opencode/opencode.json": {
+    "mtime": 1784807584.6927042,
+    "ast_hash": "e5f74d14a81702b55bdf53b33ec991d7",
+    "semantic_hash": "e5f74d14a81702b55bdf53b33ec991d7"
+  },
+  ".opencode/plugins/graphify.js": {
+    "mtime": 1784807529.7201383,
+    "ast_hash": "3ea725724bc8ebe483c9f13d6aa1124f",
+    "semantic_hash": "3ea725724bc8ebe483c9f13d6aa1124f"
+  },
+  "backend/app/__init__.py": {
+    "mtime": 1784119343.2172496,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/config.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "5d0a16b8daf3e334c5fa23c7e6bdc92a",
+    "semantic_hash": "5d0a16b8daf3e334c5fa23c7e6bdc92a"
+  },
+  "backend/app/database.py": {
+    "mtime": 1784123918.5829675,
+    "ast_hash": "e9a9185fa8e12f26fa2fd282e8a4a2c6",
+    "semantic_hash": "e9a9185fa8e12f26fa2fd282e8a4a2c6"
+  },
+  "backend/app/main.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "f56f32d22233cb1992968c112eaa11b0",
+    "semantic_hash": "f56f32d22233cb1992968c112eaa11b0"
+  },
+  "backend/app/migrations.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "6bc3a3ea29effb08b6a8367f2a828a53",
+    "semantic_hash": "6bc3a3ea29effb08b6a8367f2a828a53"
+  },
+  "backend/app/models_lol.py": {
+    "mtime": 1784124040.1722617,
+    "ast_hash": "1cf89fae10cfb08b3931b1605255d2c6",
+    "semantic_hash": "1cf89fae10cfb08b3931b1605255d2c6"
+  },
+  "backend/app/routers/__init__.py": {
+    "mtime": 1784119342.7212448,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/routers/health.py": {
+    "mtime": 1784119342.7172446,
+    "ast_hash": "3f52906b3e9a44b25b19975fa168243a",
+    "semantic_hash": "3f52906b3e9a44b25b19975fa168243a"
+  },
+  "backend/app/routers/lol_api.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "98789d76f16085bce2a802bd2542a991",
+    "semantic_hash": "98789d76f16085bce2a802bd2542a991"
+  },
+  "backend/app/routers/pages.py": {
+    "mtime": 1784124094.392839,
+    "ast_hash": "a2c7244e66d9424ac65502a107db4082",
+    "semantic_hash": "a2c7244e66d9424ac65502a107db4082"
+  },
+  "backend/app/routers/sources.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "25459b2d94b056c392108d658d800951",
+    "semantic_hash": "25459b2d94b056c392108d658d800951"
+  },
+  "backend/app/schemas.py": {
+    "mtime": 1784119342.7212448,
+    "ast_hash": "36afb0a878aacddf60d8589b517073af",
+    "semantic_hash": "36afb0a878aacddf60d8589b517073af"
+  },
+  "backend/app/services/__init__.py": {
+    "mtime": 1784119343.0092475,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/services/http_client.py": {
+    "mtime": 1784119342.8772464,
+    "ast_hash": "09db21cd18b82a98737459a2045c824e",
+    "semantic_hash": "09db21cd18b82a98737459a2045c824e"
+  },
+  "backend/app/services/imports/__init__.py": {
+    "mtime": 1784119342.9132466,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/services/imports/oracles_elixir_importer.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "5a3e964779b1c931a5bec3e13250c87e",
+    "semantic_hash": "5a3e964779b1c931a5bec3e13250c87e"
+  },
+  "backend/app/services/imports/remote_oracles_elixir.py": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "85adbb0918205adf6a85fdefbb0c5b14",
+    "semantic_hash": "85adbb0918205adf6a85fdefbb0c5b14"
+  },
+  "backend/app/services/lol_league_catalog.py": {
+    "mtime": 1784119342.937247,
+    "ast_hash": "0ee12d272c67285a8f185d6d54d7658d",
+    "semantic_hash": "0ee12d272c67285a8f185d6d54d7658d"
+  },
+  "backend/app/services/lol_metrics_engine.py": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "84aa77bde316a607184212738361dc3b",
+    "semantic_hash": "84aa77bde316a607184212738361dc3b"
+  },
+  "backend/app/services/lol_odds_importer.py": {
+    "mtime": 1784133551.1085553,
+    "ast_hash": "02e25c6b61c08114967a2bdff7f83635",
+    "semantic_hash": "02e25c6b61c08114967a2bdff7f83635"
+  },
+  "backend/app/services/lol_team_aliases.py": {
+    "mtime": 1784142163.6096194,
+    "ast_hash": "ca4feefd72d0f9ed5be8023746d4ad90",
+    "semantic_hash": "ca4feefd72d0f9ed5be8023746d4ad90"
+  },
+  "backend/app/services/series_builder.py": {
+    "mtime": 1784134402.1092181,
+    "ast_hash": "eb2820350de1efda2c893fdd66bc5ea9",
+    "semantic_hash": "eb2820350de1efda2c893fdd66bc5ea9"
+  },
+  "backend/app/services/sync/__init__.py": {
+    "mtime": 1784119342.9972475,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/services/sync/lol_sync.py": {
+    "mtime": 1784120387.4078617,
+    "ast_hash": "ad8ba4c19b2215a2c9c240dfe89e0134",
+    "semantic_hash": "ad8ba4c19b2215a2c9c240dfe89e0134"
+  },
+  "backend/app/services/team_logo_sync.py": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "6f35aa6ef760834fa882428332b72dd4",
+    "semantic_hash": "6f35aa6ef760834fa882428332b72dd4"
+  },
+  "backend/app/sources/__init__.py": {
+    "mtime": 1784119343.0772483,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/sources/base.py": {
+    "mtime": 1784119343.033248,
+    "ast_hash": "5d59bc721db1d74de458ee5d773dadf3",
+    "semantic_hash": "5d59bc721db1d74de458ee5d773dadf3"
+  },
+  "backend/app/sources/lol/__init__.py": {
+    "mtime": 1784119343.0652483,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/sources/lol/datadragon.py": {
+    "mtime": 1784119343.0532482,
+    "ast_hash": "ce7708bb20dbae973f0ab3c9caf7121d",
+    "semantic_hash": "ce7708bb20dbae973f0ab3c9caf7121d"
+  },
+  "backend/app/static/js/app.js": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "83ae2d89df876aabf3ea4267fc66f90e",
+    "semantic_hash": "83ae2d89df876aabf3ea4267fc66f90e"
+  },
+  "backend/app/static/team-logos/manifest.json": {
+    "mtime": 1784805549.8296483,
+    "ast_hash": "7721584d52923fda92677470c0dc4ad8",
+    "semantic_hash": "7721584d52923fda92677470c0dc4ad8"
+  },
+  "backend/app/utils/__init__.py": {
+    "mtime": 1784119343.1972494,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/utils/datetime_utils.py": {
+    "mtime": 1784119343.1852493,
+    "ast_hash": "ac17fe8e621dc5e1b7624c6f9c1e233d",
+    "semantic_hash": "ac17fe8e621dc5e1b7624c6f9c1e233d"
+  },
+  "backend/app/worker_main.py": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "d703e97a72564163333f2a1383c0f017",
+    "semantic_hash": "d703e97a72564163333f2a1383c0f017"
+  },
+  "backend/scripts/sync_team_logos.py": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "b21fcfe4d1cf1c3a7a8e1f2b730ab285",
+    "semantic_hash": "b21fcfe4d1cf1c3a7a8e1f2b730ab285"
+  },
+  "backend/tests/conftest.py": {
+    "mtime": 1784119343.2692502,
+    "ast_hash": "194e4bd33b98271c63d4d8f898291c4b",
+    "semantic_hash": "194e4bd33b98271c63d4d8f898291c4b"
+  },
+  "backend/tests/fixtures/datadragon_champion.json": {
+    "mtime": 1784119343.2852504,
+    "ast_hash": "bfce90e93a150834d91f8dc2bf66a2f2",
+    "semantic_hash": "bfce90e93a150834d91f8dc2bf66a2f2"
+  },
+  "backend/tests/fixtures/datadragon_versions.json": {
+    "mtime": 1784119343.3012505,
+    "ast_hash": "60eafdfff86532a3e60e0ed90dd75633",
+    "semantic_hash": "60eafdfff86532a3e60e0ed90dd75633"
+  },
+  "backend/tests/test_health.py": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "911da4ab61790c4ff290aad943b3aad4",
+    "semantic_hash": "911da4ab61790c4ff290aad943b3aad4"
+  },
+  "backend/tests/test_pages.py": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "c594484160a70d2085347a3808a7704a",
+    "semantic_hash": "c594484160a70d2085347a3808a7704a"
+  },
+  "backend/tests/test_remote_oracles.py": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "220a4c2904a1133e86afe75988ae972b",
+    "semantic_hash": "220a4c2904a1133e86afe75988ae972b"
+  },
+  "backend/tests/test_timezone.py": {
+    "mtime": 1784126321.0092752,
+    "ast_hash": "eb2e8993268e5cb264d4578d9b369e13",
+    "semantic_hash": "eb2e8993268e5cb264d4578d9b369e13"
+  },
+  "install.sh": {
+    "mtime": 1784117037.7999928,
+    "ast_hash": "3a9487bfbe7ac0deef5adcefdca7da08",
+    "semantic_hash": "3a9487bfbe7ac0deef5adcefdca7da08"
+  },
+  "openwiki/.last-update.json": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "70f8b566459145a4c0f11ef1c6d3ef22",
+    "semantic_hash": "70f8b566459145a4c0f11ef1c6d3ef22"
+  },
+  ".github/workflows/openwiki-update.yml": {
+    "mtime": 1784143007.0308592,
+    "ast_hash": "c0039579c3e4fd0b93e236f2f203d5b4",
+    "semantic_hash": "c0039579c3e4fd0b93e236f2f203d5b4"
+  },
+  ".opencode/skills/graphify/SKILL.md": {
+    "mtime": 1784807529.7201383,
+    "ast_hash": "a8188bdf35abb58e750eb1750272caf8",
+    "semantic_hash": "a8188bdf35abb58e750eb1750272caf8"
+  },
+  ".opencode/skills/graphify/references/add-watch.md": {
+    "mtime": 1784804166.329583,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": "d59d027fe449f06aa03905a01184e779"
+  },
+  ".opencode/skills/graphify/references/exports.md": {
+    "mtime": 1784804166.329583,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": "9da2a2152e60a22f07f05fed5158f287"
+  },
+  ".opencode/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1784804166.3375828,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": "42fef56a01698118f7fd722acdadea34"
+  },
+  ".opencode/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1784804166.3375828,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": "cde13df085e4c492aeb7ba298a996d0d"
+  },
+  ".opencode/skills/graphify/references/hooks.md": {
+    "mtime": 1784804166.341583,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": "3f545db6ce646650bb9de588f5512a27"
+  },
+  ".opencode/skills/graphify/references/query.md": {
+    "mtime": 1784804166.341583,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": "3c46f8ad006874260614ed8657d02307"
+  },
+  ".opencode/skills/graphify/references/transcribe.md": {
+    "mtime": 1784804166.345583,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": "67b6a5fa6c0974e18f60db9f8932fbd8"
+  },
+  ".opencode/skills/graphify/references/update.md": {
+    "mtime": 1784804166.3495831,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": "9378bd03d56baaf78bd738ab3848f142"
+  },
+  "AGENTS.md": {
+    "mtime": 1784807529.7201383,
+    "ast_hash": "cd923fb73a48b8b8d44c00c612fa9bd0",
+    "semantic_hash": "cd923fb73a48b8b8d44c00c612fa9bd0"
+  },
+  "CLAUDE.md": {
+    "mtime": 1784143007.0548594,
+    "ast_hash": "98901357f8d8cdd5270a78cb3fff129b",
+    "semantic_hash": "98901357f8d8cdd5270a78cb3fff129b"
+  },
+  "README.md": {
+    "mtime": 1784634720.636788,
+    "ast_hash": "b906c9eedab5f492e86cd8634010ba59",
+    "semantic_hash": "b906c9eedab5f492e86cd8634010ba59"
+  },
+  "backend/app/templates/base.html": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "58fe0ab77343bc0ce369abd6ed959e18",
+    "semantic_hash": "58fe0ab77343bc0ce369abd6ed959e18"
+  },
+  "docker-compose.yml": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "8014732f2ce4200ef5c1a53508fffb30",
+    "semantic_hash": "8014732f2ce4200ef5c1a53508fffb30"
+  },
+  "openwiki/architecture/overview.md": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "8c128662e7e73637e37bd7a095f237b7",
+    "semantic_hash": "8c128662e7e73637e37bd7a095f237b7"
+  },
+  "openwiki/domain/lol-metrics.md": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "63b69e1577f0eee802f0029c19dbb9c6",
+    "semantic_hash": "63b69e1577f0eee802f0029c19dbb9c6"
+  },
+  "openwiki/integrations/overview.md": {
+    "mtime": 1784136356.6263955,
+    "ast_hash": "9ecda6e203e5ffbddb17dbfb34ae7370",
+    "semantic_hash": "9ecda6e203e5ffbddb17dbfb34ae7370"
+  },
+  "openwiki/operations/runbook.md": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "f2b83ff1ad0a2be6a55b0fb1e9ece8c9",
+    "semantic_hash": "f2b83ff1ad0a2be6a55b0fb1e9ece8c9"
+  },
+  "openwiki/quickstart.md": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "8ac8ed831a96fbedea0b95e2e3cf896d",
+    "semantic_hash": "8ac8ed831a96fbedea0b95e2e3cf896d"
+  },
+  "openwiki/workflows/data-pipeline.md": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "2457f373f92a293abd38799758e8a1ae",
+    "semantic_hash": "2457f373f92a293abd38799758e8a1ae"
+  },
+  "backend/app/static/favicon.svg": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "0ab464c9ea04afb1bf86ea137eb48390",
+    "semantic_hash": "0ab464c9ea04afb1bf86ea137eb48390"
+  },
+  "backend/app/static/team-logos/anyone-s-legend.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "2fe49e01e204fe6237d607b24891ca87",
+    "semantic_hash": "2fe49e01e204fe6237d607b24891ca87"
+  },
+  "backend/app/static/team-logos/beijing-jdg-esports.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "28e1b5bd8026166f6a5c112860d19a03",
+    "semantic_hash": "28e1b5bd8026166f6a5c112860d19a03"
+  },
+  "backend/app/static/team-logos/bilibili-gaming.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "ed1dfd43cc0c2349b834de1894329982",
+    "semantic_hash": "ed1dfd43cc0c2349b834de1894329982"
+  },
+  "backend/app/static/team-logos/bnk-fearx.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "fcf5a9b29e8172b5d0c01851494ab6ca",
+    "semantic_hash": "fcf5a9b29e8172b5d0c01851494ab6ca"
+  },
+  "backend/app/static/team-logos/cloud9-kia.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "69ef66960583dd6c9a7832b5191fe193",
+    "semantic_hash": "69ef66960583dd6c9a7832b5191fe193"
+  },
+  "backend/app/static/team-logos/cnb-legends.webp": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "326a5cdc2cc8bc494ff46d2bf710d85e",
+    "semantic_hash": "326a5cdc2cc8bc494ff46d2bf710d85e"
+  },
+  "backend/app/static/team-logos/ctbc-flying-oyster.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "82dad0dbc07660668723dbe4ee6bc9ef",
+    "semantic_hash": "82dad0dbc07660668723dbe4ee6bc9ef"
+  },
+  "backend/app/static/team-logos/detonation-focusme.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "4a567b0e0d665b470dd0709dba49b07a",
+    "semantic_hash": "4a567b0e0d665b470dd0709dba49b07a"
+  },
+  "backend/app/static/team-logos/dignitas.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "8b499f72e6f448b222c816497fe24119",
+    "semantic_hash": "8b499f72e6f448b222c816497fe24119"
+  },
+  "backend/app/static/team-logos/disguised.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "4b65a36db191b4c855df9f72ad56c151",
+    "semantic_hash": "4b65a36db191b4c855df9f72ad56c151"
+  },
+  "backend/app/static/team-logos/dn-soopers.webp": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "aca207d4890c8ab261b05091f53d7e1e",
+    "semantic_hash": "aca207d4890c8ab261b05091f53d7e1e"
+  },
+  "backend/app/static/team-logos/dplus-kia.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "7c546b702b755dc54160e3f3169bcd0a",
+    "semantic_hash": "7c546b702b755dc54160e3f3169bcd0a"
+  },
+  "backend/app/static/team-logos/edward-gaming.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "5649c384ad2ecd5053c83dc7d6d81d97",
+    "semantic_hash": "5649c384ad2ecd5053c83dc7d6d81d97"
+  },
+  "backend/app/static/team-logos/first-stand.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "bb33e3477e2c9a277dc64e6b89f2c1a3",
+    "semantic_hash": "bb33e3477e2c9a277dc64e6b89f2c1a3"
+  },
+  "backend/app/static/team-logos/fluxo-w7m.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "d81c83d0e05b0eba0ec0b0b39dca3fef",
+    "semantic_hash": "d81c83d0e05b0eba0ec0b0b39dca3fef"
+  },
+  "backend/app/static/team-logos/flyquest.png": {
+    "mtime": 1784634720.6407878,
+    "ast_hash": "5feafa485daf82b31669bb6d2300b5d5",
+    "semantic_hash": "5feafa485daf82b31669bb6d2300b5d5"
+  },
+  "backend/app/static/team-logos/fnatic.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "bec38b5a9b51b82b7eb1caa70e4e4677",
+    "semantic_hash": "bec38b5a9b51b82b7eb1caa70e4e4677"
+  },
+  "backend/app/static/team-logos/fukuoka-softbank-hawks-gaming.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "50f2676a7cf68095a105a0029cad39a5",
+    "semantic_hash": "50f2676a7cf68095a105a0029cad39a5"
+  },
+  "backend/app/static/team-logos/furia.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "d9ac42dcc1d94e5f61409b9e1c62c3d9",
+    "semantic_hash": "d9ac42dcc1d94e5f61409b9e1c62c3d9"
+  },
+  "backend/app/static/team-logos/g2-esports.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "1c1b5f00b34dddecc8b1a3698ddbc3f7",
+    "semantic_hash": "1c1b5f00b34dddecc8b1a3698ddbc3f7"
+  },
+  "backend/app/static/team-logos/gam-esports.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "8b48a3004423cb20544aa076a8c3f37e",
+    "semantic_hash": "8b48a3004423cb20544aa076a8c3f37e"
+  },
+  "backend/app/static/team-logos/gen-g-esports.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "b671d553b80d6a8251f9763ea1dbcd07",
+    "semantic_hash": "b671d553b80d6a8251f9763ea1dbcd07"
+  },
+  "backend/app/static/team-logos/giantx.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "4189bc5b75ef920b7c169d8651753990",
+    "semantic_hash": "4189bc5b75ef920b7c169d8651753990"
+  },
+  "backend/app/static/team-logos/ground-zero-gaming.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "a6fbd962c198436bd1575a300548dffb",
+    "semantic_hash": "a6fbd962c198436bd1575a300548dffb"
+  },
+  "backend/app/static/team-logos/hanjin-brion.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "a73fcbf3285340a8bf29ef397b7ecef9",
+    "semantic_hash": "a73fcbf3285340a8bf29ef397b7ecef9"
+  },
+  "backend/app/static/team-logos/hanwha-life-esports.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "bd3496ee84bbe0e7f9839d0866eb9b9d",
+    "semantic_hash": "bd3496ee84bbe0e7f9839d0866eb9b9d"
+  },
+  "backend/app/static/team-logos/invictus-gaming.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "460a704236de24cf71b0cf9c865c9932",
+    "semantic_hash": "460a704236de24cf71b0cf9c865c9932"
+  },
+  "backend/app/static/team-logos/karmine-corp.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "8d5312c9ed810d3199ba21a001db60fc",
+    "semantic_hash": "8d5312c9ed810d3199ba21a001db60fc"
+  },
+  "backend/app/static/team-logos/kiwoom-drx.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "e2030934bb413cd019acd278fc30cd33",
+    "semantic_hash": "e2030934bb413cd019acd278fc30cd33"
+  },
+  "backend/app/static/team-logos/kt-rolster.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "0c6fe00d6e1212950f572d7b115b23d6",
+    "semantic_hash": "0c6fe00d6e1212950f572d7b115b23d6"
+  },
+  "backend/app/static/team-logos/lck.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "737f87d9d363eb43974b46e9da55d655",
+    "semantic_hash": "737f87d9d363eb43974b46e9da55d655"
+  },
+  "backend/app/static/team-logos/lcp.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "5d9a81b64bf710b86b3602f0f282065f",
+    "semantic_hash": "5d9a81b64bf710b86b3602f0f282065f"
+  },
+  "backend/app/static/team-logos/lcs.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "17e1955f1172343d3e60b9f4cccab268",
+    "semantic_hash": "17e1955f1172343d3e60b9f4cccab268"
+  },
+  "backend/app/static/team-logos/lec.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "fee479d578324fd51705ee5a6de5ff23",
+    "semantic_hash": "fee479d578324fd51705ee5a6de5ff23"
+  },
+  "backend/app/static/team-logos/leviatan.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "0a9d670face9f5bf3952911d78067dc8",
+    "semantic_hash": "0a9d670face9f5bf3952911d78067dc8"
+  },
+  "backend/app/static/team-logos/lgd-gaming.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "18caba9dcdb55ef2edfba65d304ac865",
+    "semantic_hash": "18caba9dcdb55ef2edfba65d304ac865"
+  },
+  "backend/app/static/team-logos/los.png": {
+    "mtime": 1784634720.6487877,
+    "ast_hash": "f4040e32cecb2fdf435bf77235fcf0f6",
+    "semantic_hash": "f4040e32cecb2fdf435bf77235fcf0f6"
+  },
+  "backend/app/static/team-logos/loud.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "c7f8838a0aa1af4ffc9998f11876bbc6",
+    "semantic_hash": "c7f8838a0aa1af4ffc9998f11876bbc6"
+  },
+  "backend/app/static/team-logos/lpl.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "7984e59f52fb09939050c9513bb833de",
+    "semantic_hash": "7984e59f52fb09939050c9513bb833de"
+  },
+  "backend/app/static/team-logos/lyon.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "360db327840584da0df64ce2009e0e72",
+    "semantic_hash": "360db327840584da0df64ce2009e0e72"
+  },
+  "backend/app/static/team-logos/mibr.webp": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "534897f1e51221d5e1eb681b211a5c16",
+    "semantic_hash": "534897f1e51221d5e1eb681b211a5c16"
+  },
+  "backend/app/static/team-logos/movistar-koi.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "9d5f21d37d7a7d44ccc9db0c20047885",
+    "semantic_hash": "9d5f21d37d7a7d44ccc9db0c20047885"
+  },
+  "backend/app/static/team-logos/msi.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "3b7778b86120bc99545a11fe028a280a",
+    "semantic_hash": "3b7778b86120bc99545a11fe028a280a"
+  },
+  "backend/app/static/team-logos/mvk-esports.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "a5d59b640c4aaeeccd4320841de0e705",
+    "semantic_hash": "a5d59b640c4aaeeccd4320841de0e705"
+  },
+  "backend/app/static/team-logos/natus-vincere.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "092fb753e81759c529b0cd068f6740e2",
+    "semantic_hash": "092fb753e81759c529b0cd068f6740e2"
+  },
+  "backend/app/static/team-logos/nongshim-red-force.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "1639bd74d56a5f1977fbc2b966ee337f",
+    "semantic_hash": "1639bd74d56a5f1977fbc2b966ee337f"
+  },
+  "backend/app/static/team-logos/oh-my-god.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "f649dea8eb1c71ac792e2d68bb804529",
+    "semantic_hash": "f649dea8eb1c71ac792e2d68bb804529"
+  },
+  "backend/app/static/team-logos/pain-gaming.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "989a80fb7fdb251667fd71cd6590d634",
+    "semantic_hash": "989a80fb7fdb251667fd71cd6590d634"
+  },
+  "backend/app/static/team-logos/red-kalunga.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "a33631e00ef89c098a259c64c97da175",
+    "semantic_hash": "a33631e00ef89c098a259c64c97da175"
+  },
+  "backend/app/static/team-logos/relove-deep-cross-gaming.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "850afb41a658368aa859bddc75c38030",
+    "semantic_hash": "850afb41a658368aa859bddc75c38030"
+  },
+  "backend/app/static/team-logos/sentinels.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "bd9e8d608ddce143c4d1f296f708a663",
+    "semantic_hash": "bd9e8d608ddce143c4d1f296f708a663"
+  },
+  "backend/app/static/team-logos/shenzhen-ninjas-in-pyjamas.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "98dce25284e0462d4d6a948d41767bb3",
+    "semantic_hash": "98dce25284e0462d4d6a948d41767bb3"
+  },
+  "backend/app/static/team-logos/shifters.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "cc5099e7872951f71ab132f72578d05d",
+    "semantic_hash": "cc5099e7872951f71ab132f72578d05d"
+  },
+  "backend/app/static/team-logos/shopify-rebellion.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "cd67c9cb11b97619d882dd89e0f3a5b1",
+    "semantic_hash": "cd67c9cb11b97619d882dd89e0f3a5b1"
+  },
+  "backend/app/static/team-logos/sk-gaming.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "a74f6fe0481beadf5435c1cacbca907c",
+    "semantic_hash": "a74f6fe0481beadf5435c1cacbca907c"
+  },
+  "backend/app/static/team-logos/suzhou-lng-esports.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "a1f1dda0d880a90bbe1f05030c88ad9d",
+    "semantic_hash": "a1f1dda0d880a90bbe1f05030c88ad9d"
+  },
+  "backend/app/static/team-logos/t1.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "1ca293966695e55d41258ffc654986c0",
+    "semantic_hash": "1ca293966695e55d41258ffc654986c0"
+  },
+  "backend/app/static/team-logos/team-heretics.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "cc912102c150c2bf59be7d574c7db824",
+    "semantic_hash": "cc912102c150c2bf59be7d574c7db824"
+  },
+  "backend/app/static/team-logos/team-liquid-alienware.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "69e78273ecbfbc2bfcc892371e143e30",
+    "semantic_hash": "69e78273ecbfbc2bfcc892371e143e30"
+  },
+  "backend/app/static/team-logos/team-secret-whales.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "f21b2f0eaf0580da79d4c712b2339d33",
+    "semantic_hash": "f21b2f0eaf0580da79d4c712b2339d33"
+  },
+  "backend/app/static/team-logos/team-vitality.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "81af04bc4e1ad937853b42f8acfb352e",
+    "semantic_hash": "81af04bc4e1ad937853b42f8acfb352e"
+  },
+  "backend/app/static/team-logos/thunder-talk-gaming.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "e75861f221aa96234abe1339f74bc99d",
+    "semantic_hash": "e75861f221aa96234abe1339f74bc99d"
+  },
+  "backend/app/static/team-logos/top-esports.png": {
+    "mtime": 1784634720.6607878,
+    "ast_hash": "4a7c39fae54f5b8e02f0234c258a0018",
+    "semantic_hash": "4a7c39fae54f5b8e02f0234c258a0018"
+  },
+  "backend/app/static/team-logos/ultra-prime.png": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "79cd16df7d7ed64c2ca31143348b71b5",
+    "semantic_hash": "79cd16df7d7ed64c2ca31143348b71b5"
+  },
+  "backend/app/static/team-logos/vivo-keyd-stars.png": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "45293b77868fc9a028d9384078bf6237",
+    "semantic_hash": "45293b77868fc9a028d9384078bf6237"
+  },
+  "backend/app/static/team-logos/weibogaming.png": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "7ed85bc467ab132c2fa8334a5c4243f6",
+    "semantic_hash": "7ed85bc467ab132c2fa8334a5c4243f6"
+  },
+  "backend/app/static/team-logos/worlds.png": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "f83c3cce02cb60ce78a3874873a839f8",
+    "semantic_hash": "f83c3cce02cb60ce78a3874873a839f8"
+  },
+  "backend/app/static/team-logos/xi-an-team-we.png": {
+    "mtime": 1784634720.6807878,
+    "ast_hash": "5862598b19dc407fa0af06e608e9f20d",
+    "semantic_hash": "5862598b19dc407fa0af06e608e9f20d"
+  }
+}

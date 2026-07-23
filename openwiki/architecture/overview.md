@@ -47,20 +47,22 @@ app.mount("/static", ...)             # CSS + JS
 
 ## Background Worker (`app/worker_main.py`)
 
-APScheduler `BackgroundScheduler` with eight recurring jobs:
+APScheduler `BackgroundScheduler` with ten recurring jobs:
 
 | Job | Interval | Description |
 |-----|----------|-------------|
 | `heartbeat` | 1 min | Writes `WorkerHeartbeat` row |
 | `sync_schedule` | 30 min | Leaguepedia schedule sync |
 | `sync_datadragon` | 1440 min | Data Dragon champion/version sync |
+| `sync_team_logos` | 1440 min | Downloads official team logos from lolesports.com + direct-url fallback (cnb-legends, mibr); applies DISPLAY_ALIASES |
 | `import_odds` | 5 min | Polls odds CSV inbox |
-| `import_oracles` | 30 min | Polls Oracle's Elixir CSV inbox |
+| `import_oracles` | 30 min | Polls Oracle's Elixir CSV local inbox |
 | `process_queued_oracle_uploads` | 15 s | Durably processes Oracle CSV uploads queued via the web API (see Sources router below) |
-| `team_logo_sync` | 1440 min | Downloads official team logos from lolesports.com + direct-url fallback (cnb-legends, mibr); applies DISPLAY_ALIASES |
+| `sync_remote_oracles` | 60 min (`lol_history_remote_poll_minutes`) | Checks configured remote Oracle CSV URL for changes (SHA-256 comparison); downloads and re-imports if changed |
+| `process_queued_remote_oracles` | 15 s | Picks up user-requested remote sync without waiting for the scheduled interval |
 | `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` (currently a stub) |
 
-All data-processing jobs (`sync_schedule`, `sync_datadragon`, `import_odds`, `import_oracles`, `precompute_stats`) skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"`) to avoid SQLite `database is locked` errors. `sync_schedule` and `sync_datadragon` no longer use `next_run_time=now` — they start on their first natural interval.
+All data-processing jobs skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"` and `SourceRun.status == "running"`) to avoid SQLite `database is locked` errors. The `heartbeat` and `sync_team_logos` jobs also respect this lock. Jobs that use `next_run_time=now` (`heartbeat`, `sync_team_logos`, `process_queued_oracle_uploads`, `process_queued_remote_oracles`) run immediately on worker start; the rest wait for their first natural interval.
 
 ## Database Layer
 

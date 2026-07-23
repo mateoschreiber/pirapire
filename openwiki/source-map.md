@@ -16,13 +16,15 @@ backend/
 │   ├── migrations.py             # Idempotent ALTER TABLE ADD COLUMN for SQLite schema evolution.
 │   │                             #   Also renames incompatible legacy tables (datasource→legacy_datasource,
 │   │                             #   sourcerun→legacy_sourcerun) using PRAGMA column detection.
-│   ├── worker_main.py            # APScheduler entrypoint. 8 recurring jobs (heartbeat, sync_schedule,
-│   │                             #   sync_datadragon, import_odds, import_oracles,
-│   │                             #   process_queued_oracle_uploads, precompute_stats,
-│   │                             #   team_logo_sync).
+│   ├── worker_main.py            # APScheduler entrypoint. 10 recurring jobs (heartbeat, sync_schedule,
+│   │                             #   sync_datadragon, sync_team_logos, import_odds, import_oracles,
+│   │                             #   process_queued_oracle_uploads, sync_remote_oracles,
+│   │                             #   process_queued_remote_oracles, precompute_stats).
 │   │                             #   All long-running jobs skip while an Oracle import is active
 │   │                             #   (_oracle_import_active). Web uploads are processed durably here
 │   │                             #   instead of via BackgroundTasks.
+│   │                             #   Remote Oracle sync checks SHA-256 before re-import.
+│   │                             #   process_queued_remote_oracles picks up user-requested sync.
 │   ├── seed.py                   # Stale football-only seed (pre-refactor). Not used in LoL-only setup.
 │   │                             #   Deleted from working tree but still tracked in git.
 │   ├── models_lol.py             # All ORM models (~300 lines). Reference data, game history, series,
@@ -65,9 +67,10 @@ backend/
 │   │   ├── imports/
 │   │   │   ├── oracles_elixir_importer.py  # Oracle's Elixir CSV import → game/team/player stats.
 │   │   │   │                               #   _import_csv_file() now accepts prune_missing param.
-│   │   │   └── remote_oracles_elixir.py    # New. Downloads OE CSV from remote URL (Google Drive
+│   │   │   └── remote_oracles_elixir.py    # Downloads OE CSV from remote URL (Google Drive
 │   │   │                                   #   share links auto-converted). Validates headers,
 │   │   │                                   #   streams to inbox, returns SHA-256 checksum.
+│   │   │                                   #   Supports quota-exceeded detection and size limits.
 │   │   │
 │   │   └── sync/
 │   │       └── lol_sync.py       # Leaguepedia schedule sync + Data Dragon champion sync

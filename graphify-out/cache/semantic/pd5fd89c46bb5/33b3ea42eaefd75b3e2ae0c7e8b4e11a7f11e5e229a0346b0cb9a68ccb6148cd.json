@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_team_liquid_alienware_image", "label": "Team Liquid Alienware Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/team-liquid-alienware.png", "metadata": {"team": "Team Liquid", "league": "LCS", "region": "North America", "sponsor": "Alienware"}}], "edges": [], "hyperedges": []}

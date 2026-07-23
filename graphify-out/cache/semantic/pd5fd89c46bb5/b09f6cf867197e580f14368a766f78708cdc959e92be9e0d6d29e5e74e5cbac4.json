@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_shopify_rebellion_image", "label": "Shopify Rebellion Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/shopify-rebellion.png", "metadata": {"team": "Shopify Rebellion", "league": "LCS", "region": "North America"}}], "edges": [], "hyperedges": []}

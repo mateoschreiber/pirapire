@@ -72,11 +72,11 @@ The database is created automatically on first startup via `init_db()`.
 | `LOL_HISTORY_RECENT_GAMES_WINDOW` | `20` | Window size for recent games |
 | `LOL_ODDS_IMPORT_DIR` | `/app/data/imports/lol_odds` | Odds CSV import directory |
 | `LOL_SCHEDULE_INTERVAL_MINUTES` | `30` | Leaguepedia sync interval |
-| `LOL_HISTORY_INTERVAL_MINUTES` | `60` | OE history import interval |
-| `LOL_HISTORY_REMOTE_POLL_MINUTES` | `60` | Remote Oracle CSV poll interval |
+| `LOL_HISTORY_INTERVAL_MINUTES` | `60` | OE history import interval (legacy, retained for local inbox and existing deployments) |
+| `LOL_HISTORY_REMOTE_POLL_MINUTES` | `60` | Remote Oracle CSV poll interval (controls `sync_remote_oracles` worker job) |
 | `DATADRAGON_INTERVAL_MINUTES` | `1440` | Data Dragon sync interval |
-| `LOL_IMPORT_POLL_INTERVAL_MINUTES` | `30` | CSV import poll interval |
 | `TEAM_LOGO_SYNC_INTERVAL_MINUTES` | `1440` | Official team logo sync interval |
+| `LOL_IMPORT_POLL_INTERVAL_MINUTES` | `30` | CSV import poll interval |
 
 ## Data Directories
 

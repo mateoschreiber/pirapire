@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_team_vitality_image", "label": "Team Vitality Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/team-vitality.png", "metadata": {"team": "Team Vitality", "league": "LEC", "region": "Europe"}}], "edges": [], "hyperedges": []}

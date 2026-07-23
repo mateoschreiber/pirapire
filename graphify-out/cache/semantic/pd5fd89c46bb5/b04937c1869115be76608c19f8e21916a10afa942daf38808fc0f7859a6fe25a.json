@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_t1_image", "label": "T1 Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/t1.png", "metadata": {"team": "T1", "league": "LCK", "region": "South Korea"}}], "edges": [], "hyperedges": []}

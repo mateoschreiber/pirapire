@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_sk_gaming_image", "label": "SK Gaming Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/sk-gaming.png", "metadata": {"team": "SK Gaming", "league": "LEC", "region": "Europe"}}], "edges": [], "hyperedges": []}

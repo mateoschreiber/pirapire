@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_team_secret_whales_image", "label": "Team Secret Whales Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/team-secret-whales.png", "metadata": {"team": "Team Secret Whales", "league": "VCS", "region": "Vietnam"}}], "edges": [], "hyperedges": []}

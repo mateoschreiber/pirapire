@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_app_static_team_logos_thunder_talk_gaming_image", "label": "ThunderTalk Gaming Logo", "type": "image_asset", "file_type": "image", "source_file": "backend/app/static/team-logos/thunder-talk-gaming.png", "metadata": {"team": "ThunderTalk Gaming", "league": "LPL", "region": "China"}}], "edges": [], "hyperedges": []}

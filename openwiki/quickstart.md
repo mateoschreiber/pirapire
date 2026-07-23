@@ -24,7 +24,7 @@ Open **http://localhost:8090**.
 | Database | SQLite via SQLModel / SQLAlchemy | `/backend/app/database.py` |
 | Templates | Jinja2 (server-rendered) | `/backend/app/templates/` |
 | Frontend | Vanilla JS + CSS | `/backend/app/static/` |
-| Background worker | APScheduler | `/backend/app/worker_main.py` |
+| Background worker | APScheduler (10 recurring jobs) | `/backend/app/worker_main.py` |
 | Runtime | Docker (app + worker containers) | `/docker-compose.yml` |
 
 ## What This Wiki Covers
@@ -46,6 +46,8 @@ Open **http://localhost:8090**.
 - **Coverage Labels** — Metrics are tagged `complete`, `partial`, or `unavailable` based on how many recent series had usable data.
 - **Team Aliases** — Normalizes team names across sources (Leaguepedia, Oracle's Elixir manual CSV) using a flexible alias table with NFKD normalization.
 - **Competition Classification** — Matches are classified into 10 standard league codes (`LCK`, `LPL`, `LEC`, `LCS`, `CBLOL`, `LCP`, `WORLDS`, `MSI`, `FIRST_STAND`, `EWC`). Former LTA (Americas) split into LCS (North) and CBLOL (South) for 2026.
+
+> **Note:** The project README outdatedly says "last 10 completed series" — the actual code uses 5. The wiki is canonical for implementation details.
 
 ## Data Flow
 

@@ -46,9 +46,16 @@ LCK_2025_T1_GEN,Gen.G,1.95,manual,2025-06-01T12:00:00Z
 
 ## 3. Oracle's Elixir CSV Import
 
-**Service:** `backend/app/services/imports/oracles_elixir_importer.py`
+**Services:**
+- Local inbox: `backend/app/services/imports/oracles_elixir_importer.py`
+- Remote download: `backend/app/services/imports/remote_oracles_elixir.py`
+- Series builder: `backend/app/services/series_builder.py`
 
-The worker job `import_oracles` (every 30 min) polls the Oracle's Elixir inbox directory.
+The worker jobs `import_oracles` (every 30 min for local inbox) and `sync_remote_oracles` (every `lol_history_remote_poll_minutes`, default 60 min) handle Oracle's Elixir data ingestion.
+
+### Local Inbox Processing
+
+The worker polls the Oracle's Elixir inbox directory for CSV files.
 
 **Oracle's Elixir** provides detailed competitive match data (every professional game globally). Each CSV row represents one participant (team or player) in one game.
 
@@ -62,6 +69,30 @@ The worker job `import_oracles` (every 30 min) polls the Oracle's Elixir inbox d
 7. Move file to `processed/` or `errors/`
 
 **Replacement mode:** The upload API supports `replace_existing=true` which atomically deletes all existing data for the file's years before re-importing.
+
+### Remote Oracle Sync
+
+**Service:** `backend/app/services/imports/remote_oracles_elixir.py`
+
+The worker job `sync_remote_oracles` polls a configured remote URL (e.g., Google Drive share) for updated Oracle's Elixir CSVs.
+
+**Remote download flow:**
+1. Google Drive share links are auto-converted to direct download URLs via `google_drive_download_url()`
+2. CSV is streamed to a temp file with size validation (`lol_history_remote_max_mb`, default 100 MB)
+3. Content is validated: checks for Google Drive quota pages, HTML responses, empty files, and required CSV headers
+4. SHA-256 checksum is computed and compared against the last imported version (stored in source config)
+5. If unchanged, the run is marked as `skipped` with no re-import
+6. If changed, `_import_csv_file()` runs with `replace=True, prune_missing=False`, then `rebuild_series()` is called
+
+**Workflow diagram:**
+```
+Remote URL → google_drive_download_url() → stream download → validate → SHA-256 check
+    │
+    ├── unchanged → skipped (no-op)
+    └── changed  → _import_csv_file(replace=True) → rebuild_series()
+```
+
+**Configuration:** Set via the admin UI at `/sources` → Oracle's Elixir → configure `base_url` and enable `auto_refresh`. The setting persists in the `DataSource.config_json` field. Manual sync can be requested via `POST /api/sources/oracles_elixir/sync`.
 
 ## 4. Series Builder
 
