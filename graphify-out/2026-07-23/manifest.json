@@ -50,8 +50,8 @@
     "semantic_hash": "3f52906b3e9a44b25b19975fa168243a"
   },
   "backend/app/routers/lol_api.py": {
-    "mtime": 1784826933.8568769,
-    "ast_hash": "bbe83a5eea87b6c7d52171240bc919a0",
+    "mtime": 1784827565.8106701,
+    "ast_hash": "da9e7f83af8d82e6df781f2fab3b433c",
     "semantic_hash": ""
   },
   "backend/app/routers/pages.py": {
@@ -160,7 +160,7 @@
     "semantic_hash": ""
   },
   "backend/app/static/team-logos/manifest.json": {
-    "mtime": 1784827040.253853,
+    "mtime": 1784827674.8836694,
     "ast_hash": "7721584d52923fda92677470c0dc4ad8",
     "semantic_hash": "7721584d52923fda92677470c0dc4ad8"
   },
@@ -205,8 +205,8 @@
     "semantic_hash": "911da4ab61790c4ff290aad943b3aad4"
   },
   "backend/tests/test_pages.py": {
-    "mtime": 1784826933.852877,
-    "ast_hash": "077a307565599a178c8fc7322597815b",
+    "mtime": 1784827586.0188553,
+    "ast_hash": "9fb200a5b70ceaeb3aae0527d3749558",
     "semantic_hash": ""
   },
   "backend/tests/test_remote_oracles.py": {
@@ -230,7 +230,7 @@
     "semantic_hash": ""
   },
   ".github/workflows/openwiki-update.yml": {
-    "mtime": 1784809811.750767,
+    "mtime": 1784827881.841565,
     "ast_hash": "c0039579c3e4fd0b93e236f2f203d5b4",
     "semantic_hash": "c0039579c3e4fd0b93e236f2f203d5b4"
   },
@@ -280,12 +280,12 @@
     "semantic_hash": "9378bd03d56baaf78bd738ab3848f142"
   },
   "AGENTS.md": {
-    "mtime": 1784809811.754767,
+    "mtime": 1784827881.849565,
     "ast_hash": "cd923fb73a48b8b8d44c00c612fa9bd0",
     "semantic_hash": "cd923fb73a48b8b8d44c00c612fa9bd0"
   },
   "CLAUDE.md": {
-    "mtime": 1784809811.754767,
+    "mtime": 1784827881.849565,
     "ast_hash": "98901357f8d8cdd5270a78cb3fff129b",
     "semantic_hash": "98901357f8d8cdd5270a78cb3fff129b"
   },
