@@ -1,12 +1,12 @@
 # Graph Report - pirapire  (2026-07-23)
 
 ## Corpus Check
-- 75 files · ~184,289 words
+- 75 files · ~184,444 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 712 nodes · 1396 edges · 61 communities (45 shown, 16 thin omitted)
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 117 edges (avg confidence: 0.8)
+- 712 nodes · 1399 edges · 61 communities (45 shown, 16 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 120 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
@@ -72,10 +72,10 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `LolMatchEvent` - 32 edges
-2. `SourceRun` - 22 edges
-3. `_import_csv_file()` - 22 edges
-4. `Graphify Knowledge Graph Tool` - 22 edges
-5. `DataSource` - 21 edges
+2. `DataSource` - 22 edges
+3. `SourceRun` - 22 edges
+4. `_import_csv_file()` - 22 edges
+5. `Graphify Knowledge Graph Tool` - 22 edges
 6. `LolGameHistory` - 17 edges
 7. `synchronize_known_aliases()` - 17 edges
 8. `rebuild_series()` - 16 edges
@@ -119,7 +119,7 @@ Nodes (55): LolChampion, LolDataCoverage, LolMatchEvent, LolMatchStatisticsReadM
 
 ### Community 2 - "Data Import Pipeline"
 Cohesion: 0.12
-Nodes (52): DataSource, ImportBatch, ImportError, SourceRun, aliases(), _batch_view(), _config(), _configuration_view() (+44 more)
+Nodes (51): DataSource, ImportBatch, ImportError, SourceRun, aliases(), _batch_view(), _config(), _configuration_view() (+43 more)
 
 ### Community 3 - "Frontend JavaScript"
 Cohesion: 0.17
@@ -259,7 +259,7 @@ Nodes (5): esc(), formatStart(), initFootballDashboard(), initFootballSync(), mo
 
 ### Community 60 - "http_client.py"
 Cohesion: 0.11
-Nodes (31): FootballCompetition, FootballMatchEvent, FootballMatchStatisticsReadModel, FootballPlayer, FootballPlayerMatchStat, FootballTeam, FootballTeamMatchStat, _now() (+23 more)
+Nodes (32): FootballCompetition, FootballMatchEvent, FootballMatchStatisticsReadModel, FootballPlayer, FootballPlayerMatchStat, FootballTeam, FootballTeamMatchStat, _now() (+24 more)
 
 ## Knowledge Gaps
 - **174 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `ag-al`, `anyone-s-legend`, `beijing-jdg-esports` (+169 more)
@@ -271,15 +271,15 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `LolMatchEvent` connect `Match Events & Odds Models` to `Data Import Pipeline`, `Team Logo Sync Service`, `Core LoL Domain Models`, `Oracle's Elixir Importer`?**
   _High betweenness centrality (0.027) - this node is a cross-community bridge._
-- **Why does `_import_csv_file()` connect `Oracle's Elixir Importer` to `Data Import Pipeline`, `Core LoL Domain Models`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **Why does `sync_official_team_logos()` connect `Background Worker Jobs` to `Core LoL Domain Models`?**
+- **Why does `_import_csv_file()` connect `Oracle's Elixir Importer` to `Data Import Pipeline`, `http_client.py`, `Core LoL Domain Models`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `DataSource` connect `Data Import Pipeline` to `Match Events & Odds Models`, `http_client.py`, `Core LoL Domain Models`, `Database & Migrations`?**
   _High betweenness centrality (0.013) - this node is a cross-community bridge._
 - **Are the 9 inferred relationships involving `LolMatchEvent` (e.g. with `get_match()` and `get_match_statistics()`) actually correct?**
   _`LolMatchEvent` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 6 inferred relationships involving `DataSource` (e.g. with `_run_football_sync()` and `synchronize_football()`) actually correct?**
+  _`DataSource` has 6 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 9 inferred relationships involving `SourceRun` (e.g. with `_run_football_sync()` and `synchronize_football()`) actually correct?**
   _`SourceRun` has 9 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 4 inferred relationships involving `_import_csv_file()` (e.g. with `LolGameHistory` and `LolPlayerGameStat`) actually correct?**
-  _`_import_csv_file()` has 4 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `$schema`, `.opencode/plugins/graphify.js`, `ag-al` to the rest of the system?**
   _174 weakly-connected nodes found - possible documentation gaps or missing edges._

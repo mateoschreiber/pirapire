@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "backend/app/routers/sources.py": {
-    "mtime": 1784831757.3287187,
-    "ast_hash": "a948eae8ab07ed47417b5bcce616cc46",
+    "mtime": 1784832357.2263966,
+    "ast_hash": "9a31b67305398f32c8fc680b3d99c12f",
     "semantic_hash": ""
   },
   "backend/app/schemas.py": {
@@ -160,7 +160,7 @@
     "semantic_hash": ""
   },
   "backend/app/static/team-logos/manifest.json": {
-    "mtime": 1784831940.890384,
+    "mtime": 1784832354.1783662,
     "ast_hash": "7721584d52923fda92677470c0dc4ad8",
     "semantic_hash": "7721584d52923fda92677470c0dc4ad8"
   },
@@ -725,8 +725,8 @@
     "semantic_hash": ""
   },
   "backend/app/routers/football_api.py": {
-    "mtime": 1784832153.3963304,
-    "ast_hash": "9d7ed5dc53539e976de37b1332625757",
+    "mtime": 1784832378.850612,
+    "ast_hash": "fe0bf1e6800c5447fcd3c062bb3457fe",
     "semantic_hash": ""
   },
   "backend/app/services/football/__init__.py": {
@@ -745,8 +745,8 @@
     "semantic_hash": ""
   },
   "backend/app/static/js/football.js": {
-    "mtime": 1784832177.1685753,
-    "ast_hash": "8210affa38fa452cbb9f672328bd03f4",
+    "mtime": 1784832378.8546119,
+    "ast_hash": "fd5c4a69c8147395c59d6979597fd47e",
     "semantic_hash": ""
   },
   "backend/app/templates/football_dashboard.html": {
@@ -755,8 +755,8 @@
     "semantic_hash": ""
   },
   "backend/app/services/football/importer.py": {
-    "mtime": 1784832127.244076,
-    "ast_hash": "b28a5b95b9542048a0ec138a18235697",
+    "mtime": 1784832349.030315,
+    "ast_hash": "bd05fd28f53eb429bf37c51825be5646",
     "semantic_hash": ""
   }
 }
