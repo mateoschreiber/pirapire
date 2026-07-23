@@ -167,7 +167,7 @@
       "label": "Removed from working tree",
       "file_type": "document",
       "source_file": "openwiki/source-map.md",
-      "source_location": "L193",
+      "source_location": "L191",
       "_origin": "ast",
       "id": "openwiki_source_map_removed_from_working_tree",
       "community": 11,
@@ -7879,7 +7879,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "openwiki/source-map.md",
-      "source_location": "L193",
+      "source_location": "L191",
       "weight": 1.0,
       "_origin": "ast",
       "source": "openwiki_source_map_latest_additions_commits_56d9fe8_uncommitted_caching_kespa",
@@ -22144,5 +22144,5 @@
       ]
     }
   ],
-  "built_at_commit": "82ed8821ecfe57b57afcff8c166e4455cdbdce50"
+  "built_at_commit": "d0b6d56b0bd564047edc82a8fdf0cf65b9c14f1d"
 }

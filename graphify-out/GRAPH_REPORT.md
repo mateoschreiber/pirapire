@@ -1,7 +1,7 @@
 # Graph Report - pirapire  (2026-07-23)
 
 ## Corpus Check
-- 68 files · ~181,450 words
+- 68 files · ~181,446 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `82ed8821`
+- Built from commit: `d0b6d56b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

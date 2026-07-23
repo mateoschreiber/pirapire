@@ -305,8 +305,8 @@
     "semantic_hash": "8014732f2ce4200ef5c1a53508fffb30"
   },
   "openwiki/architecture/overview.md": {
-    "mtime": 1784809923.4953434,
-    "ast_hash": "9d15ed23991073d92ba449cc6da404a7",
+    "mtime": 1784828117.143729,
+    "ast_hash": "b8ee3ca2b6cc7e30c3ac1c91f7aecc05",
     "semantic_hash": ""
   },
   "openwiki/domain/lol-metrics.md": {
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "openwiki/quickstart.md": {
-    "mtime": 1784809996.8357198,
-    "ast_hash": "30736c0985a40040d1450fdd4242c62f",
+    "mtime": 1784828132.5918722,
+    "ast_hash": "04b733c65f4acebe2c5b6f263e7e7e62",
     "semantic_hash": ""
   },
   "openwiki/workflows/data-pipeline.md": {
@@ -705,13 +705,13 @@
     "semantic_hash": ""
   },
   "openwiki/source-map.md": {
-    "mtime": 1784828033.9829583,
-    "ast_hash": "fdd1b3c57781616fb4daa7ab64f949f4",
+    "mtime": 1784828064.887244,
+    "ast_hash": "5f8d674b0d8641ae85874bd35cbb1050",
     "semantic_hash": ""
   },
   "openwiki/testing/overview.md": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "2e2ab4c30f74306b25ad6a126be2903e",
+    "mtime": 1784828156.2240913,
+    "ast_hash": "13e4f5e4837eb50036e2e77aa673706b",
     "semantic_hash": ""
   },
   "backend/tests/test_statistics_cache.py": {
