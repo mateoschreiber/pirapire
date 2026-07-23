@@ -132,16 +132,15 @@ The match detail page renders this data in a `#recent-matchups` section labeled 
 
 ### Dashboard Preview Odds
 
-**Source:** `backend/app/static/js/app.js` — `loadPreviewOdds()`, `previewOddsCache`
+**Source:** `backend/app/static/js/app.js` — `oddsHtml()`
 
-Since commit `acf7802`, the upcoming matches dashboard card grid **loads and displays the same calculated form-based odds** as the match detail page. Every match card that rendered a placeholder skeleton (`"Calculando cuotas con la forma reciente…"`) now asynchronously fetches statistics from `/api/lol/matches/{key}/statistics` and populates the card with estimated odds.
+Preview odds are now rendered **server-side** in the upcoming matches API response. The `GET /api/lol/matches/upcoming` endpoint loads cached `estimated_market` data for all scheduled matches in two queries (one for the cache table, then batch loads odds), and each match view in the response includes `estimated_market` directly. The dashboard card grid calls `oddsHtml(match, match.estimated_market)` inline during rendering — no separate async fetch, no client-side cache, no loading skeleton.
 
 **Mechanism:**
-
-1. **Loading skeleton** — Each match card renders a dashed-border `.match-odds.preview-loading` div with a CSS skeleton placeholder immediately on page render.
-2. **Concurrent fetch** — `loadPreviewOdds(matches)` fans out across a pool of up to **4 concurrent workers** (`Promise.all` with `Array.from({length: Math.min(4, queue.length)}, worker)`). Each worker pops a match from the queue, fetches the statistics endpoint, and extracts `estimated_market` from the response payload.
-3. **Per-match cache** — The `previewOddsCache` Map (module-scoped `Map<string, estimated_market_payload>`) stores the first successful result per `match_key`. Subsequent renders or filter changes reuse cached values without a network round-trip. Cache lives for the dashboard page lifetime (in-memory, no persistence).
-4. **Fallback** — If `estimated_market.available` is false, the API returns no cached data, or the fetch fails, the slot renders `"Cuotas calculadas no disponibles"` with a note about insufficient history.
+1. The `/upcoming` endpoint loads `LolMatchStatisticsReadModel` rows for all scheduled matches in a single query and resolves cached statistics via `cached_statistics_from_record()`.
+2. Odds are batch-loaded via `_current_odds_by_match()` (2 queries total instead of 2N).
+3. `_match_view()` accepts optional `estimated_market` and `odds` parameters, so the upcoming list includes pre-loaded values.
+4. The match card renders `estimated_market` directly via `oddsHtml()` in the `renderMatches()` function. No placeholder, no worker pool.
 
 **Rendered output** (when available):
 
@@ -153,13 +152,33 @@ Since commit `acf7802`, the upcoming matches dashboard card grid **loads and dis
 </div>
 ```
 
-The preview and the match detail page share the same endpoint (`/api/lol/matches/{key}/statistics`) and the same `estimated_market` data, but use **different render functions**: the preview calls `oddsHtml()` (defined in `app.js`), while the detail page calls `renderMatchOdds()` for a richer layout with a market-source badge, model description, and external odds reference. The underlying data (decimal odds, probability percentages, series count) is identical.
+The match detail page shares the same `estimated_market` data but calls `renderMatchOdds()` for a richer layout with a market-source badge, model description, and external odds reference. The underlying data (decimal odds, probability percentages, series count) is identical.
 
-### Precomputation (Stub)
+### Statistics Cache & Precomputation
 
-`precompute_upcoming_stats()` in `lol_metrics_engine.py` is currently a **stub** that returns `{"precomputed": 0, "total_scheduled": 0}` without actually computing or persisting any statistics. It is scheduled in the background worker every 30 minutes (`job_precompute_stats`) but does nothing yet.
+**Sources:**
+- `backend/app/services/lol_metrics_engine.py` — `precompute_upcoming_stats()`, `cached_match_statistics()`, `store_match_statistics()`, `invalidate_statistics_cache()`
+- `backend/app/routers/lol_api.py` — `/statistics` and `/upcoming` endpoints now serve cached data
+- `backend/app/models_lol.py` — `LolMatchStatisticsReadModel.payload_json` and `coverage_json` are `Optional[dict]` (JSON columns), not strings
 
-A `LolMatchStatisticsReadModel` model exists in `models_lol.py` for future cached statistics storage, but the app-level service does not write to it. (The standalone root-level `/backend/lol_metrics_engine.py` has an older implementation that does write to this model, but it is superseded by the app package version.)
+Statistics are **cached** in `LolMatchStatisticsReadModel` to avoid recomputing on every request.
+
+**Computation flow:**
+1. `precompute_upcoming_stats(session)` — Worker job (every 30 minutes, runs immediately on worker start). For each scheduled match with no valid cached entry, it calls `compute_match_statistics()` and persists the result via `store_match_statistics()`. Returns `{"precomputed": N, "skipped": M, "total_scheduled": total}`.
+2. `cached_match_statistics(session, match)` — Reads `LolMatchStatisticsReadModel` and validates the `input_fingerprint` (SHA-256 of match_key, teams, start_time, updated_at). Returns `(payload, coverage, computed_at)` if valid, `None` if stale or missing.
+3. `cached_statistics_from_record(cached, match)` — Validates a loaded row without a DB round-trip.
+4. `invalidate_statistics_cache(session)` — Deletes all cached rows. Called automatically by `rebuild_series()`, `sync_leaguepedia_schedule()`, and the Oracle's Elixir inbox importer when games change.
+5. `store_match_statistics(session, match, payload, coverage)` — Upserts a cache row with the current `input_fingerprint`.
+
+**Cache invalidation triggers:**
+- Series rebuild (after Oracle's Elixir import)
+- Leaguepedia schedule sync (when matches are inserted or updated)
+- Oracle's Elixir inbox import (any new games trigger a series rebuild which clears the cache)
+
+**Serve pattern:**
+- `GET /api/lol/matches/{key}/statistics` — Reads cache; returns `{"status":"ready","payload":...,"coverage":...}` if valid, or `{"status":"pending"}` if not yet computed (the frontend JS renders a neutral message rather than an error).
+- `GET /api/lol/matches/upcoming` — Batch-loads cache rows for all scheduled matches and includes `estimated_market` directly in each match view.
+- Dashboard JS (`app.js`) renders `match.estimated_market` inline — no separate fetch for preview odds.
 
 ## Competition Classification
 
@@ -180,8 +199,9 @@ For the 2026 season, the former **LTA** (League of The Americas) has been replac
 | `MSI` | Mid-Season Invitational | Contains "Mid-Season Invitational" or "MSI" |
 | `FIRST_STAND` | First Stand | Contains "First Stand" |
 | `EWC` | Esports World Cup | Contains "Esports World Cup" |
+| `KESPA` | KeSPA Cup | Contains "KeSPA Cup" |
 
-Dashboard displays only these 10 competitions. Academy leagues (e.g., `LCK CL`) are excluded.
+Dashboard displays only these 11 competitions. Academy leagues (e.g., `LCK CL`) are excluded.
 A bare `LTA` (without North/South qualifier) does not match any competition code and is excluded.
 
 ## Official 2026 Competition Rosters

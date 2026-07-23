@@ -128,11 +128,11 @@ The metrics engine computes **team and player statistics** from recent completed
 
 **Coverage labels:** `complete`, `partial`, or `unavailable` — visible in the match detail UI as "Completo", "Parcial", or "N/D". The response also includes `estimated_market` (form-based odds) and `data_notes` with context about the source of odds and sample window.
 
-Note: `precompute_upcoming_stats()` is currently a stub — it returns `{"precomputed": 0, "total_scheduled": 0}` without computing or persisting anything. The `LolMatchStatisticsReadModel` table exists but is not written by the app-level code. Statistics are computed on-demand via the `/statistics` endpoint, not precomputed.
+Statistics are now **cached** in `LolMatchStatisticsReadModel`. The worker's `precompute_stats` job (every 30 min, runs immediately on start) calls `precompute_upcoming_stats()` which persists computed results via `store_match_statistics()`. Subsequent loads serve from cache (validated by `input_fingerprint`). Cache is invalidated on series rebuilds, schedule syncs, and Oracle's Elixir imports. See [domain/lol-metrics.md → Statistics Cache & Precomputation](../domain/lol-metrics.md#statistics-cache--precomputation).
 
 ## 6. Dashboard & API Serving
 
 - **Upcoming matches API** (`/api/lol/matches/upcoming`): Fetches `LolMatchEvent` records within configurable window, enriches with odds from `LolOddsSnapshot`/`LolTeamOdd`
-- **Match preview odds** — The dashboard page fires `loadPreviewOdds()` after rendering the match card grid. Up to 4 concurrent workers fetch `/api/lol/matches/{key}/statistics` per match, cache results in a module-scoped `previewOddsCache` Map, and render the same `estimated_market` data shown on the detail page. See [lol-metrics.md → Dashboard Preview Odds](../domain/lol-metrics.md#dashboard-preview-odds).
+- **Match preview odds** — The upcoming API response now includes `estimated_market` directly on each match view, batch-loaded from the statistics cache via `cached_statistics_from_record()`. The dashboard renders these inline with `oddsHtml()` — no separate async fetch. See [domain/lol-metrics.md → Dashboard Preview Odds](../domain/lol-metrics.md#dashboard-preview-odds).
 - **Competition filtering:** Dashboard shows only tier-1 leagues and international events
-- **Competition classification** (`_competition_code()` in `lol_api.py`): Regex-based mapping of league/tournament strings to canonical codes (LCK, LPL, LEC, LCS, CBLOL, LCP, WORLDS, MSI, FIRST_STAND, EWC)
+- **Competition classification** (`_competition_code()` in `lol_api.py`): Regex-based mapping of league/tournament strings to canonical codes (LCK, LPL, LEC, LCS, CBLOL, LCP, WORLDS, MSI, FIRST_STAND, EWC, KESPA)

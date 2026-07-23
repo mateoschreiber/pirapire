@@ -29,6 +29,8 @@ backend/
 │   │                             #   Deleted from working tree but still tracked in git.
 │   ├── models_lol.py             # All ORM models (~300 lines). Reference data, game history, series,
 │   │                             #   match events, odds snapshots, stats cache, operational tracking.
+│   │                             #   LolMatchStatisticsReadModel.payload_json/coverage_json are
+│   │                             #   Optional[dict] (JSON columns), not strings.
 │   └── schemas.py               # Pydantic response models: MatchResponse, UpcomingMatch,
 │                                 #   UpcomingResponse, StatisticsResponse, OddsImportRequest
 │
@@ -50,7 +52,10 @@ backend/
 │   ├── services/
 │   │   ├── http_client.py        # Shared httpx wrapper: timeout, retry, structured JSON
 │   │   ├── series_builder.py     # Groups LolGameHistory → LolSeries. rebuild_series() entrypoint
-│   │   ├── lol_metrics_engine.py # Team + player statistics from last 5 series. precompute_upcoming_stats().
+│   │   ├── lol_metrics_engine.py # Team + player statistics from last 5 series. precompute_upcoming_stats()
+│   │   │                         #   now caches to LolMatchStatisticsReadModel. New caching layer:
+│   │   │                         #   cached_match_statistics(), store_match_statistics(),
+│   │   │                         #   invalidate_statistics_cache(), cached_statistics_from_record().
 │   │   │                         #   Player stats now report kills_per_map and deaths_per_map
 │   │   │                         #   (per-map averages) instead of absolute kills/deaths totals.
 │   │   │                         #   New: _recent_matchups() returns last 3 series summaries with
