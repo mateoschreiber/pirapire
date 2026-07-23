@@ -8,6 +8,8 @@ from ..models_lol import LolGameHistory, LolSeries
 
 
 def rebuild_series(session: Session):
+    from .lol_metrics_engine import invalidate_statistics_cache
+
     games = session.exec(select(LolGameHistory).order_by(LolGameHistory.date)).all()
     buckets = defaultdict(list)
     for game in games:
@@ -35,5 +37,6 @@ def rebuild_series(session: Session):
                            game_ids_json=json.dumps([g.id for g in items]),maps_count=len(items),complete=True)
         session.add(series); session.flush()
         for g in items: g.series_id=series.id; session.add(g)
+    invalidate_statistics_cache(session)
     session.commit()
     return len(buckets)

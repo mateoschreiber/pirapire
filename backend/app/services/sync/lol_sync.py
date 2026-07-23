@@ -125,6 +125,24 @@ def _upsert_match_event(session, row):
     try: best_of = int(best_of_raw) if best_of_raw else None
     except: best_of = None
 
+    source_url = f"https://lol.fandom.com/wiki/{overview.replace(' ', '_')}" if overview else ""
+    current_start = match.start_time_utc
+    if current_start and current_start.tzinfo is None:
+        current_start = current_start.replace(tzinfo=UTC)
+    changed = is_new or current_start != dt or any(
+        getattr(match, field) != value
+        for field, value in {
+            "league": league,
+            "tournament": tournament,
+            "team_a": team1,
+            "team_b": team2,
+            "best_of": best_of,
+            "status": status,
+            "source_url": source_url,
+        }.items()
+    )
+    if not changed:
+        return (0, 0, 1)
     match.league = league
     match.tournament = tournament
     match.team_a = team1
@@ -132,7 +150,7 @@ def _upsert_match_event(session, row):
     match.start_time_utc = dt
     match.best_of = best_of
     match.status = status
-    match.source_url = f"https://lol.fandom.com/wiki/{overview.replace(' ', '_')}" if overview else ""
+    match.source_url = source_url
     match.observed_at = now
     match.updated_at = now
     session.add(match)
@@ -152,6 +170,12 @@ def sync_leaguepedia_schedule(session: Session):
     for row in rows:
         i, u, s = _upsert_match_event(session, row)
         inserted += i; updated += u; skipped += s
+
+    if inserted or updated:
+        from ..lol_metrics_engine import invalidate_statistics_cache
+
+        invalidate_statistics_cache(session)
+        session.commit()
 
     scheduled_count = session.exec(select(LolMatchEvent).where(LolMatchEvent.status == "scheduled")).all()
     return {"inserted": inserted, "updated": updated, "skipped": skipped, "total_rows": len(rows), "scheduled": len(scheduled_count)}

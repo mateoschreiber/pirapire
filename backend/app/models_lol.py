@@ -87,14 +87,18 @@ class LolGameHistory(SQLModel, table=True):
     red_team: Optional[str] = None
     winner_team: Optional[str] = None
     source_key: str = Field(index=True)
-    series_id: Optional[int] = Field(default=None, foreign_key="lolseries.id", index=True)
+    series_id: Optional[int] = Field(
+        default=None, foreign_key="lolseries.id", index=True
+    )
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
 
 class LolTeamGameStat(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    game_id: Optional[int] = Field(default=None, foreign_key='lolgamehistory.id', index=True)
+    game_id: Optional[int] = Field(
+        default=None, foreign_key="lolgamehistory.id", index=True
+    )
     source_name: str = Field(index=True)
     source_game_id: str = Field(index=True)
     year: Optional[int] = Field(default=None, index=True)
@@ -121,14 +125,18 @@ class LolTeamGameStat(SQLModel, table=True):
     final_gold: Optional[int] = None
     earned_gold: Optional[int] = None
     team_id: Optional[int] = Field(default=None, foreign_key="lolteam.id", index=True)
-    opponent_team_id: Optional[int] = Field(default=None, foreign_key="lolteam.id", index=True)
+    opponent_team_id: Optional[int] = Field(
+        default=None, foreign_key="lolteam.id", index=True
+    )
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
 
 
 class LolPlayerGameStat(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    game_id: Optional[int] = Field(default=None, foreign_key='lolgamehistory.id', index=True)
+    game_id: Optional[int] = Field(
+        default=None, foreign_key="lolgamehistory.id", index=True
+    )
     source_name: str = Field(index=True)
     source_game_id: str = Field(index=True)
     year: Optional[int] = Field(default=None, index=True)
@@ -148,7 +156,9 @@ class LolPlayerGameStat(SQLModel, table=True):
     solo_kills: Optional[int] = None
     final_gold: Optional[int] = None
     team_id: Optional[int] = Field(default=None, foreign_key="lolteam.id", index=True)
-    player_id: Optional[int] = Field(default=None, foreign_key="lolplayer.id", index=True)
+    player_id: Optional[int] = Field(
+        default=None, foreign_key="lolplayer.id", index=True
+    )
     source_key: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now)
 
@@ -192,6 +202,7 @@ class LolSeries(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 class LolMatchEvent(SQLModel, table=True):
     """Upcoming or finished professional LoL series."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     match_key: str = Field(index=True, unique=True)
     source_name: str = Field(index=True)
@@ -202,7 +213,9 @@ class LolMatchEvent(SQLModel, table=True):
     team_b: str = Field(index=True)
     start_time_utc: datetime = Field(index=True)
     best_of: Optional[int] = None
-    status: str = Field(default="scheduled")  # scheduled | live | finished | cancelled | postponed
+    status: str = Field(
+        default="scheduled"
+    )  # scheduled | live | finished | cancelled | postponed
     source_url: Optional[str] = None
     observed_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -210,8 +223,11 @@ class LolMatchEvent(SQLModel, table=True):
 
 class LolOddsSnapshot(SQLModel, table=True):
     """Immutable capture of general winner odds for a series."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    match_event_id: Optional[int] = Field(default=None, foreign_key='lolmatchevent.id', index=True)
+    match_event_id: Optional[int] = Field(
+        default=None, foreign_key="lolmatchevent.id", index=True
+    )
     provider: str = Field(index=True)
     captured_at: datetime = Field(default_factory=_now)
     is_current: bool = True
@@ -220,22 +236,27 @@ class LolOddsSnapshot(SQLModel, table=True):
 
 class LolTeamOdd(SQLModel, table=True):
     """One team selection inside a snapshot."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    snapshot_id: Optional[int] = Field(default=None, foreign_key='loloddssnapshot.id', index=True)
+    snapshot_id: Optional[int] = Field(
+        default=None, foreign_key="loloddssnapshot.id", index=True
+    )
     team_name: str = Field(index=True)
     decimal_odds: float
 
 
 class LolMatchStatisticsReadModel(SQLModel, table=True):
     """Materialised cached statistics payload for a match."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     match_key: str = Field(index=True, unique=True)
     input_fingerprint: str
     status: str = "pending"
-    payload_json: Optional[str] = Field(default=None, sa_column=Column(JSON))
-    coverage_json: Optional[str] = Field(default=None, sa_column=Column(JSON))
+    payload_json: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    coverage_json: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     computed_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
 
 # Operational source and stable-identity records.  Existing name fields remain for
 # backwards-compatible display; new IDs are used whenever an adapter provides them.
@@ -322,7 +343,9 @@ class ImportBatch(SQLModel, table=True):
 
 class ImportError(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    batch_id: Optional[int] = Field(default=None, foreign_key="importbatch.id", index=True)
+    batch_id: Optional[int] = Field(
+        default=None, foreign_key="importbatch.id", index=True
+    )
     row_number: Optional[int] = None
     reason: str
     raw_json: Optional[str] = None

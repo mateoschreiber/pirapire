@@ -334,7 +334,15 @@ scheduler.add_job(job_import_oracles, "interval", minutes=30, id="import_oracles
 scheduler.add_job(job_process_queued_oracle_uploads, "interval", seconds=15, id="process_queued_oracle_uploads", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
 scheduler.add_job(job_sync_remote_oracles, "interval", minutes=settings.lol_history_remote_poll_minutes, id="sync_remote_oracles", coalesce=True, max_instances=1)
 scheduler.add_job(job_process_queued_remote_oracles, "interval", seconds=15, id="process_queued_remote_oracles", coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc))
-scheduler.add_job(job_precompute_stats, "interval", minutes=30, id="precompute_stats", coalesce=True, max_instances=1)
+scheduler.add_job(
+    job_precompute_stats,
+    "interval",
+    minutes=30,
+    id="precompute_stats",
+    coalesce=True,
+    max_instances=1,
+    next_run_time=datetime.now(timezone.utc),
+)
 
 scheduler.start()
 log.info("Worker running. Press Ctrl+C to stop.")

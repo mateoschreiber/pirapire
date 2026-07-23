@@ -1,13 +1,16 @@
 """Traceable, series-based LoL statistics."""
-import json
-from datetime import datetime
 
-from sqlalchemy import or_
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import delete, or_
 from sqlmodel import Session, select
 
 from ..models_lol import (
     LolGameHistory,
     LolMatchEvent,
+    LolMatchStatisticsReadModel,
     LolPlayerGameStat,
     LolSeries,
     LolTeamGameStat,
@@ -17,6 +20,73 @@ from .lol_team_aliases import canonical_team
 
 def _resolve(session: Session, name: str) -> str:
     return canonical_team(session, name) or name
+
+
+def _cache_fingerprint(match: LolMatchEvent) -> str:
+    """Fingerprint fields whose changes alter the statistics window."""
+    raw = "|".join(
+        [
+            match.match_key,
+            match.team_a,
+            match.team_b,
+            match.start_time_utc.isoformat(),
+            match.updated_at.isoformat(),
+        ]
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def cached_statistics_from_record(
+    cached: LolMatchStatisticsReadModel | None, match: LolMatchEvent
+):
+    """Validate a previously fetched read-model record without another query."""
+    if (
+        not cached
+        or cached.status != "ready"
+        or cached.input_fingerprint != _cache_fingerprint(match)
+    ):
+        return None
+    if not isinstance(cached.payload_json, dict) or not isinstance(
+        cached.coverage_json, dict
+    ):
+        return None
+    return cached.payload_json, cached.coverage_json, cached.computed_at
+
+
+def cached_match_statistics(session: Session, match: LolMatchEvent):
+    cached = session.exec(
+        select(LolMatchStatisticsReadModel).where(
+            LolMatchStatisticsReadModel.match_key == match.match_key
+        )
+    ).first()
+    return cached_statistics_from_record(cached, match)
+
+
+def store_match_statistics(
+    session: Session,
+    match: LolMatchEvent,
+    payload: dict,
+    coverage: dict,
+) -> None:
+    cached = session.exec(
+        select(LolMatchStatisticsReadModel).where(
+            LolMatchStatisticsReadModel.match_key == match.match_key
+        )
+    ).first()
+    if not cached:
+        cached = LolMatchStatisticsReadModel(match_key=match.match_key)
+    cached.input_fingerprint = _cache_fingerprint(match)
+    cached.status = "ready"
+    cached.payload_json = payload
+    cached.coverage_json = coverage
+    cached.computed_at = datetime.now(timezone.utc)
+    cached.updated_at = datetime.now(timezone.utc)
+    session.add(cached)
+
+
+def invalidate_statistics_cache(session: Session) -> None:
+    """Invalidate derived data after an import, schedule update, or alias change."""
+    session.exec(delete(LolMatchStatisticsReadModel))
 
 
 def _metric(numerator, denominator, valid, total, reason=None):
@@ -41,62 +111,94 @@ def _recent_series(session: Session, team: str, before: datetime):
     # Only Oracle series have map-level statistics. Mixing schedule-only series
     # made valid data look partial and duplicated the same real-world series.
     return session.exec(
-        select(LolSeries).where(
+        select(LolSeries)
+        .where(
             or_(LolSeries.team_a == team, LolSeries.team_b == team),
             LolSeries.source_name == "oracles_elixir",
             LolSeries.complete == True,  # noqa: E712
             LolSeries.last_game_at < before.isoformat(),
-        ).order_by(LolSeries.last_game_at.desc()).limit(5)
+        )
+        .order_by(LolSeries.last_game_at.desc())
+        .limit(5)
     ).all()
 
 
 def _series_games(session: Session, series):
     if getattr(series, "id", None):
-        linked = session.exec(select(LolGameHistory).where(LolGameHistory.series_id == series.id)).all()
+        linked = session.exec(
+            select(LolGameHistory).where(LolGameHistory.series_id == series.id)
+        ).all()
         if linked:
             return linked
     try:
         ids = json.loads(series.game_ids_json or "[]")
     except json.JSONDecodeError:
         ids = []
-    return session.exec(select(LolGameHistory).where(LolGameHistory.id.in_(ids))).all() if ids else []
+    return (
+        session.exec(select(LolGameHistory).where(LolGameHistory.id.in_(ids))).all()
+        if ids
+        else []
+    )
 
 
-def _recent_matchups(session: Session, team: str, series: list[LolSeries]) -> list[dict]:
+def _recent_matchups(
+    session: Session, team: str, series: list[LolSeries]
+) -> list[dict]:
     """Return the last three individual maps, never series aggregates."""
     games = []
     for item in series:
         for game in _series_games(session, item):
             games.append((game, item.last_game_at))
-    games.sort(key=lambda value: (value[0].date or "", value[0].game_number or 0, str(value[1] or "")), reverse=True)
+    games.sort(
+        key=lambda value: (
+            value[0].date or "",
+            value[0].game_number or 0,
+            str(value[1] or ""),
+        ),
+        reverse=True,
+    )
 
     output = []
     for game, fallback_date in games:
-        rows = session.exec(select(LolTeamGameStat).where(LolTeamGameStat.game_id == game.id)).all()
-        own = next((row for row in rows if _resolve(session, row.team_name) == team), None)
+        rows = session.exec(
+            select(LolTeamGameStat).where(LolTeamGameStat.game_id == game.id)
+        ).all()
+        own = next(
+            (row for row in rows if _resolve(session, row.team_name) == team), None
+        )
         opponent = next((row for row in rows if own and row.id != own.id), None)
         if not own or not opponent:
             continue
-        output.append({
-            "date": game.date or fallback_date,
-            "game_number": game.game_number,
-            "opponent": opponent.team_name,
-            "score": "1-0" if own.result == 1 else "0-1" if own.result == 0 else "N/D",
-            "result": "win" if own.result == 1 else "loss" if own.result == 0 else "draw",
-            "duration_seconds": own.game_length_seconds or game.game_length_seconds,
-            "team": {
-                "name": own.team_name,
-                "kills": own.kills,
-                "towers": own.towers,
-                "inhibitors": own.inhibitors,
-            },
-            "opponent_stats": {
-                "name": opponent.team_name,
-                "kills": opponent.kills,
-                "towers": opponent.towers,
-                "inhibitors": opponent.inhibitors,
-            },
-        })
+        output.append(
+            {
+                "date": game.date or fallback_date,
+                "game_number": game.game_number,
+                "opponent": opponent.team_name,
+                "score": "1-0"
+                if own.result == 1
+                else "0-1"
+                if own.result == 0
+                else "N/D",
+                "result": "win"
+                if own.result == 1
+                else "loss"
+                if own.result == 0
+                else "draw",
+                "duration_seconds": own.game_length_seconds or game.game_length_seconds,
+                "team": {
+                    "name": own.team_name,
+                    "kills": own.kills,
+                    "towers": own.towers,
+                    "inhibitors": own.inhibitors,
+                },
+                "opponent_stats": {
+                    "name": opponent.team_name,
+                    "kills": opponent.kills,
+                    "towers": opponent.towers,
+                    "inhibitors": opponent.inhibitors,
+                },
+            }
+        )
         if len(output) == 3:
             break
     return output
@@ -109,8 +211,12 @@ def _team_payload(session: Session, team_name: str, before: datetime):
     team_rows, opponents = [], []
     series_map_results = {}
     for game in games:
-        rows = session.exec(select(LolTeamGameStat).where(LolTeamGameStat.game_id == game.id)).all()
-        own = next((row for row in rows if _resolve(session, row.team_name) == team), None)
+        rows = session.exec(
+            select(LolTeamGameStat).where(LolTeamGameStat.game_id == game.id)
+        ).all()
+        own = next(
+            (row for row in rows if _resolve(session, row.team_name) == team), None
+        )
         if not own:
             continue
         opponent = next((row for row in rows if row.id != own.id), None)
@@ -119,7 +225,9 @@ def _team_payload(session: Session, team_name: str, before: datetime):
         team_rows.append(own)
         opponents.append(opponent)
         if game.series_id is not None:
-            result = series_map_results.setdefault(game.series_id, {"wins": 0, "losses": 0})
+            result = series_map_results.setdefault(
+                game.series_id, {"wins": 0, "losses": 0}
+            )
             if own.result == 1:
                 result["wins"] += 1
             elif own.result == 0:
@@ -127,38 +235,71 @@ def _team_payload(session: Session, team_name: str, before: datetime):
 
     total = len(games)
     valid = len(team_rows)
-    reason = "no_complete_series" if not series else "unresolved_team" if not valid else None
+    reason = (
+        "no_complete_series" if not series else "unresolved_team" if not valid else None
+    )
 
     def percent(field):
-        pairs = [(getattr(own, field), getattr(opp, field)) for own, opp in zip(team_rows, opponents)]
-        usable = [(own, opp) for own, opp in pairs if own is not None and opp is not None]
-        return _metric(sum(own for own, _ in usable), sum(own + opp for own, opp in usable), len(usable), total, reason)
+        pairs = [
+            (getattr(own, field), getattr(opp, field))
+            for own, opp in zip(team_rows, opponents)
+        ]
+        usable = [
+            (own, opp) for own, opp in pairs if own is not None and opp is not None
+        ]
+        return _metric(
+            sum(own for own, _ in usable),
+            sum(own + opp for own, opp in usable),
+            len(usable),
+            total,
+            reason,
+        )
 
     def absolute(field):
-        values = [getattr(row, field) for row in team_rows if getattr(row, field) is not None]
+        values = [
+            getattr(row, field) for row in team_rows if getattr(row, field) is not None
+        ]
         return {
             "total": sum(values) if values else None,
             "per_map": round(sum(values) / len(values), 2) if values else None,
-            "status": "complete" if len(values) == total and total else "partial" if values else "unavailable",
+            "status": "complete"
+            if len(values) == total and total
+            else "partial"
+            if values
+            else "unavailable",
             "valid_maps": len(values),
             "total_maps": total,
             "reason": None if values else (reason or "metric_not_provided"),
         }
 
     def average(field):
-        values = [getattr(row, field) for row in team_rows if getattr(row, field) is not None]
+        values = [
+            getattr(row, field) for row in team_rows if getattr(row, field) is not None
+        ]
         return {
             "value": round(sum(values) / len(values), 2) if values else None,
-            "status": "complete" if len(values) == total and total else "partial" if values else "unavailable",
+            "status": "complete"
+            if len(values) == total and total
+            else "partial"
+            if values
+            else "unavailable",
             "valid_maps": len(values),
             "total_maps": total,
             "reason": None if values else (reason or "metric_not_provided"),
         }
 
-    durations = [row.game_length_seconds for row in team_rows if row.game_length_seconds is not None]
+    durations = [
+        row.game_length_seconds
+        for row in team_rows
+        if row.game_length_seconds is not None
+    ]
     map_duration = {
         "value": round(sum(durations) / len(durations)) if durations else None,
-        "status": "complete" if len(durations) == total and total else "partial" if durations else "unavailable",
+        "status": "complete"
+        if len(durations) == total and total
+        else "partial"
+        if durations
+        else "unavailable",
         "valid_maps": len(durations),
         "total_maps": total,
         "reason": None if durations else (reason or "metric_not_provided"),
@@ -167,7 +308,9 @@ def _team_payload(session: Session, team_name: str, before: datetime):
     series_wins = 0
     series_losses = 0
     for item in series:
-        value = sum(game.game_length_seconds or 0 for game in _series_games(session, item))
+        value = sum(
+            game.game_length_seconds or 0 for game in _series_games(session, item)
+        )
         if value:
             series_durations.append(value)
         result = series_map_results.get(item.id, {"wins": 0, "losses": 0})
@@ -183,7 +326,9 @@ def _team_payload(session: Session, team_name: str, before: datetime):
         "series_used": len(series),
         "series_wins": series_wins,
         "series_losses": series_losses,
-        "win_rate_pct": round(100 * series_wins / decided_series, 1) if decided_series else None,
+        "win_rate_pct": round(100 * series_wins / decided_series, 1)
+        if decided_series
+        else None,
         "maps_used": valid,
         "series": [
             {
@@ -199,11 +344,27 @@ def _team_payload(session: Session, team_name: str, before: datetime):
         "recent_matchups": _recent_matchups(session, team, series),
         "metrics": {
             key: percent(key)
-            for key in ("towers", "inhibitors", "kills", "deaths", "dragons", "barons", "gold")
+            for key in (
+                "towers",
+                "inhibitors",
+                "kills",
+                "deaths",
+                "dragons",
+                "barons",
+                "gold",
+            )
         },
         "averages": {
             key: average(key)
-            for key in ("towers", "inhibitors", "kills", "deaths", "dragons", "barons", "gold")
+            for key in (
+                "towers",
+                "inhibitors",
+                "kills",
+                "deaths",
+                "dragons",
+                "barons",
+                "gold",
+            )
         },
         "objective_totals": {
             "dragons": absolute("dragons"),
@@ -211,7 +372,9 @@ def _team_payload(session: Session, team_name: str, before: datetime):
         },
         "avg_map_duration_seconds": map_duration,
         "avg_series_duration_seconds": {
-            "value": round(sum(series_durations) / len(series_durations)) if series_durations else None,
+            "value": round(sum(series_durations) / len(series_durations))
+            if series_durations
+            else None,
             "status": "complete" if series_durations else "unavailable",
             "valid_maps": valid,
             "total_maps": total,
@@ -221,8 +384,10 @@ def _team_payload(session: Session, team_name: str, before: datetime):
     payload["metrics"]["final_gold"] = payload["metrics"].pop("gold")
     statuses = [metric["status"] for metric in payload["averages"].values()]
     payload["coverage"] = (
-        "complete" if statuses and all(status == "complete" for status in statuses)
-        else "partial" if any(status != "unavailable" for status in statuses)
+        "complete"
+        if statuses and all(status == "complete" for status in statuses)
+        else "partial"
+        if any(status != "unavailable" for status in statuses)
         else "unavailable"
     )
     payload["reason"] = reason
@@ -231,8 +396,18 @@ def _team_payload(session: Session, team_name: str, before: datetime):
 
 def _players(session: Session, team: str, games, team_rows):
     ids = [game.id for game in games]
-    rows = session.exec(select(LolPlayerGameStat).where(LolPlayerGameStat.game_id.in_(ids))).all() if ids else []
-    rows = [row for row in rows if row.team_name and _resolve(session, row.team_name) == team]
+    rows = (
+        session.exec(
+            select(LolPlayerGameStat).where(LolPlayerGameStat.game_id.in_(ids))
+        ).all()
+        if ids
+        else []
+    )
+    rows = [
+        row
+        for row in rows
+        if row.team_name and _resolve(session, row.team_name) == team
+    ]
     denominators = {
         "kills": sum(row.kills or 0 for row in team_rows),
         "deaths": sum(row.deaths or 0 for row in team_rows),
@@ -242,16 +417,19 @@ def _players(session: Session, team: str, games, team_rows):
     for row in rows:
         if not row.player_name:
             continue
-        item = grouped.setdefault(row.player_name, {
-            "player_name": row.player_name,
-            "role": row.role,
-            "games": set(),
-            "kills": 0,
-            "deaths": 0,
-            "gold": 0,
-            "cs": 0,
-            "cs_valid_maps": 0,
-        })
+        item = grouped.setdefault(
+            row.player_name,
+            {
+                "player_name": row.player_name,
+                "role": row.role,
+                "games": set(),
+                "kills": 0,
+                "deaths": 0,
+                "gold": 0,
+                "cs": 0,
+                "cs_valid_maps": 0,
+            },
+        )
         item["games"].add(row.game_id)
         for key in ("kills", "deaths", "gold"):
             item[key] += getattr(row, key) or 0
@@ -259,35 +437,62 @@ def _players(session: Session, team: str, games, team_rows):
             item["cs"] += row.cs
             item["cs_valid_maps"] += 1
 
-    role_order = {"top": 0, "jng": 1, "jungle": 1, "jg": 1, "mid": 2, "bot": 3, "adc": 3, "sup": 4, "support": 4}
-    role_label = {"top": "Top", "jng": "Jg", "jungle": "Jg", "jg": "Jg", "mid": "Mid", "bot": "ADC", "adc": "ADC", "sup": "Supp", "support": "Supp"}
+    role_order = {
+        "top": 0,
+        "jng": 1,
+        "jungle": 1,
+        "jg": 1,
+        "mid": 2,
+        "bot": 3,
+        "adc": 3,
+        "sup": 4,
+        "support": 4,
+    }
+    role_label = {
+        "top": "Top",
+        "jng": "Jg",
+        "jungle": "Jg",
+        "jg": "Jg",
+        "mid": "Mid",
+        "bot": "ADC",
+        "adc": "ADC",
+        "sup": "Supp",
+        "support": "Supp",
+    }
     output = []
     for item in grouped.values():
+
         def pct(key, denominator):
             return round(100 * item[key] / denominator, 1) if denominator else None
 
         maps = len(item["games"])
         role_key = (item["role"] or "").strip().lower()
-        output.append({
-            "player_name": item["player_name"],
-            "role": role_label.get(role_key, item["role"]),
-            "role_order": role_order.get(role_key, 99),
-            "maps_played": maps,
-            "kills_per_map": round(item["kills"] / maps, 2) if maps else None,
-            "kills_pct": pct("kills", denominators["kills"]),
-            "deaths_per_map": round(item["deaths"] / maps, 2) if maps else None,
-            "deaths_pct": pct("deaths", denominators["deaths"]),
-            "gold_per_map": round(item["gold"] / maps, 1) if maps else None,
-            "cs_per_map": round(item["cs"] / item["cs_valid_maps"], 1) if item["cs_valid_maps"] else None,
-            "cs_status": "available" if item["cs_valid_maps"] else "unavailable",
-        })
+        output.append(
+            {
+                "player_name": item["player_name"],
+                "role": role_label.get(role_key, item["role"]),
+                "role_order": role_order.get(role_key, 99),
+                "maps_played": maps,
+                "kills_per_map": round(item["kills"] / maps, 2) if maps else None,
+                "kills_pct": pct("kills", denominators["kills"]),
+                "deaths_per_map": round(item["deaths"] / maps, 2) if maps else None,
+                "deaths_pct": pct("deaths", denominators["deaths"]),
+                "gold_per_map": round(item["gold"] / maps, 1) if maps else None,
+                "cs_per_map": round(item["cs"] / item["cs_valid_maps"], 1)
+                if item["cs_valid_maps"]
+                else None,
+                "cs_status": "available" if item["cs_valid_maps"] else "unavailable",
+            }
+        )
     output.sort(key=lambda item: (item["role_order"], item["player_name"].lower()))
     for item in output:
         item.pop("role_order", None)
     return output
 
 
-def _estimated_market(team_a: dict, team_b: dict, team_a_name: str, team_b_name: str) -> dict:
+def _estimated_market(
+    team_a: dict, team_b: dict, team_a_name: str, team_b_name: str
+) -> dict:
     sample_a = team_a["series_wins"] + team_a["series_losses"]
     sample_b = team_b["series_wins"] + team_b["series_losses"]
     if not sample_a or not sample_b:
@@ -323,7 +528,9 @@ def _estimated_market(team_a: dict, team_b: dict, team_a_name: str, team_b_name:
 
 
 def compute_match_statistics(session: Session, match_key: str):
-    match = session.exec(select(LolMatchEvent).where(LolMatchEvent.match_key == match_key)).first()
+    match = session.exec(
+        select(LolMatchEvent).where(LolMatchEvent.match_key == match_key)
+    ).first()
     if not match:
         return None
     team_a, games_a, rows_a = _team_payload(session, match.team_a, match.start_time_utc)
@@ -335,7 +542,9 @@ def compute_match_statistics(session: Session, match_key: str):
         "team_b_name": match.team_b,
         "players_a": _players(session, team_a["team_name"], games_a, rows_a),
         "players_b": _players(session, team_b["team_name"], games_b, rows_b),
-        "estimated_market": _estimated_market(team_a, team_b, match.team_a, match.team_b),
+        "estimated_market": _estimated_market(
+            team_a, team_b, match.team_a, match.team_b
+        ),
         "data_notes": {
             "odds": "Las cuotas calculadas son una estimación estadística interna y no representan una casa de apuestas.",
             "sample": "Estadísticas calculadas sobre las últimas 5 series con mapas disponibles.",
@@ -344,4 +553,32 @@ def compute_match_statistics(session: Session, match_key: str):
 
 
 def precompute_upcoming_stats(session: Session):
-    return {"precomputed": 0, "total_scheduled": 0}
+    now = datetime.now(timezone.utc)
+    scheduled = session.exec(
+        select(LolMatchEvent)
+        .where(LolMatchEvent.status == "scheduled")
+        .where(LolMatchEvent.start_time_utc >= now)
+        .where(LolMatchEvent.start_time_utc <= now + timedelta(days=14))
+        .order_by(LolMatchEvent.start_time_utc.asc())
+    ).all()
+    precomputed = skipped = unavailable = 0
+    for match in scheduled:
+        if cached_match_statistics(session, match):
+            skipped += 1
+            continue
+        result = compute_match_statistics(session, match.match_key)
+        if not result:
+            unavailable += 1
+            continue
+        payload, coverage = result
+        store_match_statistics(session, match, payload, coverage)
+        # SQLite permits a single writer. Commit each derived record so this
+        # background job never holds the write lock while computing the next one.
+        session.commit()
+        precomputed += 1
+    return {
+        "precomputed": precomputed,
+        "skipped": skipped,
+        "unavailable": unavailable,
+        "total_scheduled": len(scheduled),
+    }

@@ -6,7 +6,16 @@ from sqlmodel import Session, select
 
 from ..config import settings
 from ..database import get_session
-from ..models_lol import LolMatchEvent, LolOddsSnapshot, LolTeamOdd
+from ..models_lol import (
+    LolMatchEvent,
+    LolMatchStatisticsReadModel,
+    LolOddsSnapshot,
+    LolTeamOdd,
+)
+from ..services.lol_metrics_engine import (
+    cached_match_statistics,
+    cached_statistics_from_record,
+)
 
 router = APIRouter(prefix="/api/lol")
 
@@ -21,57 +30,101 @@ COMPETITIONS = (
     ("MSI", "MSI"),
     ("FIRST_STAND", "FIRST STAND"),
     ("EWC", "EWC"),
+    ("KESPA", "KeSPA CUP"),
 )
 COMPETITION_LABELS = dict(COMPETITIONS)
 
 OFFICIAL_COMPETITION_ROSTERS_2026 = {
     "LCK": {
         "teams": (
-            "Gen.G Esports", "T1", "NONGSHIM RED FORCE", "DN SOOPers", "HANJIN BRION",
-            "Hanwha Life Esports", "Dplus KIA", "kt Rolster", "BNK FEARX", "KIWOOM DRX",
+            "Gen.G Esports",
+            "T1",
+            "NONGSHIM RED FORCE",
+            "DN SOOPers",
+            "HANJIN BRION",
+            "Hanwha Life Esports",
+            "Dplus KIA",
+            "kt Rolster",
+            "BNK FEARX",
+            "KIWOOM DRX",
         ),
         "source_url": "https://lolesports.com/en-US/tournament/115548106590082745/overview",
         "status": "official",
     },
     "LPL": {
         "teams": (
-            "Anyone's Legend", "BILIBILI GAMING", "Invictus Gaming", "Beijing JDG Esports",
-            "Shenzhen NINJAS IN PYJAMAS", "Xi'an Team WE", "TOP ESPORTS", "WeiboGaming",
-            "EDWARD GAMING", "LGD GAMING", "Suzhou LNG Esports", "Oh My God",
-            "THUNDER TALK GAMING", "Ultra Prime",
+            "Anyone's Legend",
+            "BILIBILI GAMING",
+            "Invictus Gaming",
+            "Beijing JDG Esports",
+            "Shenzhen NINJAS IN PYJAMAS",
+            "Xi'an Team WE",
+            "TOP ESPORTS",
+            "WeiboGaming",
+            "EDWARD GAMING",
+            "LGD GAMING",
+            "Suzhou LNG Esports",
+            "Oh My God",
+            "THUNDER TALK GAMING",
+            "Ultra Prime",
         ),
         "source_url": "https://lolesports.com/en-US/tournament/115615907996665826/overview",
         "status": "official",
     },
     "LEC": {
         "teams": (
-            "Team Heretics", "Natus Vincere", "Team Vitality", "Shifters", "GIANTX",
-            "SK Gaming", "Movistar KOI", "Fnatic", "Karmine Corp", "G2 Esports",
+            "Team Heretics",
+            "Natus Vincere",
+            "Team Vitality",
+            "Shifters",
+            "GIANTX",
+            "SK Gaming",
+            "Movistar KOI",
+            "Fnatic",
+            "Karmine Corp",
+            "G2 Esports",
         ),
         "source_url": "https://lolesports.com/en-US/tournament/115548681802226458/overview",
         "status": "official",
     },
     "LCS": {
         "teams": (
-            "Sentinels", "Cloud9 Kia", "Dignitas", "Disguised", "FlyQuest", "LYON",
-            "Shopify Rebellion", "Team Liquid Alienware",
+            "Sentinels",
+            "Cloud9 Kia",
+            "Dignitas",
+            "Disguised",
+            "FlyQuest",
+            "LYON",
+            "Shopify Rebellion",
+            "Team Liquid Alienware",
         ),
         "source_url": "https://lolesports.com/news/lcs-2026-address",
         "status": "official",
     },
     "CBLOL": {
         "teams": (
-            "Fluxo W7M", "FURIA", "LEVIATÁN", "LOS", "LOUD", "paiN Gaming",
-            "RED Kalunga", "Vivo Keyd Stars",
+            "Fluxo W7M",
+            "FURIA",
+            "LEVIATÁN",
+            "LOS",
+            "LOUD",
+            "paiN Gaming",
+            "RED Kalunga",
+            "Vivo Keyd Stars",
         ),
         "source_url": "https://lolesports.com/en-US/tournament/115565518151768348/overview",
         "status": "official",
     },
     "LCP": {
         "teams": (
-            "CTBC Flying Oyster", "DetonatioN FocusMe", "Relove Deep Cross Gaming",
-            "GAM Esports", "Ground Zero Gaming", "MVK Esports",
-            "Fukuoka SoftBank HAWKS gaming", "Team Secret Whales",
+            "CTBC Flying Oyster",
+            "DetonatioN FocusMe",
+            "Relove Deep Cross Gaming",
+            "GAM Esports",
+            "Ground Zero Gaming",
+            "MVK Esports",
+            "Fukuoka SoftBank HAWKS gaming",
+            "Team Secret Whales",
         ),
         "source_url": "https://lolesports.com/en-US/tournament/115570728597462574/overview",
         "status": "official",
@@ -83,32 +136,59 @@ OFFICIAL_COMPETITION_ROSTERS_2026 = {
     },
     "MSI": {
         "teams": (
-            "BILIBILI GAMING", "TOP ESPORTS", "Hanwha Life Esports", "T1",
-            "G2 Esports", "Karmine Corp", "LYON", "Team Liquid Alienware",
-            "Team Secret Whales", "Relove Deep Cross Gaming", "FURIA",
+            "BILIBILI GAMING",
+            "TOP ESPORTS",
+            "Hanwha Life Esports",
+            "T1",
+            "G2 Esports",
+            "Karmine Corp",
+            "LYON",
+            "Team Liquid Alienware",
+            "Team Secret Whales",
+            "Relove Deep Cross Gaming",
+            "FURIA",
         ),
         "source_url": "https://lolesports.com/en-US/news/msi-",
         "status": "official",
     },
     "FIRST_STAND": {
         "teams": (
-            "BILIBILI GAMING", "Beijing JDG Esports", "Gen.G Esports", "BNK FEARX",
-            "G2 Esports", "LYON", "Team Secret Whales", "LOUD",
+            "BILIBILI GAMING",
+            "Beijing JDG Esports",
+            "Gen.G Esports",
+            "BNK FEARX",
+            "G2 Esports",
+            "LYON",
+            "Team Secret Whales",
+            "LOUD",
         ),
         "source_url": "https://lolesports.com/en-US/leagues/first_stand",
         "status": "official",
     },
     "EWC": {
         "teams": (
-            "AG.AL", "BILIBILI GAMING", "Dplus KIA", "FURIA", "G2 Esports",
-            "GAM Esports", "Gen.G Esports", "Hanwha Life Esports", "Beijing JDG Esports",
-            "Karmine Corp", "LYON", "MIBR.LOS", "Movistar KOI", "Sentinels", "T1",
+            "AG.AL",
+            "BILIBILI GAMING",
+            "Dplus KIA",
+            "FURIA",
+            "G2 Esports",
+            "GAM Esports",
+            "Gen.G Esports",
+            "Hanwha Life Esports",
+            "Beijing JDG Esports",
+            "Karmine Corp",
+            "LYON",
+            "MIBR.LOS",
+            "Movistar KOI",
+            "Sentinels",
+            "T1",
             "Team Secret",
         ),
         "source_url": "https://esportsworldcup.com/en/competitions/league-of-legends",
         "status": "official",
     },
 }
+
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -128,9 +208,13 @@ def _competition_code(league: str | None, tournament: str | None = None) -> str 
     combined = f"{league_text} {(tournament or '').strip().upper()}"
     if "ESPORTS WORLD CUP" in combined:
         return "EWC"
+    if "KESPA CUP" in combined:
+        return "KESPA"
     if "FIRST STAND" in combined or "FIST STAND" in combined:
         return "FIRST_STAND"
-    if "MID-SEASON INVITATIONAL" in combined or re.search(r"(^|[^A-Z])MSI([^A-Z]|$)", combined):
+    if "MID-SEASON INVITATIONAL" in combined or re.search(
+        r"(^|[^A-Z])MSI([^A-Z]|$)", combined
+    ):
         return "MSI"
     if "WORLD CHAMPIONSHIP" in combined or "WORLDS" in combined:
         return "WORLDS"
@@ -143,6 +227,7 @@ def _competition_code(league: str | None, tournament: str | None = None) -> str 
             return code
     return None
 
+
 def _odds_for_match(session: Session, match: LolMatchEvent) -> dict:
     snapshot = session.exec(
         select(LolOddsSnapshot)
@@ -153,7 +238,9 @@ def _odds_for_match(session: Session, match: LolMatchEvent) -> dict:
     ).first()
     odds_a = odds_b = None
     if snapshot:
-        for odd in session.exec(select(LolTeamOdd).where(LolTeamOdd.snapshot_id == snapshot.id)).all():
+        for odd in session.exec(
+            select(LolTeamOdd).where(LolTeamOdd.snapshot_id == snapshot.id)
+        ).all():
             if odd.team_name == match.team_a:
                 odds_a = odd.decimal_odds
             elif odd.team_name == match.team_b:
@@ -166,16 +253,88 @@ def _odds_for_match(session: Session, match: LolMatchEvent) -> dict:
         "odds_captured_at": snapshot.captured_at.isoformat() if snapshot else None,
         "odds_available": available,
         "odds_status": "available" if available else "not_captured",
-        "odds_message": None if available else "Sin captura de cuotas. Oracle's Elixir no incluye datos de apuestas.",
+        "odds_message": None
+        if available
+        else "Sin captura de cuotas. Oracle's Elixir no incluye datos de apuestas.",
     }
 
 
-def _match_view(session: Session, match: LolMatchEvent) -> dict:
+def _unavailable_odds() -> dict:
+    return {
+        "odds_a": None,
+        "odds_b": None,
+        "odds_provider": None,
+        "odds_captured_at": None,
+        "odds_available": False,
+        "odds_status": "not_captured",
+        "odds_message": "Sin captura de cuotas. Oracle's Elixir no incluye datos de apuestas.",
+    }
+
+
+def _current_odds_by_match(
+    session: Session, matches: list[LolMatchEvent]
+) -> dict[int, dict]:
+    """Load the current odds for a list of matches in two queries, not 2N."""
+    match_ids = [match.id for match in matches if match.id is not None]
+    result = {match_id: _unavailable_odds() for match_id in match_ids}
+    if not match_ids:
+        return result
+    snapshots = session.exec(
+        select(LolOddsSnapshot)
+        .where(LolOddsSnapshot.match_event_id.in_(match_ids))
+        .where(LolOddsSnapshot.is_current == True)  # noqa: E712
+        .order_by(LolOddsSnapshot.captured_at.desc())
+    ).all()
+    latest = {}
+    for snapshot in snapshots:
+        latest.setdefault(snapshot.match_event_id, snapshot)
+    if not latest:
+        return result
+    odds = session.exec(
+        select(LolTeamOdd).where(
+            LolTeamOdd.snapshot_id.in_([item.id for item in latest.values()])
+        )
+    ).all()
+    odds_by_snapshot = {}
+    for odd in odds:
+        odds_by_snapshot.setdefault(odd.snapshot_id, []).append(odd)
+    for match in matches:
+        snapshot = latest.get(match.id)
+        if not snapshot:
+            continue
+        values = {
+            odd.team_name: odd.decimal_odds
+            for odd in odds_by_snapshot.get(snapshot.id, [])
+        }
+        odds_a, odds_b = values.get(match.team_a), values.get(match.team_b)
+        available = odds_a is not None and odds_b is not None
+        result[match.id] = {
+            "odds_a": odds_a,
+            "odds_b": odds_b,
+            "odds_provider": snapshot.provider,
+            "odds_captured_at": snapshot.captured_at.isoformat(),
+            "odds_available": available,
+            "odds_status": "available" if available else "not_captured",
+            "odds_message": None
+            if available
+            else "Sin captura de cuotas. Oracle's Elixir no incluye datos de apuestas.",
+        }
+    return result
+
+
+def _match_view(
+    session: Session,
+    match: LolMatchEvent,
+    estimated_market: dict | None = None,
+    odds: dict | None = None,
+) -> dict:
     code = _competition_code(match.league, match.tournament)
     return {
         "match_key": match.match_key,
         "competition_code": code,
-        "competition": COMPETITION_LABELS.get(code, match.league or match.tournament or "N/D"),
+        "competition": COMPETITION_LABELS.get(
+            code, match.league or match.tournament or "N/D"
+        ),
         "league": match.league,
         "tournament": match.tournament,
         "team_a": match.team_a,
@@ -183,11 +342,14 @@ def _match_view(session: Session, match: LolMatchEvent) -> dict:
         "start_time_utc": _utc_iso(match.start_time_utc),
         "best_of": match.best_of,
         "status": match.status,
-        **_odds_for_match(session, match),
+        "estimated_market": estimated_market,
+        **(odds if odds is not None else _odds_for_match(session, match)),
     }
 
 
-def _competition_summary(events: list[LolMatchEvent], upcoming: list[LolMatchEvent], year: int) -> list[dict]:
+def _competition_summary(
+    events: list[LolMatchEvent], upcoming: list[LolMatchEvent], year: int
+) -> list[dict]:
     upcoming_counts = {code: 0 for code, _ in COMPETITIONS}
     for event in upcoming:
         code = _competition_code(event.league, event.tournament)
@@ -197,29 +359,40 @@ def _competition_summary(events: list[LolMatchEvent], upcoming: list[LolMatchEve
     result = []
     for code, label in COMPETITIONS:
         relevant = [
-            event for event in events
-            if event.start_time_utc.year == year and _competition_code(event.league, event.tournament) == code
+            event
+            for event in events
+            if event.start_time_utc.year == year
+            and _competition_code(event.league, event.tournament) == code
         ]
-        discovered_teams = sorted({
-            team.strip()
-            for event in relevant
-            for team in (event.team_a, event.team_b)
-            if team and team.strip().upper() not in {"TBD", "TBA", "UNKNOWN"}
-        }, key=str.casefold)
+        discovered_teams = sorted(
+            {
+                team.strip()
+                for event in relevant
+                for team in (event.team_a, event.team_b)
+                if team and team.strip().upper() not in {"TBD", "TBA", "UNKNOWN"}
+            },
+            key=str.casefold,
+        )
         official = OFFICIAL_COMPETITION_ROSTERS_2026.get(code) if year == 2026 else None
         teams = list(official["teams"]) if official else discovered_teams
-        roster_status = official["status"] if official else ("calendar_derived" if teams else "not_published")
-        result.append({
-            "code": code,
-            "label": label,
-            "season": year,
-            "qualified_teams": teams,
-            "team_count": len(teams),
-            "upcoming_matches": upcoming_counts[code],
-            "coverage": "available" if teams else "not_published",
-            "roster_status": roster_status,
-            "official_source_url": official["source_url"] if official else None,
-        })
+        roster_status = (
+            official["status"]
+            if official
+            else ("calendar_derived" if teams else "not_published")
+        )
+        result.append(
+            {
+                "code": code,
+                "label": label,
+                "season": year,
+                "qualified_teams": teams,
+                "team_count": len(teams),
+                "upcoming_matches": upcoming_counts[code],
+                "coverage": "available" if teams else "not_published",
+                "roster_status": roster_status,
+                "official_source_url": official["source_url"] if official else None,
+            }
+        )
     return result
 
 
@@ -237,10 +410,42 @@ def upcoming_matches(
         .where(LolMatchEvent.status == "scheduled")
         .order_by(LolMatchEvent.start_time_utc.asc())
     ).all()
-    allowed = [event for event in scheduled if _competition_code(event.league, event.tournament)]
+    allowed = [
+        event
+        for event in scheduled
+        if _competition_code(event.league, event.tournament)
+    ]
     all_events = session.exec(select(LolMatchEvent)).all()
+    cache_rows = (
+        session.exec(
+            select(LolMatchStatisticsReadModel).where(
+                LolMatchStatisticsReadModel.match_key.in_(
+                    [match.match_key for match in allowed]
+                )
+            )
+        ).all()
+        if allowed
+        else []
+    )
+    cache_by_key = {row.match_key: row for row in cache_rows}
+    estimated_markets = {}
+    for match in allowed:
+        cached = cached_statistics_from_record(cache_by_key.get(match.match_key), match)
+        if cached:
+            payload, _, _ = cached
+            estimated_markets[match.match_key] = payload.get("estimated_market")
+    odds_by_match = _current_odds_by_match(session, allowed)
+
     return {
-        "matches": [_match_view(session, match) for match in allowed],
+        "matches": [
+            _match_view(
+                session,
+                match,
+                estimated_markets.get(match.match_key),
+                odds_by_match.get(match.id, _unavailable_odds()),
+            )
+            for match in allowed
+        ],
         "competitions": _competition_summary(all_events, allowed, now.year),
         "allowed_competitions": [label for _, label in COMPETITIONS],
         "count": len(allowed),
@@ -251,7 +456,9 @@ def upcoming_matches(
 
 @router.get("/matches/{match_key}")
 def get_match(match_key: str, session: Session = Depends(get_session)):
-    match = session.exec(select(LolMatchEvent).where(LolMatchEvent.match_key == match_key)).first()
+    match = session.exec(
+        select(LolMatchEvent).where(LolMatchEvent.match_key == match_key)
+    ).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
     return {
@@ -263,16 +470,25 @@ def get_match(match_key: str, session: Session = Depends(get_session)):
 
 @router.get("/matches/{match_key}/statistics")
 def get_match_statistics(match_key: str, session: Session = Depends(get_session)):
-    from ..services.lol_metrics_engine import compute_match_statistics
-
-    result = compute_match_statistics(session, match_key)
-    if not result:
+    match = session.exec(
+        select(LolMatchEvent).where(LolMatchEvent.match_key == match_key)
+    ).first()
+    if not match:
         raise HTTPException(status_code=404, detail="Match not found")
-    payload, coverage = result
+    cached = cached_match_statistics(session, match)
+    if not cached:
+        return {
+            "match_key": match_key,
+            "status": "pending",
+            "payload": None,
+            "coverage": None,
+            "computed_at": None,
+        }
+    payload, coverage, computed_at = cached
     return {
         "match_key": match_key,
-        "status": "computed",
+        "status": "ready",
         "payload": payload,
         "coverage": coverage,
-        "computed_at": datetime.now(timezone.utc).isoformat(),
+        "computed_at": _utc_iso(computed_at),
     }

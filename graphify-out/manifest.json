@@ -30,14 +30,14 @@
     "semantic_hash": "f56f32d22233cb1992968c112eaa11b0"
   },
   "backend/app/migrations.py": {
-    "mtime": 1784634720.636788,
-    "ast_hash": "6bc3a3ea29effb08b6a8367f2a828a53",
-    "semantic_hash": "6bc3a3ea29effb08b6a8367f2a828a53"
+    "mtime": 1784826933.852877,
+    "ast_hash": "b8e805adb93884f105cb3e04009379cf",
+    "semantic_hash": ""
   },
   "backend/app/models_lol.py": {
-    "mtime": 1784124040.1722617,
-    "ast_hash": "1cf89fae10cfb08b3931b1605255d2c6",
-    "semantic_hash": "1cf89fae10cfb08b3931b1605255d2c6"
+    "mtime": 1784826933.8568769,
+    "ast_hash": "dafeaee04bfcc6f6f0339b9abe2ac479",
+    "semantic_hash": ""
   },
   "backend/app/routers/__init__.py": {
     "mtime": 1784119342.7212448,
@@ -50,9 +50,9 @@
     "semantic_hash": "3f52906b3e9a44b25b19975fa168243a"
   },
   "backend/app/routers/lol_api.py": {
-    "mtime": 1784634720.636788,
-    "ast_hash": "98789d76f16085bce2a802bd2542a991",
-    "semantic_hash": "98789d76f16085bce2a802bd2542a991"
+    "mtime": 1784827565.8106701,
+    "ast_hash": "da9e7f83af8d82e6df781f2fab3b433c",
+    "semantic_hash": ""
   },
   "backend/app/routers/pages.py": {
     "mtime": 1784124094.392839,
@@ -85,9 +85,9 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "backend/app/services/imports/oracles_elixir_importer.py": {
-    "mtime": 1784634720.636788,
-    "ast_hash": "5a3e964779b1c931a5bec3e13250c87e",
-    "semantic_hash": "5a3e964779b1c931a5bec3e13250c87e"
+    "mtime": 1784826933.852877,
+    "ast_hash": "4f7d46034452c4961b86f51e3ca71d15",
+    "semantic_hash": ""
   },
   "backend/app/services/imports/remote_oracles_elixir.py": {
     "mtime": 1784634720.636788,
@@ -100,9 +100,9 @@
     "semantic_hash": "0ee12d272c67285a8f185d6d54d7658d"
   },
   "backend/app/services/lol_metrics_engine.py": {
-    "mtime": 1784634720.6407878,
-    "ast_hash": "84aa77bde316a607184212738361dc3b",
-    "semantic_hash": "84aa77bde316a607184212738361dc3b"
+    "mtime": 1784827118.3345692,
+    "ast_hash": "6e8acda1cfa4ae49b7cafcb4d593acad",
+    "semantic_hash": ""
   },
   "backend/app/services/lol_odds_importer.py": {
     "mtime": 1784133551.1085553,
@@ -115,9 +115,9 @@
     "semantic_hash": "ca4feefd72d0f9ed5be8023746d4ad90"
   },
   "backend/app/services/series_builder.py": {
-    "mtime": 1784134402.1092181,
-    "ast_hash": "eb2820350de1efda2c893fdd66bc5ea9",
-    "semantic_hash": "eb2820350de1efda2c893fdd66bc5ea9"
+    "mtime": 1784826690.3266406,
+    "ast_hash": "cb0b4845727bbbf709aa02322eb39e43",
+    "semantic_hash": ""
   },
   "backend/app/services/sync/__init__.py": {
     "mtime": 1784119342.9972475,
@@ -125,9 +125,9 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "backend/app/services/sync/lol_sync.py": {
-    "mtime": 1784120387.4078617,
-    "ast_hash": "ad8ba4c19b2215a2c9c240dfe89e0134",
-    "semantic_hash": "ad8ba4c19b2215a2c9c240dfe89e0134"
+    "mtime": 1784826685.2705941,
+    "ast_hash": "ca0eeb48df204aaf97a3aa8e2d6aaf4e",
+    "semantic_hash": ""
   },
   "backend/app/services/team_logo_sync.py": {
     "mtime": 1784634720.6407878,
@@ -155,12 +155,12 @@
     "semantic_hash": "ce7708bb20dbae973f0ab3c9caf7121d"
   },
   "backend/app/static/js/app.js": {
-    "mtime": 1784634720.6407878,
-    "ast_hash": "83ae2d89df876aabf3ea4267fc66f90e",
-    "semantic_hash": "83ae2d89df876aabf3ea4267fc66f90e"
+    "mtime": 1784826644.1622164,
+    "ast_hash": "e52b41139bc055d2fe8392ecc508eb5d",
+    "semantic_hash": ""
   },
   "backend/app/static/team-logos/manifest.json": {
-    "mtime": 1784805549.8296483,
+    "mtime": 1784827674.8836694,
     "ast_hash": "7721584d52923fda92677470c0dc4ad8",
     "semantic_hash": "7721584d52923fda92677470c0dc4ad8"
   },
@@ -175,9 +175,9 @@
     "semantic_hash": "ac17fe8e621dc5e1b7624c6f9c1e233d"
   },
   "backend/app/worker_main.py": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "d703e97a72564163333f2a1383c0f017",
-    "semantic_hash": "d703e97a72564163333f2a1383c0f017"
+    "mtime": 1784826651.5022838,
+    "ast_hash": "346d49cd519f6540c95cac1610eb44c6",
+    "semantic_hash": ""
   },
   "backend/scripts/sync_team_logos.py": {
     "mtime": 1784634720.6807878,
@@ -205,9 +205,9 @@
     "semantic_hash": "911da4ab61790c4ff290aad943b3aad4"
   },
   "backend/tests/test_pages.py": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "c594484160a70d2085347a3808a7704a",
-    "semantic_hash": "c594484160a70d2085347a3808a7704a"
+    "mtime": 1784827586.0188553,
+    "ast_hash": "9fb200a5b70ceaeb3aae0527d3749558",
+    "semantic_hash": ""
   },
   "backend/tests/test_remote_oracles.py": {
     "mtime": 1784634720.6807878,
@@ -230,7 +230,7 @@
     "semantic_hash": ""
   },
   ".github/workflows/openwiki-update.yml": {
-    "mtime": 1784809811.750767,
+    "mtime": 1784827881.841565,
     "ast_hash": "c0039579c3e4fd0b93e236f2f203d5b4",
     "semantic_hash": "c0039579c3e4fd0b93e236f2f203d5b4"
   },
@@ -280,12 +280,12 @@
     "semantic_hash": "9378bd03d56baaf78bd738ab3848f142"
   },
   "AGENTS.md": {
-    "mtime": 1784809811.754767,
+    "mtime": 1784827881.849565,
     "ast_hash": "cd923fb73a48b8b8d44c00c612fa9bd0",
     "semantic_hash": "cd923fb73a48b8b8d44c00c612fa9bd0"
   },
   "CLAUDE.md": {
-    "mtime": 1784809811.754767,
+    "mtime": 1784827881.849565,
     "ast_hash": "98901357f8d8cdd5270a78cb3fff129b",
     "semantic_hash": "98901357f8d8cdd5270a78cb3fff129b"
   },
@@ -712,6 +712,11 @@
   "openwiki/testing/overview.md": {
     "mtime": 1784634720.6807878,
     "ast_hash": "2e2ab4c30f74306b25ad6a126be2903e",
+    "semantic_hash": ""
+  },
+  "backend/tests/test_statistics_cache.py": {
+    "mtime": 1784826780.391468,
+    "ast_hash": "fefdc1509f3f19b35d80521f4b316f46",
     "semantic_hash": ""
   }
 }

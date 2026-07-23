@@ -66,9 +66,7 @@ def upgrade(engine) -> None:
         if recreate_source_runs:
             SourceRun.__table__.create(engine, checkfirst=True)
 
-        for definition in (
-            "series_id INTEGER REFERENCES lolseries(id)",
-        ):
+        for definition in ("series_id INTEGER REFERENCES lolseries(id)",):
             _add(session, "lolgamehistory", definition)
         for definition in (
             "team_id INTEGER REFERENCES lolteam(id)",
@@ -83,4 +81,10 @@ def upgrade(engine) -> None:
             "final_gold INTEGER",
         ):
             _add(session, "lolplayergamestat", definition)
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS ix_lolmatchevent_status_start ON lolmatchevent(status, start_time_utc)",
+            "CREATE INDEX IF NOT EXISTS ix_lolseries_team_a_stats ON lolseries(team_a, source_name, complete, last_game_at DESC)",
+            "CREATE INDEX IF NOT EXISTS ix_lolseries_team_b_stats ON lolseries(team_b, source_name, complete, last_game_at DESC)",
+        ):
+            session.exec(text(statement))
         session.commit()

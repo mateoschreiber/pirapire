@@ -5,7 +5,6 @@
   let dashboardData = null;
   let activeCompetition = "ALL";
   let matchDetailData = null;
-  const previewOddsCache = new Map();
   let teamLogos = {};
   let teamLogosLoaded = false;
 
@@ -183,38 +182,6 @@
     return '<div class="match-odds unavailable"><strong>Cuotas calculadas no disponibles</strong><small>No hay historial suficiente para ambos equipos.</small></div>';
   }
 
-  function previewOddsLoadingHtml() {
-    return '<div class="match-odds preview-loading"><span class="skeleton"></span><small>Calculando cuotas con la forma reciente…</small></div>';
-  }
-
-  function updatePreviewOdds(match, estimated) {
-    document.querySelectorAll(".match-odds-slot").forEach(function (slot) {
-      if (slot.dataset.oddsKey === match.match_key) slot.innerHTML = oddsHtml(match, estimated);
-    });
-  }
-
-  async function loadPreviewOdds(matches) {
-    const queue = matches.slice();
-    async function worker() {
-      while (queue.length) {
-        const match = queue.shift();
-        try {
-          let estimated = previewOddsCache.get(match.match_key);
-          if (!estimated) {
-            const stats = await fetchJSON(API + "/" + encodeURIComponent(match.match_key) + "/statistics");
-            estimated = stats && stats.payload ? stats.payload.estimated_market : null;
-            if (estimated) previewOddsCache.set(match.match_key, estimated);
-          }
-          updatePreviewOdds(match, estimated);
-        } catch (error) {
-          updatePreviewOdds(match, null);
-          console.error("Preview odds load failed:", error);
-        }
-      }
-    }
-    await Promise.all(Array.from({length: Math.min(4, queue.length)}, worker));
-  }
-
   function renderMatches(container, matches) {
     if (!container) return;
     const visible = activeCompetition === "ALL" ? matches : matches.filter(function (match) { return match.competition_code === activeCompetition; });
@@ -232,14 +199,13 @@
         '<span class="match-datetime">' + esc(fmtDate(match.start_time_utc)) + " · " + esc(fmtTime(match.start_time_utc)) + "</span></div>" +
         '<div class="match-versus"><strong>' + teamLogo(match.team_a, "team-logo-sm") + esc(match.team_a) + '</strong><span>VS</span><strong>' + teamLogo(match.team_b, "team-logo-sm") + esc(match.team_b) + "</strong></div>" +
         '<div class="match-meta"><span>' + (match.best_of ? "BO" + match.best_of : "Formato N/D") + "</span><span>Programado</span><span>Hora PY</span></div>" +
-        '<div class="match-odds-slot" data-odds-key="' + esc(match.match_key) + '">' + previewOddsLoadingHtml() + "</div></article>";
+        '<div class="match-odds-slot">' + oddsHtml(match, match.estimated_market) + "</div></article>";
     }).join("");
     container.querySelectorAll(".match-card").forEach(function (card) {
       function open() { window.location.href = "/lol/matches/" + encodeURIComponent(card.dataset.key); }
       card.addEventListener("click", open);
       card.addEventListener("keydown", function (event) { if (event.key === "Enter" || event.key === " ") open(); });
     });
-    void loadPreviewOdds(visible);
   }
 
   // Match detail
@@ -307,6 +273,11 @@
   async function loadStatistics() {
     try {
       const stats = await fetchJSON(API + "/" + encodeURIComponent(MATCH_KEY) + "/statistics");
+      if (stats.status === "pending") {
+        const section = el("stats-section");
+        if (section) section.insertAdjacentHTML("beforeend", '<p class="meta">Las estadísticas se están actualizando con los últimos datos locales.</p>');
+        return;
+      }
       renderStats(stats);
     } catch (error) {
       const section = el("stats-section");

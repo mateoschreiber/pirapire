@@ -14,7 +14,9 @@ def test_dashboard_html():
     assert "Próximos encuentros" in response.text
     assert 'data-testid="live-clock"' in response.text
     assert 'class="dashboard-section dashboard-disclosure"' in response.text
-    assert response.text.index('aria-labelledby="matches-title" open') < response.text.index('aria-labelledby="teams-title"')
+    assert response.text.index(
+        'aria-labelledby="matches-title" open'
+    ) < response.text.index('aria-labelledby="teams-title"')
 
 
 def test_sources_html_has_upload_flow():
@@ -52,7 +54,9 @@ def test_upcoming_api():
 
 
 def test_upcoming_timezone():
-    assert client.get("/api/lol/matches/upcoming").json()["timezone"] == "America/Asuncion"
+    assert (
+        client.get("/api/lol/matches/upcoming").json()["timezone"] == "America/Asuncion"
+    )
 
 
 def test_api_serializes_naive_sqlite_match_times_as_utc():
@@ -83,12 +87,19 @@ def test_logo_aliases_use_downloaded_official_assets():
 
     from app.services.team_logo_sync import DISPLAY_ALIASES, apply_display_aliases
 
-    manifest = json.loads((Path(__file__).parents[1] / "app/static/team-logos/manifest.json").read_text())
+    manifest = json.loads(
+        (Path(__file__).parents[1] / "app/static/team-logos/manifest.json").read_text()
+    )
     apply_display_aliases(manifest)
-    assert all(manifest.get(alias) == manifest.get(official) for alias, official in DISPLAY_ALIASES.items())
+    assert all(
+        manifest.get(alias) == manifest.get(official)
+        for alias, official in DISPLAY_ALIASES.items()
+    )
+
 
 def test_competition_classifier_excludes_academies():
     from app.routers.lol_api import _competition_code
+
     assert _competition_code("LCK/2026 Season/Rounds 3-4") == "LCK"
     assert _competition_code("LCK CL/2026 Season/Rounds 3-4") is None
     assert _competition_code("LCS/2026 Season") == "LCS"
@@ -98,32 +109,78 @@ def test_competition_classifier_excludes_academies():
     assert _competition_code("LTA/2025 Season") is None
     assert _competition_code("2026 Mid-Season Invitational") == "MSI"
     assert _competition_code("Esports World Cup 2026") == "EWC"
+    assert _competition_code("2026 LoL KeSPA Cup") == "KESPA"
     assert _competition_code("World Championship/2026") == "WORLDS"
 
 
 def test_upcoming_api_exposes_only_allowed_competitions():
     payload = client.get("/api/lol/matches/upcoming?hours=336").json()
     assert payload["allowed_competitions"] == [
-        "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP",
-        "WORLDS", "MSI", "FIRST STAND", "EWC",
+        "LCK",
+        "LPL",
+        "LEC",
+        "LCS",
+        "CBLOL",
+        "LCP",
+        "WORLDS",
+        "MSI",
+        "FIRST STAND",
+        "EWC",
+        "KeSPA CUP",
     ]
-    assert len(payload["competitions"]) == 10
-    allowed = {"LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", "WORLDS", "MSI", "FIRST_STAND", "EWC"}
+    assert len(payload["competitions"]) == 11
+    allowed = {
+        "LCK",
+        "LPL",
+        "LEC",
+        "LCS",
+        "CBLOL",
+        "LCP",
+        "WORLDS",
+        "MSI",
+        "FIRST_STAND",
+        "EWC",
+        "KESPA",
+    }
     assert all(match["competition_code"] in allowed for match in payload["matches"])
 
 
 def test_2026_official_competition_rosters_are_complete():
     payload = client.get("/api/lol/matches/upcoming?hours=336").json()
     by_code = {item["code"]: item for item in payload["competitions"]}
-    expected_counts = {"LCK": 10, "LPL": 14, "LEC": 10, "LCS": 8, "CBLOL": 8, "LCP": 8, "MSI": 11, "FIRST_STAND": 8, "EWC": 16}
-    assert {code: by_code[code]["team_count"] for code in expected_counts} == expected_counts
+    expected_counts = {
+        "LCK": 10,
+        "LPL": 14,
+        "LEC": 10,
+        "LCS": 8,
+        "CBLOL": 8,
+        "LCP": 8,
+        "MSI": 11,
+        "FIRST_STAND": 8,
+        "EWC": 16,
+    }
+    assert {
+        code: by_code[code]["team_count"] for code in expected_counts
+    } == expected_counts
     assert set(by_code["LCK"]["qualified_teams"]) == {
-        "Gen.G Esports", "T1", "NONGSHIM RED FORCE", "DN SOOPers", "HANJIN BRION",
-        "Hanwha Life Esports", "Dplus KIA", "kt Rolster", "BNK FEARX", "KIWOOM DRX",
+        "Gen.G Esports",
+        "T1",
+        "NONGSHIM RED FORCE",
+        "DN SOOPers",
+        "HANJIN BRION",
+        "Hanwha Life Esports",
+        "Dplus KIA",
+        "kt Rolster",
+        "BNK FEARX",
+        "KIWOOM DRX",
     }
     assert all(by_code[code]["roster_status"] == "official" for code in expected_counts)
-    assert all(by_code[code]["official_source_url"].startswith("https://") for code in expected_counts)
+    assert all(
+        by_code[code]["official_source_url"].startswith("https://")
+        for code in expected_counts
+    )
     assert by_code["WORLDS"]["roster_status"] == "not_published"
+
 
 def test_dashboard_assets_include_requested_metrics():
     js = client.get("/static/js/app.js").text
@@ -134,7 +191,7 @@ def test_dashboard_assets_include_requested_metrics():
     assert "Oro" in js
     assert "Porcentaje de victorias" in js
     assert "Cuotas justas estimadas" in js
-    assert '<th>Valor</th>' in js
+    assert "<th>Valor</th>" in js
     assert "solo_kills_status" not in js
     assert "Solo kills" not in js
     assert "CS promedio por mapa" in js
@@ -143,10 +200,9 @@ def test_dashboard_assets_include_requested_metrics():
     assert "player.kills_per_map" in js
     assert "player.deaths_per_map" in js
     assert "cs_per_map" in js
-    assert "loadPreviewOdds" in js
-    assert "data-odds-key" in js
+    assert "loadPreviewOdds" not in js
+    assert "match.estimated_market" in js
     assert "Cuotas calculadas no disponibles" in js
-
 
 
 def test_known_aliases_reconcile_renamed_teams():
@@ -157,18 +213,28 @@ def test_known_aliases_reconcile_renamed_teams():
     from app.services.lol_team_aliases import canonical_team, synchronize_known_aliases
 
     with Session(engine) as session:
-        session.add(LolMatchEvent(
-            match_key="alias-sync-agal", source_name="test", source_match_id="alias-sync-agal",
-            league="EWC", tournament="EWC", team_a="AG.AL", team_b="T1",
-            start_time_utc=datetime(2026, 8, 1, tzinfo=timezone.utc), status="scheduled",
-        ))
+        session.add(
+            LolMatchEvent(
+                match_key="alias-sync-agal",
+                source_name="test",
+                source_match_id="alias-sync-agal",
+                league="EWC",
+                tournament="EWC",
+                team_a="AG.AL",
+                team_b="T1",
+                start_time_utc=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                status="scheduled",
+            )
+        )
         session.commit()
         result = synchronize_known_aliases(session)
         assert canonical_team(session, "AG.AL") == "Anyone's Legend"
         assert canonical_team(session, "LYON (2024 American Team)") == "LYON"
         assert canonical_team(session, "Ninjas in Pyjamas.CN") == "Ninjas in Pyjamas"
         assert result["exhibitions"][0]["alias"] == "CNB Legends"
-        event = session.exec(select(LolMatchEvent).where(LolMatchEvent.match_key == "alias-sync-agal")).one()
+        event = session.exec(
+            select(LolMatchEvent).where(LolMatchEvent.match_key == "alias-sync-agal")
+        ).one()
         assert event.team_a == "Anyone's Legend"
 
 
@@ -179,7 +245,11 @@ def test_sources_support_configuration_and_custom_api():
     configured = client.put(
         "/api/sources/external_odds_api/configuration",
         headers=headers,
-        json={"base_url": "https://example.com/api", "api_key": "secret", "enabled": True},
+        json={
+            "base_url": "https://example.com/api",
+            "api_key": "secret",
+            "enabled": True,
+        },
     )
     assert configured.status_code == 200
     assert configured.json()["api_key_configured"] is True
@@ -187,11 +257,18 @@ def test_sources_support_configuration_and_custom_api():
     created = client.post(
         "/api/sources/custom",
         headers=headers,
-        json={"display_name": "Stats API Test", "base_url": "https://example.com/stats", "enabled": True},
+        json={
+            "display_name": "Stats API Test",
+            "base_url": "https://example.com/stats",
+            "enabled": True,
+        },
     )
     assert created.status_code == 200
     assert created.json()["custom"] is True
-    assert any(item["code"] == created.json()["code"] for item in client.get("/api/sources").json()["sources"])
+    assert any(
+        item["code"] == created.json()["code"]
+        for item in client.get("/api/sources").json()["sources"]
+    )
 
 
 def test_manual_odds_upload_and_match_response(tmp_path):
@@ -202,11 +279,19 @@ def test_manual_odds_upload_and_match_response(tmp_path):
     from app.models_lol import LolMatchEvent
 
     with Session(engine) as session:
-        session.add(LolMatchEvent(
-            match_key="odds-test-match", source_name="test", source_match_id="odds-test",
-            league="LCK/2026 Season", tournament="LCK", team_a="Alpha", team_b="Beta",
-            start_time_utc=datetime(2026, 12, 1, tzinfo=timezone.utc), status="scheduled",
-        ))
+        session.add(
+            LolMatchEvent(
+                match_key="odds-test-match",
+                source_name="test",
+                source_match_id="odds-test",
+                league="LCK/2026 Season",
+                tournament="LCK",
+                team_a="Alpha",
+                team_b="Beta",
+                start_time_utc=datetime(2026, 12, 1, tzinfo=timezone.utc),
+                status="scheduled",
+            )
+        )
         session.commit()
     original = settings.lol_odds_import_dir
     settings.lol_odds_import_dir = str(tmp_path / "odds")
@@ -236,9 +321,22 @@ def test_alias_identity_wins_over_conflicting_mapping():
     from app.database import engine
     from app.models_lol import LolTeamAlias
     from app.services.lol_team_aliases import canonical_team
+
     with Session(engine) as session:
-        session.add(LolTeamAlias(canonical_team="Academy", alias="Identity Test", normalized_alias="academy"))
-        session.add(LolTeamAlias(canonical_team="Identity Test", alias="Identity Test", normalized_alias="identitytest"))
+        session.add(
+            LolTeamAlias(
+                canonical_team="Academy",
+                alias="Identity Test",
+                normalized_alias="academy",
+            )
+        )
+        session.add(
+            LolTeamAlias(
+                canonical_team="Identity Test",
+                alias="Identity Test",
+                normalized_alias="identitytest",
+            )
+        )
         session.commit()
         assert canonical_team(session, "Identity Test") == "Identity Test"
 
@@ -250,6 +348,7 @@ def test_oracle_replacement_updates_and_removes_stale_games(tmp_path):
     from app.services.imports.oracles_elixir_importer import _import_csv_file
 
     header = "gameid,position,playername,teamname,side,date,league,result,towers,inhibitors,kills,deaths,assists,dragons,barons,totalgold,total cs\n"
+
     def game(game_id, towers, cs):
         return (
             f"{game_id},team,,Alpha,Blue,2099-01-01,LCK,1,{towers},1,12,8,20,3,1,60000,0\n"
@@ -259,21 +358,31 @@ def test_oracle_replacement_updates_and_removes_stale_games(tmp_path):
         )
 
     first = tmp_path / "history.csv"
-    first.write_text(header + game("replace-1", 6, 250) + game("replace-stale", 5, 220), encoding="utf-8")
+    first.write_text(
+        header + game("replace-1", 6, 250) + game("replace-stale", 5, 220),
+        encoding="utf-8",
+    )
     newest = tmp_path / "history-new.csv"
     newest.write_text(header + game("replace-1", 11, 333), encoding="utf-8")
     with Session(engine) as session:
         assert _import_csv_file(session, str(first), replace=True)["games"] == 2
         assert _import_csv_file(session, str(newest), replace=True)["games"] == 1
-        games = session.exec(select(LolGameHistory).where(LolGameHistory.year == 2099)).all()
+        games = session.exec(
+            select(LolGameHistory).where(LolGameHistory.year == 2099)
+        ).all()
         assert [item.source_game_id for item in games] == ["replace-1"]
         game_id = games[0].id
-        alpha = session.exec(select(LolTeamGameStat).where(
-            LolTeamGameStat.game_id == game_id, LolTeamGameStat.team_name == "Alpha"
-        )).one()
-        player = session.exec(select(LolPlayerGameStat).where(
-            LolPlayerGameStat.game_id == game_id, LolPlayerGameStat.player_name == "AlphaTop"
-        )).one()
+        alpha = session.exec(
+            select(LolTeamGameStat).where(
+                LolTeamGameStat.game_id == game_id, LolTeamGameStat.team_name == "Alpha"
+            )
+        ).one()
+        player = session.exec(
+            select(LolPlayerGameStat).where(
+                LolPlayerGameStat.game_id == game_id,
+                LolPlayerGameStat.player_name == "AlphaTop",
+            )
+        ).one()
         assert alpha.towers == 11
         assert player.cs == 333
 
