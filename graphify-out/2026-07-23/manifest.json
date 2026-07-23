@@ -225,12 +225,12 @@
     "semantic_hash": "3a9487bfbe7ac0deef5adcefdca7da08"
   },
   "openwiki/.last-update.json": {
-    "mtime": 1784810005.3077633,
-    "ast_hash": "8af8382b34a3bfef1672bc59bfa9a90b",
-    "semantic_hash": ""
+    "mtime": 1784634720.6807878,
+    "ast_hash": "70f8b566459145a4c0f11ef1c6d3ef22",
+    "semantic_hash": "70f8b566459145a4c0f11ef1c6d3ef22"
   },
   ".github/workflows/openwiki-update.yml": {
-    "mtime": 1784809811.750767,
+    "mtime": 1784143007.0308592,
     "ast_hash": "c0039579c3e4fd0b93e236f2f203d5b4",
     "semantic_hash": "c0039579c3e4fd0b93e236f2f203d5b4"
   },
@@ -280,12 +280,12 @@
     "semantic_hash": "9378bd03d56baaf78bd738ab3848f142"
   },
   "AGENTS.md": {
-    "mtime": 1784809811.754767,
+    "mtime": 1784807529.7201383,
     "ast_hash": "cd923fb73a48b8b8d44c00c612fa9bd0",
     "semantic_hash": "cd923fb73a48b8b8d44c00c612fa9bd0"
   },
   "CLAUDE.md": {
-    "mtime": 1784809811.754767,
+    "mtime": 1784143007.0548594,
     "ast_hash": "98901357f8d8cdd5270a78cb3fff129b",
     "semantic_hash": "98901357f8d8cdd5270a78cb3fff129b"
   },
@@ -305,9 +305,9 @@
     "semantic_hash": "8014732f2ce4200ef5c1a53508fffb30"
   },
   "openwiki/architecture/overview.md": {
-    "mtime": 1784809923.4953434,
-    "ast_hash": "9d15ed23991073d92ba449cc6da404a7",
-    "semantic_hash": ""
+    "mtime": 1784634720.6807878,
+    "ast_hash": "8c128662e7e73637e37bd7a095f237b7",
+    "semantic_hash": "8c128662e7e73637e37bd7a095f237b7"
   },
   "openwiki/domain/lol-metrics.md": {
     "mtime": 1784634720.6807878,
@@ -315,24 +315,24 @@
     "semantic_hash": "63b69e1577f0eee802f0029c19dbb9c6"
   },
   "openwiki/integrations/overview.md": {
-    "mtime": 1784809937.7354167,
-    "ast_hash": "317977dddb7a0bfcf10a9808c35f9ea3",
-    "semantic_hash": ""
+    "mtime": 1784136356.6263955,
+    "ast_hash": "9ecda6e203e5ffbddb17dbfb34ae7370",
+    "semantic_hash": "9ecda6e203e5ffbddb17dbfb34ae7370"
   },
   "openwiki/operations/runbook.md": {
-    "mtime": 1784809962.3075428,
-    "ast_hash": "e52b8b1aca86033f8b74f953f449f02b",
-    "semantic_hash": ""
+    "mtime": 1784634720.6807878,
+    "ast_hash": "f2b83ff1ad0a2be6a55b0fb1e9ece8c9",
+    "semantic_hash": "f2b83ff1ad0a2be6a55b0fb1e9ece8c9"
   },
   "openwiki/quickstart.md": {
-    "mtime": 1784809996.8357198,
-    "ast_hash": "30736c0985a40040d1450fdd4242c62f",
-    "semantic_hash": ""
+    "mtime": 1784634720.6807878,
+    "ast_hash": "8ac8ed831a96fbedea0b95e2e3cf896d",
+    "semantic_hash": "8ac8ed831a96fbedea0b95e2e3cf896d"
   },
   "openwiki/workflows/data-pipeline.md": {
-    "mtime": 1784809954.0235004,
-    "ast_hash": "e6340dec44da6f2430af361f4fda6222",
-    "semantic_hash": ""
+    "mtime": 1784634720.6807878,
+    "ast_hash": "2457f373f92a293abd38799758e8a1ae",
+    "semantic_hash": "2457f373f92a293abd38799758e8a1ae"
   },
   "backend/app/static/favicon.svg": {
     "mtime": 1784634720.6407878,
@@ -678,40 +678,5 @@
     "mtime": 1784634720.6807878,
     "ast_hash": "5862598b19dc407fa0af06e608e9f20d",
     "semantic_hash": "5862598b19dc407fa0af06e608e9f20d"
-  },
-  "backend/app/templates/dashboard.html": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "b6afc1037dfe8b080c3b48c89db90513",
-    "semantic_hash": ""
-  },
-  "backend/app/templates/match_detail.html": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "93e5d4aceb21162910da79289b3d0e37",
-    "semantic_hash": ""
-  },
-  "backend/app/templates/sources.html": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "f8eaa08ab247de46fae0ae78b03b8591",
-    "semantic_hash": ""
-  },
-  "backend/requirements.txt": {
-    "mtime": 1784125044.3739953,
-    "ast_hash": "30c481fb5379678a630d9161e92581ae",
-    "semantic_hash": ""
-  },
-  "openwiki/INSTRUCTIONS.md": {
-    "mtime": 1784136206.936805,
-    "ast_hash": "30e371d7bb49d0e814138675f1e03464",
-    "semantic_hash": ""
-  },
-  "openwiki/source-map.md": {
-    "mtime": 1784809973.1235983,
-    "ast_hash": "a1e2ae3af284efa550ed935546abd68f",
-    "semantic_hash": ""
-  },
-  "openwiki/testing/overview.md": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "2e2ab4c30f74306b25ad6a126be2903e",
-    "semantic_hash": ""
   }
 }

@@ -1,18 +1,13 @@
-# Graph Report - pirapire  (2026-07-23)
+# Graph Report - .  (2026-07-23)
 
 ## Corpus Check
-- 67 files · ~180,046 words
+- 143 files · ~179,577 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 627 nodes · 1222 edges · 55 communities (41 shown, 14 thin omitted)
+- 621 nodes · 1217 edges · 55 communities (41 shown, 14 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 101 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
-
-## Graph Freshness
-- Built from commit: `946d6ab5`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - Team Logos & Brand Assets
@@ -108,8 +103,8 @@ Cohesion: 0.02
 Nodes (85): ag-al, anyone-s-legend, beijing-jdg-esports, bilibili-gaming, bnk-fearx, cloud9, cloud9-kia, cnb-legends (+77 more)
 
 ### Community 1 - "Match Events & Odds Models"
-Cohesion: 0.09
-Nodes (24): LolMatchEvent, LolOddsSnapshot, LolTeamOdd, Upcoming or finished professional LoL series., Immutable capture of general winner odds for a series., One team selection inside a snapshot., _competition_code(), _competition_summary() (+16 more)
+Cohesion: 0.08
+Nodes (37): LolMatchEvent, LolOddsSnapshot, LolTeamAlias, LolTeamOdd, Upcoming or finished professional LoL series., Immutable capture of general winner odds for a series., One team selection inside a snapshot., _competition_code() (+29 more)
 
 ### Community 2 - "Data Import Pipeline"
 Cohesion: 0.13
@@ -120,12 +115,12 @@ Cohesion: 0.15
 Nodes (40): averageValue(), el(), esc(), fetchJSON(), fmtDate(), fmtNumber(), fmtOdds(), fmtPct() (+32 more)
 
 ### Community 4 - "Core LoL Domain Models"
-Cohesion: 0.07
-Nodes (51): LolChampion, LolDataCoverage, LolLeague, LolLeagueAlias, LolMatchStatisticsReadModel, LolPatch, LolPlayer, LolPlayerExternalIdentity (+43 more)
+Cohesion: 0.10
+Nodes (30): LolChampion, LolDataCoverage, LolLeague, LolLeagueAlias, LolMatchStatisticsReadModel, LolPatch, LolPlayer, LolPlayerExternalIdentity (+22 more)
 
 ### Community 5 - "Oracle's Elixir Importer"
-Cohesion: 0.10
-Nodes (33): LolGameHistory, LolPlayerGameStat, LolTeamGameStat, _bool(), _import_csv_file(), import_oracles_inbox(), _int(), _normalized_row() (+25 more)
+Cohesion: 0.11
+Nodes (31): LolGameHistory, LolPlayerGameStat, LolTeamGameStat, _bool(), _import_csv_file(), import_oracles_inbox(), _int(), _normalized_row() (+23 more)
 
 ### Community 6 - "Database & Migrations"
 Cohesion: 0.10
@@ -140,16 +135,16 @@ Cohesion: 0.12
 Nodes (20): Settings, get_client(), Shared httpx wrapper for all external API calls., Fetch JSON returning a structured result (never raises).      Returns {"ok": b, request_json(), safe_get(), safe_get_json(), format_local() (+12 more)
 
 ### Community 9 - "Background Worker Jobs"
-Cohesion: 0.16
-Nodes (26): _captured(), import_odds_csv(), import_odds_directory(), _now(), datetime, Session, Session, rebuild_series() (+18 more)
+Cohesion: 0.21
+Nodes (21): WorkerHeartbeat, Session, rebuild_series(), _finish_remote_run(), job_heartbeat(), job_import_odds(), job_import_oracles(), job_precompute_stats() (+13 more)
 
 ### Community 10 - "Graphify Skill Reference"
 Cohesion: 0.11
 Nodes (18): Graphify add URL Command, Graphify Watch Mode (--watch), Graphify Token-Reduction Benchmark, Graphify FalkorDB Export, Graphify MCP Server, Graphify Neo4j Export, Graphify Wiki Export, Graphify Cross-Repo Graph Merge (+10 more)
 
 ### Community 11 - "Match Statistics Engine"
-Cohesion: 0.33
-Nodes (5): Cross-Reference: Key Entry Points, Key External Files, Latest Additions (commits `56d9fe8` + uncommitted), Removed from working tree, Source Map
+Cohesion: 0.27
+Nodes (15): LolSeries, compute_match_statistics(), _estimated_market(), _players(), precompute_upcoming_stats(), datetime, Session, Traceable, series-based LoL statistics. (+7 more)
 
 ### Community 12 - "Team Logos (Worlds Batch)"
 Cohesion: 0.30
@@ -240,24 +235,24 @@ Cohesion: 1.00
 Nodes (3): Team Logo: CNB Legends, Team Logo: DN Soopers, Team Logo: Fluxo W7M
 
 ## Knowledge Gaps
-- **167 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree` (+162 more)
+- **164 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `ag-al`, `anyone-s-legend`, `beijing-jdg-esports` (+159 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `LolMatchEvent` connect `Match Events & Odds Models` to `Background Worker Jobs`, `Data Import Pipeline`, `Core LoL Domain Models`, `Oracle's Elixir Importer`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `LolMatchEvent` connect `Match Events & Odds Models` to `Data Import Pipeline`, `Match Statistics Engine`, `Core LoL Domain Models`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
 - **Why does `_import_csv_file()` connect `Oracle's Elixir Importer` to `Background Worker Jobs`, `Data Import Pipeline`, `Match Events & Odds Models`?**
   _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **Why does `sync_official_team_logos()` connect `Team Logo Sync Service` to `Background Worker Jobs`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **Are the 7 inferred relationships involving `LolMatchEvent` (e.g. with `get_match()` and `upcoming_matches()`) actually correct?**
   _`LolMatchEvent` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 4 inferred relationships involving `_import_csv_file()` (e.g. with `LolGameHistory` and `LolPlayerGameStat`) actually correct?**
   _`_import_csv_file()` has 4 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `$schema`, `.opencode/plugins/graphify.js`, `Key External Files` to the rest of the system?**
-  _167 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `$schema`, `.opencode/plugins/graphify.js`, `ag-al` to the rest of the system?**
+  _164 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Team Logos & Brand Assets` be split into smaller, more focused modules?**
   _Cohesion score 0.023255813953488372 - nodes in this community are weakly interconnected._
