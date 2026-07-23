@@ -60,9 +60,9 @@ APScheduler `BackgroundScheduler` with ten recurring jobs:
 | `process_queued_oracle_uploads` | 15 s | Durably processes Oracle CSV uploads queued via the web API (see Sources router below) |
 | `sync_remote_oracles` | 60 min (`lol_history_remote_poll_minutes`) | Checks configured remote Oracle CSV URL for changes (SHA-256 comparison); downloads and re-imports if changed |
 | `process_queued_remote_oracles` | 15 s | Picks up user-requested remote sync without waiting for the scheduled interval |
-| `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` (currently a stub) |
+| `precompute_stats` | 30 min | Calls `precompute_upcoming_stats()` — now persists to `LolMatchStatisticsReadModel` cache. Runs immediately on worker start (`next_run_time=now`) |
 
-All data-processing jobs skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"` and `SourceRun.status == "running"`) to avoid SQLite `database is locked` errors. The `heartbeat` and `sync_team_logos` jobs also respect this lock. Jobs that use `next_run_time=now` (`heartbeat`, `sync_team_logos`, `process_queued_oracle_uploads`, `process_queued_remote_oracles`) run immediately on worker start; the rest wait for their first natural interval.
+All data-processing jobs skip execution while an Oracle import batch is running (`worker_main._oracle_import_active()` checks `ImportBatch.status == "running"` and `SourceRun.status == "running"`) to avoid SQLite `database is locked` errors. The `heartbeat` and `sync_team_logos` jobs also respect this lock. Jobs that use `next_run_time=now` (`heartbeat`, `sync_team_logos`, `process_queued_oracle_uploads`, `process_queued_remote_oracles`, `precompute_stats`) run immediately on worker start; the rest wait for their first natural interval.
 
 ## Database Layer
 
@@ -142,6 +142,7 @@ When modifying this codebase, watch for:
 5. **Frontend is vanilla JS:** No framework. Template rendering is server-side Jinja2 with JavaScript fetching JSON from `/api/lol/matches/*` endpoints. The UI received a **Corporate v3 refresh** (styles.css): Inter font (self-hosted woff2), `--bg`/`--surface`/`--primary` CSS variables, rounded cards, gradient buttons, skeleton loading states, responsive breakpoints at 980px and 680px, and `theme-color` meta. The font file is preloaded in `base.html` and served from `/static/fonts/inter-latin.woff2`.
 6. **Stale seed.py:** `/backend/app/seed.py` references deleted football models and will fail if called. It is a pre-Phase-1 artifact and has been removed from the working tree (still tracked in git history).
 7. **Duplicate standalone scripts:** `/backend/lol_metrics_engine.py` and `/backend/oracles_elixir_importer.py` exist at the backend root — these are older versions superseded by the app package versions. Do not import them. These have been removed from the working tree (still tracked in git history).
+8. **Statistics cache invalidation:** Statistics are cached in `LolMatchStatisticsReadModel` with an `input_fingerprint` (SHA-256 of match key + teams + timestamps). When importing new data (`rebuild_series`, `sync_leaguepedia_schedule`, `import_oracles_inbox`), `invalidate_statistics_cache()` deletes all cached rows so the next query recomputes fresh statistics. Any new data path that affects statistics should call `invalidate_statistics_cache()` from `lol_metrics_engine`.
 
 ## Service Layer Detail
 

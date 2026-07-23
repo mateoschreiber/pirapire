@@ -1,7 +1,7 @@
 # Graph Report - pirapire  (2026-07-23)
 
 ## Corpus Check
-- 68 files · ~180,989 words
+- 68 files · ~181,203 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7405c332`
+- Built from commit: `217b3a8a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -245,7 +245,7 @@ Cohesion: 0.20
 Nodes (9): Conftest Setup, Coverage Areas Not Yet Tested, Key Tests, test_health.py, test_pages.py, Test Structure, test_timezone.py, Testing (+1 more)
 
 ## Knowledge Gaps
-- **174 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `ag-al`, `anyone-s-legend`, `beijing-jdg-esports` (+169 more)
+- **174 isolated node(s):** `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree`, `$schema`, `.opencode/plugins/graphify.js` (+169 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -262,7 +262,7 @@ _Questions this graph is uniquely positioned to answer:_
   _`LolMatchEvent` has 9 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 3 inferred relationships involving `_import_csv_file()` (e.g. with `LolGameHistory` and `LolPlayerGameStat`) actually correct?**
   _`_import_csv_file()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `$schema`, `.opencode/plugins/graphify.js`, `ag-al` to the rest of the system?**
+- **What connects `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree` to the rest of the system?**
   _174 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Team Logos & Brand Assets` be split into smaller, more focused modules?**
   _Cohesion score 0.023255813953488372 - nodes in this community are weakly interconnected._

@@ -7,6 +7,7 @@ backend/tests/
 ├── conftest.py           # Test setup: temp SQLite DB, init_db()
 ├── test_health.py        # Health, favicon, sources API, removed-domain checks
 ├── test_pages.py         # HTML pages, API endpoints, static assets, per-map metrics
+├── test_statistics_cache.py # Cache precompute persist + reuse, API serves from cache
 ├── test_remote_oracles.py # Remote CSV download, URL conversion, validation
 └── test_timezone.py      # Timezone conversion tests
 ```

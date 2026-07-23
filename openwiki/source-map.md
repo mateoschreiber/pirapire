@@ -40,6 +40,10 @@ backend/
 │   │   ├── lol_api.py            # JSON API: /api/lol/matches/*. Competition classification,
 │   │   │                         #   odds enrichment, statistics retrieval. Uses _utc_iso() to
 │   │   │                         #   serialize SQLite naive datetimes with explicit +00:00 offset.
+│   │   │                         #   /statistics endpoint now serves from LolMatchStatisticsReadModel cache.
+│   │   │                         #   /upcoming batch-loads cache + odds for all matches (2N → 2 queries).
+│   │   │                         #   KESPA added to COMPETITIONS (11 total).
+│   │   │                         #   _match_view() accepts optional estimated_market + odds params.
 │   │   └── sources.py            # Source status, config GET/PUT, custom sources, alias sync,
 │   │                             #   CSV upload, connectivity test, import/run history. Admin-auth.
 │   │                             #   execute_import (POST /api/imports/execute) no longer uses
@@ -91,8 +95,9 @@ backend/
 │   │   ├── css/
 │   │   │   └── styles.css       # Dashboard/match detail CSS + source-config forms. Sidebar layout, cards, tables.
 │   │   └── js/
-│   │       └── app.js           # Vanilla JS: dashboard + match detail rendering, preview odds,
-    │   │                           #   shortened labels (Torres, Dragones, Barones, Oro), per-map matchups.
+│   │       └── app.js           # Vanilla JS: dashboard + match detail rendering, preview odds
+│   │                           #   rendered server-side in match.estimated_market (no async fetch).
+│   │                           #   Uses es-PY locale, America/Asuncion timezone.
 │   │                           #   Uses es-PY locale, America/Asuncion timezone.
 │   │
 │   ├── templates/
@@ -121,7 +126,8 @@ backend/
     ├── test_health.py           # Health, favicon, source API + removed-domain tests
     ├── test_pages.py            # Page rendering, API endpoints, competition classifier,
     │   ├── test_pages.py        #   upload progress, per-map metrics, alias reconciliation,
-    │   │                        #   source config + custom API tests
+    │   │                        #   source config + custom API tests. 11 competitions (KESPA added).
+    ├── test_statistics_cache.py # New. Cache precompute persist + reuse, API serves from cache
     ├── test_timezone.py         # Timezone conversion tests
     └── test_remote_oracles.py   # New. Remote CSV download, Google Drive URL conversion,
                                 #   header validation, max-bytes enforcement
@@ -154,19 +160,23 @@ pirapire/
 | Modify the dashboard UI | `templates/dashboard.html`, `static/js/app.js`, `static/css/styles.css` |
 | Add a test | `tests/test_pages.py` as pattern (uses TestClient, real SQLite) |
 
-## Latest Additions (commits `56d9fe8` + uncommitted)
+## Latest Additions (commits `56d9fe8`, uncommitted caching + KESPA)
 
 | File | What Changed |
 |------|-------------|
+| `services/lol_metrics_engine.py` | **Added** `_recent_matchups()` — last 3 individual maps per team; **added statistics caching layer** — `cached_match_statistics()`, `store_match_statistics()`, `invalidate_statistics_cache()`, `cached_statistics_from_record()`, `_cache_fingerprint()`. `precompute_upcoming_stats()` now persists to `LolMatchStatisticsReadModel` |
+| `routers/lol_api.py` | **Added** `_utc_iso()` — naive SQLite datetime → explicit UTC ISO; **batch odds loading** via `_current_odds_by_match()` (2 queries vs 2N); **KESPA** added to COMPETITIONS (11 total); `/statistics` endpoint serves from cache; `/upcoming` loads cached stats inline |
+| `models_lol.py` | **Changed** `LolMatchStatisticsReadModel.payload_json`/`coverage_json` from `Optional[str]` to `Optional[dict]` |
+| `migrations.py` | **Added** performance indexes: `ix_lolmatchevent_status_start`, `ix_lolseries_team_a_stats`, `ix_lolseries_team_b_stats` |
+| `services/series_builder.py` | **Added** `invalidate_statistics_cache()` call after rebuild |
+| `services/sync/lol_sync.py` | **Added** early-exit skip detection (no-op if match unchanged); `invalidate_statistics_cache()` after schedule sync |
+| `services/imports/oracles_elixir_importer.py` | **Added** `rebuild_series()` call after inbox import |
+| `worker_main.py` | **Changed** `precompute_stats` job now uses `next_run_time=now` (runs immediately on worker start) |
+| `static/js/app.js` | **Removed** `loadPreviewOdds()`, `previewOddsCache`, concurrent fetcher; preview odds now rendered server-side from `match.estimated_market`; added `pending` status handling for statistics endpoint |
+| `tests/test_statistics_cache.py` | **New** — Cache precompute persist + reuse, API serves from cache without recomputing |
 | `services/imports/remote_oracles_elixir.py` | **New** — Downloads OE CSV from remote URL (Google Drive support) |
 | `services/team_logo_sync.py` | **New** — Caches official team logos from lolesports.com. DISPLAY_ALIASES maps provider names to cached assets; OFFICIAL_TEAM_ASSETS with direct-url fallback for cnb-legends, mibr |
-| `services/lol_metrics_engine.py` | **Added** `_recent_matchups()` — last 3 individual maps (not series) per team with per-map score, game_number |
 | `routers/sources.py` | **Enhanced** — `_leaguepedia_schedule_view()`, `_source_view()`, auto_refresh for OE, configuration_note |
-| `routers/lol_api.py` | **Added** `_utc_iso()` — naive SQLite datetime → explicit UTC ISO |
-| `templates/base.html` | **Added** favicon link, cache-busted version query strings |
-| `templates/match_detail.html` | **Added** `#recent-matchups` section after team stats |
-| `templates/sources.html` | **Added** upload progress bar, `uploadImport()` JS, configuration_note, auto_refresh |
-| `static/js/app.js` | **Updated** player kills/deaths to per-map averages; shortened metric labels (Torres, Dragones, Barones, Oro); per-map matchup cards; XHR upload |
 | `static/css/styles.css` | **Added** `.upload-progress` styles |
 | `static/favicon.svg` | **New** — SVG favicon |
 | `static/team-logos/` | **New** — Local team logo cache directory |
