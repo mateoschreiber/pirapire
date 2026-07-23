@@ -20,14 +20,14 @@
     "semantic_hash": "5d0a16b8daf3e334c5fa23c7e6bdc92a"
   },
   "backend/app/database.py": {
-    "mtime": 1784123918.5829675,
-    "ast_hash": "e9a9185fa8e12f26fa2fd282e8a4a2c6",
-    "semantic_hash": "e9a9185fa8e12f26fa2fd282e8a4a2c6"
+    "mtime": 1784828813.3741562,
+    "ast_hash": "85035534eb35c4f8fc6e1a95c902494a",
+    "semantic_hash": ""
   },
   "backend/app/main.py": {
-    "mtime": 1784634720.636788,
-    "ast_hash": "f56f32d22233cb1992968c112eaa11b0",
-    "semantic_hash": "f56f32d22233cb1992968c112eaa11b0"
+    "mtime": 1784828813.3781562,
+    "ast_hash": "6ef21125dc53366536f873c9330319a9",
+    "semantic_hash": ""
   },
   "backend/app/migrations.py": {
     "mtime": 1784826933.852877,
@@ -55,14 +55,14 @@
     "semantic_hash": ""
   },
   "backend/app/routers/pages.py": {
-    "mtime": 1784124094.392839,
-    "ast_hash": "a2c7244e66d9424ac65502a107db4082",
-    "semantic_hash": "a2c7244e66d9424ac65502a107db4082"
+    "mtime": 1784828906.6750145,
+    "ast_hash": "5d67f004665aec84240014f444defe12",
+    "semantic_hash": ""
   },
   "backend/app/routers/sources.py": {
-    "mtime": 1784634720.636788,
-    "ast_hash": "25459b2d94b056c392108d658d800951",
-    "semantic_hash": "25459b2d94b056c392108d658d800951"
+    "mtime": 1784831757.3287187,
+    "ast_hash": "a948eae8ab07ed47417b5bcce616cc46",
+    "semantic_hash": ""
   },
   "backend/app/schemas.py": {
     "mtime": 1784119342.7212448,
@@ -160,7 +160,7 @@
     "semantic_hash": ""
   },
   "backend/app/static/team-logos/manifest.json": {
-    "mtime": 1784827674.8836694,
+    "mtime": 1784831940.890384,
     "ast_hash": "7721584d52923fda92677470c0dc4ad8",
     "semantic_hash": "7721584d52923fda92677470c0dc4ad8"
   },
@@ -205,8 +205,8 @@
     "semantic_hash": "911da4ab61790c4ff290aad943b3aad4"
   },
   "backend/tests/test_pages.py": {
-    "mtime": 1784827586.0188553,
-    "ast_hash": "9fb200a5b70ceaeb3aae0527d3749558",
+    "mtime": 1784831757.3207185,
+    "ast_hash": "856c7b39d2bd007923985fa9b0145d3c",
     "semantic_hash": ""
   },
   "backend/tests/test_remote_oracles.py": {
@@ -225,8 +225,8 @@
     "semantic_hash": "3a9487bfbe7ac0deef5adcefdca7da08"
   },
   "openwiki/.last-update.json": {
-    "mtime": 1784810005.3077633,
-    "ast_hash": "8af8382b34a3bfef1672bc59bfa9a90b",
+    "mtime": 1784828215.4006395,
+    "ast_hash": "c0f41004a106aa9d72651641c62696bc",
     "semantic_hash": ""
   },
   ".github/workflows/openwiki-update.yml": {
@@ -295,9 +295,9 @@
     "semantic_hash": "b906c9eedab5f492e86cd8634010ba59"
   },
   "backend/app/templates/base.html": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "58fe0ab77343bc0ce369abd6ed959e18",
-    "semantic_hash": "58fe0ab77343bc0ce369abd6ed959e18"
+    "mtime": 1784828813.3941565,
+    "ast_hash": "068da282529aecea4d3352f48f0d769c",
+    "semantic_hash": ""
   },
   "docker-compose.yml": {
     "mtime": 1784634720.6807878,
@@ -690,8 +690,8 @@
     "semantic_hash": ""
   },
   "backend/app/templates/sources.html": {
-    "mtime": 1784634720.6807878,
-    "ast_hash": "f8eaa08ab247de46fae0ae78b03b8591",
+    "mtime": 1784831731.4804842,
+    "ast_hash": "abc1ee827e54abe3e072949beacf79e1",
     "semantic_hash": ""
   },
   "backend/requirements.txt": {
@@ -705,8 +705,8 @@
     "semantic_hash": ""
   },
   "openwiki/source-map.md": {
-    "mtime": 1784828064.887244,
-    "ast_hash": "5f8d674b0d8641ae85874bd35cbb1050",
+    "mtime": 1784828176.5362797,
+    "ast_hash": "fc38d226a276a8b9e53eb39003e3bd8a",
     "semantic_hash": ""
   },
   "openwiki/testing/overview.md": {
@@ -717,6 +717,46 @@
   "backend/tests/test_statistics_cache.py": {
     "mtime": 1784826780.391468,
     "ast_hash": "fefdc1509f3f19b35d80521f4b316f46",
+    "semantic_hash": ""
+  },
+  "backend/app/models_football.py": {
+    "mtime": 1784828906.6750145,
+    "ast_hash": "c824b71888de77890f3cf0a9badba80e",
+    "semantic_hash": ""
+  },
+  "backend/app/routers/football_api.py": {
+    "mtime": 1784832153.3963304,
+    "ast_hash": "9d7ed5dc53539e976de37b1332625757",
+    "semantic_hash": ""
+  },
+  "backend/app/services/football/__init__.py": {
+    "mtime": 1784828859.214578,
+    "ast_hash": "342bd7c58ad11831a299c231345fe4ea",
+    "semantic_hash": ""
+  },
+  "backend/app/sources/football/__init__.py": {
+    "mtime": 1784828859.210578,
+    "ast_hash": "695bf50f5855f5cf53392e282095a946",
+    "semantic_hash": ""
+  },
+  "backend/app/sources/football/base.py": {
+    "mtime": 1784828859.210578,
+    "ast_hash": "3dfbbb5bd696c23bf4d9ecde5d87f67c",
+    "semantic_hash": ""
+  },
+  "backend/app/static/js/football.js": {
+    "mtime": 1784832177.1685753,
+    "ast_hash": "8210affa38fa452cbb9f672328bd03f4",
+    "semantic_hash": ""
+  },
+  "backend/app/templates/football_dashboard.html": {
+    "mtime": 1784832177.1565752,
+    "ast_hash": "b2c23f4068fd2e6e6da911d46680022f",
+    "semantic_hash": ""
+  },
+  "backend/app/services/football/importer.py": {
+    "mtime": 1784832127.244076,
+    "ast_hash": "b28a5b95b9542048a0ec138a18235697",
     "semantic_hash": ""
   }
 }

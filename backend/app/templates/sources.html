@@ -9,7 +9,7 @@
 </div>
 <section id="status" class="tab-panel active">
   <div class="sources-toolbar card source-control-card">
-    <div><p class="eyebrow">Actualización global</p><h3>Sincronizar fuentes</h3><p class="meta">Reconstruye las estadísticas desde las versiones más recientes.</p></div>
+    <div><p class="eyebrow">League of Legends</p><h3>Sincronizar fuentes LoL</h3><p class="meta">Reconstruye únicamente las estadísticas de League of Legends.</p></div>
     <label><span>Token administrativo</span><input id="sync-admin-token" type="password" autocomplete="current-password" placeholder="Ingrese el token"></label>
     <button id="sync-all-button" class="btn" type="button">Sincronizar datos</button>
     <span id="sync-status" class="meta sync-message" aria-live="polite"></span>
@@ -20,17 +20,18 @@
     <form id="source-config-form" class="source-config-form">
       <label><span>Token administrativo</span><input id="source-admin-token" type="password" autocomplete="current-password" placeholder="Ingrese el token" required></label>
       <label><span>Código</span><input id="source-config-code" readonly></label>
-      <label><span>URL de API o web</span><input id="source-config-url" type="url" placeholder="https://api.ejemplo.com"></label>
-      <label><span>Clave API</span><input id="source-config-key" type="password" autocomplete="off" placeholder="Se conserva si queda vacío"></label>
+      <label><span id="source-config-url-label">URL de API o web</span><input id="source-config-url" type="url" placeholder="https://api.ejemplo.com"></label>
+      <label><span id="source-config-key-label">Clave API</span><input id="source-config-key" type="password" autocomplete="off" placeholder="Se conserva si queda vacío"></label>
       <label class="replace-option"><input id="source-config-enabled" type="checkbox" checked> Fuente habilitada</label>
       <label id="source-config-auto-row" class="replace-option hidden"><input id="source-config-auto" type="checkbox"> Comprobación automática cada 60 minutos</label>
-      <div class="upload-actions"><button class="btn" type="submit">Guardar configuración</button><button id="source-config-test" class="btn btn-ghost" type="button">Probar conexión</button><button id="source-config-sync" class="btn btn-ghost hidden" type="button">Importar ahora</button></div>
+      <div class="upload-actions"><button class="btn" type="submit">Guardar configuración</button><button id="source-config-test" class="btn btn-ghost" type="button">Probar conexión</button><button id="source-config-sync" class="btn btn-ghost hidden" type="button">Importar ahora</button><button id="source-config-delete" class="btn btn-ghost hidden" type="button">Eliminar API</button></div>
     </form>
-    <p id="source-config-message" class="meta"></p>
+    <p id="source-config-message" class="meta"></p><a id="source-config-docs" class="competition-source hidden" target="_blank" rel="noopener noreferrer">Documentación del proveedor</a>
   </section>
   <section class="card source-add-card">
     <div><p class="eyebrow">Nueva integración</p><h3>Agregar API externa</h3><p class="meta">Registra una API o página web para probar y conservar su configuración.</p></div>
     <form id="custom-source-form" class="source-config-form">
+      <label><span>Deporte</span><select id="custom-source-sport"><option value="football">Fútbol</option><option value="lol">League of Legends</option></select></label>
       <label><span>Nombre</span><input id="custom-source-name" required placeholder="Mi API de estadísticas"></label>
       <label><span>URL de API o web</span><input id="custom-source-url" type="url" required placeholder="https://api.ejemplo.com"></label>
       <label><span>Clave API opcional</span><input id="custom-source-key" type="password" autocomplete="off"></label>
@@ -41,7 +42,7 @@
 </section>
 <section id="files" class="tab-panel">
   <div class="card sources-panel">
-    <div class="section-heading"><div><p class="eyebrow">Carga de datos</p><h3>Importar estadísticas</h3></div><span class="badge badge-blue">CSV · máximo 100 MB</span></div>
+    <div class="section-heading"><div><p class="eyebrow">League of Legends</p><h3>Importar estadísticas LoL</h3></div><span class="badge badge-blue">CSV · máximo 100 MB</span></div>
     <form id="upload-form" class="upload-form">
       <label><span>Token administrativo</span><input id="admin-token" type="password" autocomplete="current-password" placeholder="Ingrese el token" required></label>
       <label><span>Tipo de fuente</span><select name="type"><option value="oracle">Oracle's Elixir / estadísticas LoL</option><option value="manual_statistics">Estadísticas manuales</option><option value="manual_odds">Odds / cuotas manuales</option></select></label>
@@ -136,32 +137,65 @@
   const configCard = $('#source-config-card');
   const configForm = $('#source-config-form');
   const configMessage = $('#source-config-message');
+  const configDocs = $('#source-config-docs');
+  const deleteSourceButton = $('#source-config-delete');
+  let sourceCatalog = new Map();
   const sourceToken = () => $('#source-admin-token').value || $('#sync-admin-token').value || $('#admin-token').value;
   const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 
   function loadSources() {
     json('/api/sources').then((data) => {
-      $('#sources-status').innerHTML = data.sources.map((source) => {
+      sourceCatalog = new Map(data.sources.map((source) => [source.code, source]));
+      const renderSource = (source) => {
         const runtime = source.managed_by === 'runtime';
         const automatic = source.code === 'oracles_elixir' ? ` · Automática: ${source.auto_refresh ? 'activa' : 'desactivada'}` : '';
         const details = runtime ? `Eventos programados: ${Number(source.records_received || 0).toLocaleString('es-PY')}` : ((source.configured ? 'Configurada' : 'Sin configurar') + automatic);
         const autoToggle = source.code === 'oracles_elixir' && source.base_url
           ? `<label class="replace-option source-auto-toggle"><input type="checkbox" data-auto-source="${escapeHtml(source.code)}" data-base-url="${escapeHtml(source.base_url)}" data-enabled="${source.enabled}" ${source.auto_refresh ? 'checked' : ''}> Actualizar automáticamente (60 min)</label>`
           : '';
-        return `<article class="source-card"><h3>${escapeHtml(source.display_name)}</h3><p>${source.status}</p><p>${escapeHtml(details)}</p><p>${escapeHtml(source.base_url || source.last_error || '')}</p>${autoToggle}<button class="btn btn-ghost" type="button" data-config-source="${escapeHtml(source.code)}">${runtime ? 'Ver estado' : 'Configurar'}</button></article>`;
+        const documentation = source.documentation_url ? `<a class="competition-source" href="${escapeHtml(source.documentation_url)}" target="_blank" rel="noopener noreferrer">Documentación</a>` : '';
+        const statusLabel = source.status === 'healthy' ? '✓ Conectada' : source.status === 'configured' ? 'Configurada · verificar' : source.configured ? 'Configurada · deshabilitada' : 'Sin configurar';
+        const statusClass = source.status === 'healthy' ? 'badge-green' : source.status === 'configured' ? 'badge-yellow' : 'badge-gray';
+        const remove = source.custom ? `<button class="btn btn-ghost" type="button" data-delete-source="${escapeHtml(source.code)}">Eliminar</button>` : '';
+        return `<article class="source-card"><h3>${escapeHtml(source.display_name)}</h3><p><span class="badge ${statusClass}">${statusLabel}</span></p><p>${escapeHtml(details)}</p><p>${escapeHtml(source.base_url || source.last_error || '')}</p>${documentation}${autoToggle}<button class="btn btn-ghost" type="button" data-config-source="${escapeHtml(source.code)}">${runtime ? 'Ver estado' : 'Configurar'}</button>${remove}</article>`;
+      };
+      const sections = [
+        {sport: 'lol', title: 'League of Legends', detail: 'Fuentes y archivos exclusivos de LoL.'},
+        {sport: 'football', title: 'Fútbol', detail: 'Proveedores preparados; agregue la clave antes de habilitarlos.'},
+      ];
+      $('#sources-status').innerHTML = sections.map((section) => {
+        const items = data.sources.filter((source) => source.sport === section.sport);
+        return `<section class="source-sport-group"><div class="section-heading"><div><p class="eyebrow">${section.title}</p><p class="meta">${section.detail}</p></div></div><div class="sources-grid">${items.map(renderSource).join('') || '<p class="meta">Sin fuentes registradas.</p>'}</div></section>`;
       }).join('');
     }).catch((error) => { $('#sources-status').textContent = 'Error: ' + error.message; });
   }
 
   async function openSourceConfig(code) {
     const token = sourceToken();
-    if (!token) { configMessage.textContent = 'Ingrese el token administrativo para configurar fuentes.'; configCard.classList.remove('hidden'); return; }
+    if (!token) {
+      const source = sourceCatalog.get(code) || {};
+      $('#source-config-title').textContent = source.display_name || 'Fuente';
+      $('#source-config-code').value = code;
+      $('#source-config-url').value = source.base_url || '';
+      $('#source-config-key').value = '';
+      $('#source-config-url-label').textContent = source.sport === 'football' ? 'URL base del proveedor' : 'URL de API o web';
+      $('#source-config-key-label').textContent = source.api_key_header ? `${source.api_key_label} (${source.api_key_header})` : (source.api_key_label || 'Clave API');
+      $('#source-config-auto-row').classList.toggle('hidden', code !== 'oracles_elixir');
+      deleteSourceButton.classList.toggle('hidden', !source.custom);
+      configDocs.classList.toggle('hidden', !source.documentation_url);
+      configDocs.href = source.documentation_url || '#';
+      configMessage.textContent = 'Ingrese el token administrativo y salga del campo para cargar la configuración de esta fuente.';
+      configCard.classList.remove('hidden');
+      return;
+    }
     try {
       const source = await json('/api/sources/' + encodeURIComponent(code) + '/configuration', {headers: {'X-Admin-Token': token}});
       $('#source-config-title').textContent = source.display_name;
       $('#source-config-code').value = source.code;
       $('#source-config-url').value = source.base_url || '';
       $('#source-config-key').value = '';
+      $('#source-config-url-label').textContent = source.sport === 'football' ? 'URL base del proveedor' : 'URL de API o web';
+      $('#source-config-key-label').textContent = source.api_key_header ? `${source.api_key_label} (${source.api_key_header})` : source.api_key_label;
       $('#source-config-enabled').checked = source.enabled;
       $('#source-config-auto').checked = Boolean(source.auto_refresh);
       const runtimeManaged = source.managed_by === 'runtime';
@@ -170,7 +204,10 @@
       });
       $('#source-config-auto-row').classList.toggle('hidden', source.code !== 'oracles_elixir');
       $('#source-config-sync').classList.toggle('hidden', source.code !== 'oracles_elixir' || runtimeManaged || !source.auto_refresh);
-      configMessage.textContent = source.configuration_note || (source.api_key_configured ? 'Clave API configurada; déjela vacía para conservarla.' : '');
+      deleteSourceButton.classList.toggle('hidden', !source.custom || runtimeManaged);
+      configMessage.textContent = source.configuration_note || (source.api_key_configured ? 'Clave API configurada; déjela vacía para conservarla.' : 'La clave se guarda localmente y no se muestra después de guardar.');
+      configDocs.classList.toggle('hidden', !source.documentation_url);
+      configDocs.href = source.documentation_url || '#';
       configCard.classList.remove('hidden');
       configCard.scrollIntoView({behavior: 'smooth', block: 'nearest'});
     } catch (error) {
@@ -181,6 +218,11 @@
 
   $('#sources-status').addEventListener('click', async (event) => {
     const autoSource = event.target.dataset.autoSource;
+    const deleteSource = event.target.dataset.deleteSource;
+    if (deleteSource) {
+      await removeSource(deleteSource);
+      return;
+    }
     if (autoSource) {
       const token = sourceToken();
       const checkbox = event.target;
@@ -208,6 +250,11 @@
     if (code) openSourceConfig(code);
   });
   $('#source-config-close').addEventListener('click', () => configCard.classList.add('hidden'));
+  deleteSourceButton.addEventListener('click', async () => removeSource($('#source-config-code').value));
+  $('#source-admin-token').addEventListener('change', () => {
+    const code = $('#source-config-code').value;
+    if (code && sourceToken()) openSourceConfig(code);
+  });
 
   configForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -220,7 +267,7 @@
         headers: {'Content-Type': 'application/json', 'X-Admin-Token': token},
         body: JSON.stringify({base_url: $('#source-config-url').value, api_key: $('#source-config-key').value || null, enabled: $('#source-config-enabled').checked, auto_refresh: $('#source-config-code').value === 'oracles_elixir' ? $('#source-config-auto').checked : null})
       });
-      configMessage.textContent = result.configured ? 'Configuración guardada.' : 'Configuración guardada; indique una URL para activarla.';
+      configMessage.textContent = result.configured ? 'Configuración guardada. Estado pendiente de verificación: pulse “Probar conexión”.' : 'Configuración guardada; indique una URL y clave API para activarla.';
       loadSources();
     } catch (error) { configMessage.textContent = 'No se pudo guardar: ' + error.message; }
   });
@@ -233,13 +280,28 @@
   $('#source-config-test').addEventListener('click', async () => {
     const token = sourceToken();
     if (!token) { configMessage.textContent = 'Ingrese el token administrativo.'; return; }
+    const code = $('#source-config-code').value;
+    if (!code) { configMessage.textContent = 'Seleccione una fuente para configurar.'; return; }
+    if ($('#source-config-key').value) { configMessage.textContent = 'Guarde la configuración antes de probar la nueva clave API.'; return; }
     configMessage.textContent = 'Probando conexión…';
     try {
-      const result = await json('/api/sources/' + encodeURIComponent($('#source-config-code').value) + '/test', {method: 'POST', headers: {'X-Admin-Token': token}});
-      configMessage.textContent = result.status === 'healthy' ? 'Conexión verificada.' : 'No se pudo verificar: ' + (result.reason || 'sin detalles');
+      const result = await json('/api/sources/' + encodeURIComponent(code) + '/test', {method: 'POST', headers: {'X-Admin-Token': token}});
+      configMessage.textContent = result.status === 'healthy' ? '✓ Conexión verificada correctamente.' : 'No se pudo verificar: ' + (result.reason || 'sin detalles');
       loadSources(); loadRuns();
     } catch (error) { configMessage.textContent = 'No se pudo probar: ' + error.message; }
   });
+
+  async function removeSource(code) {
+    const token = sourceToken();
+    if (!token) { configMessage.textContent = 'Ingrese el token administrativo para eliminar una API.'; configCard.classList.remove('hidden'); return; }
+    if (!code) { configMessage.textContent = 'Seleccione una API para eliminar.'; return; }
+    if (!confirm('¿Eliminar esta API personalizada y su configuración? Esta acción no elimina datos ya importados.')) return;
+    try {
+      await json('/api/sources/' + encodeURIComponent(code), {method: 'DELETE', headers: {'X-Admin-Token': token}});
+      configCard.classList.add('hidden');
+      loadSources();
+    } catch (error) { configMessage.textContent = 'No se pudo eliminar: ' + error.message; }
+  }
 
   $('#source-config-sync').addEventListener('click', async () => {
     const token = sourceToken();
@@ -262,7 +324,7 @@
       const result = await json('/api/sources/custom', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-Admin-Token': token},
-        body: JSON.stringify({display_name: $('#custom-source-name').value, base_url: $('#custom-source-url').value, api_key: $('#custom-source-key').value || null, enabled: true})
+        body: JSON.stringify({display_name: $('#custom-source-name').value, sport: $('#custom-source-sport').value, base_url: $('#custom-source-url').value, api_key: $('#custom-source-key').value || null, enabled: true})
       });
       message.textContent = 'API registrada: ' + result.display_name + '.';
       $('#custom-source-form').reset();

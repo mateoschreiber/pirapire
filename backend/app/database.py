@@ -9,7 +9,7 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 
 
 def init_db() -> None:
-    from . import models_lol  # noqa: F401
+    from . import models_football, models_lol  # noqa: F401
     SQLModel.metadata.create_all(engine)
     from .migrations import upgrade
     upgrade(engine)

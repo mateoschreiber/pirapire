@@ -19,6 +19,30 @@ def test_dashboard_html():
     ) < response.text.index('aria-labelledby="teams-title"')
 
 
+def test_football_dashboard_is_isolated_from_lol_dashboard():
+    response = client.get("/football")
+    assert response.status_code == 200
+    assert "Fútbol · Módulo independiente" in response.text
+    assert "/static/js/football.js" in response.text
+    assert "League of Legends" in response.text
+
+
+def test_football_upcoming_api_is_available_without_a_source():
+    response = client.get("/api/football/matches/upcoming")
+    assert response.status_code == 200
+    assert response.json()["source_status"] == "not_configured"
+
+
+def test_sources_expose_separate_football_provider_configuration():
+    payload = client.get("/api/sources").json()
+    by_code = {source["code"]: source for source in payload["sources"]}
+    assert by_code["football_data"]["sport"] == "football"
+    assert by_code["football_data"]["base_url"] == "https://api.football-data.org/v4"
+    assert by_code["football_data"]["api_key_header"] == "X-Auth-Token"
+    assert by_code["api_football"]["sport"] == "football"
+    assert by_code["api_football"]["api_key_header"] == "x-apisports-key"
+
+
 def test_sources_html_has_upload_flow():
     response = client.get("/sources")
     assert response.status_code == 200
@@ -269,6 +293,9 @@ def test_sources_support_configuration_and_custom_api():
         item["code"] == created.json()["code"]
         for item in client.get("/api/sources").json()["sources"]
     )
+    deleted = client.delete(f"/api/sources/{created.json()['code']}", headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] == created.json()["code"]
 
 
 def test_manual_odds_upload_and_match_response(tmp_path):

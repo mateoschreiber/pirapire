@@ -1,16 +1,16 @@
 # Graph Report - pirapire  (2026-07-23)
 
 ## Corpus Check
-- 68 files · ~181,446 words
+- 75 files · ~184,444 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 650 nodes · 1261 edges · 57 communities (43 shown, 14 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 108 edges (avg confidence: 0.8)
+- 712 nodes · 1399 edges · 61 communities (45 shown, 16 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 120 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d0b6d56b`
+- Built from commit: `6fe35576`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,18 +64,23 @@
 - Team Logo (First Stand)
 - Team Logo (Fnatic)
 - OpenWiki DataDragon Docs
+- services/__init__.py
+- football.js
+- services/football/__init__.py
+- sources/football/__init__.py
+- http_client.py
 
 ## God Nodes (most connected - your core abstractions)
 1. `LolMatchEvent` - 32 edges
-2. `Graphify Knowledge Graph Tool` - 22 edges
-3. `_import_csv_file()` - 21 edges
-4. `SourceRun` - 19 edges
-5. `LolGameHistory` - 17 edges
-6. `rebuild_series()` - 16 edges
-7. `Worlds Tournament Logo` - 16 edges
-8. `LolTeamGameStat` - 15 edges
-9. `el()` - 15 edges
-10. `_source()` - 15 edges
+2. `DataSource` - 22 edges
+3. `SourceRun` - 22 edges
+4. `_import_csv_file()` - 22 edges
+5. `Graphify Knowledge Graph Tool` - 22 edges
+6. `LolGameHistory` - 17 edges
+7. `synchronize_known_aliases()` - 17 edges
+8. `rebuild_series()` - 16 edges
+9. `Worlds Tournament Logo` - 16 edges
+10. `LolTeamGameStat` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `CLAUDE.md Agent Instructions` --semantically_similar_to--> `OpenWiki in AGENTS.md`  [INFERRED] [semantically similar]
@@ -102,47 +107,47 @@
 - **LTA North Teams** — backend_app_static_team_logos_cloud9_kia, backend_app_static_team_logos_dignitas, backend_app_static_team_logos_disguised, backend_app_static_team_logos_flyquest [INFERRED]
 - **LTA South Teams** — backend_app_static_team_logos_cnb_legends, backend_app_static_team_logos_dn_soopers, backend_app_static_team_logos_fluxo_w7m [INFERRED]
 
-## Communities (57 total, 14 thin omitted)
+## Communities (61 total, 16 thin omitted)
 
 ### Community 0 - "Team Logos & Brand Assets"
 Cohesion: 0.02
 Nodes (85): ag-al, anyone-s-legend, beijing-jdg-esports, bilibili-gaming, bnk-fearx, cloud9, cloud9-kia, cnb-legends (+77 more)
 
 ### Community 1 - "Match Events & Odds Models"
-Cohesion: 0.07
-Nodes (48): LolMatchEvent, LolMatchStatisticsReadModel, LolSeries, Upcoming or finished professional LoL series., Materialised cached statistics payload for a match., _competition_code(), _competition_summary(), _current_odds_by_match() (+40 more)
+Cohesion: 0.09
+Nodes (55): LolChampion, LolDataCoverage, LolMatchEvent, LolMatchStatisticsReadModel, LolOddsSnapshot, LolPatch, LolPlayer, LolPlayerExternalIdentity (+47 more)
 
 ### Community 2 - "Data Import Pipeline"
-Cohesion: 0.13
-Nodes (48): DataSource, ImportBatch, ImportError, SourceRun, aliases(), _batch_view(), _config(), _configuration_view() (+40 more)
+Cohesion: 0.12
+Nodes (51): DataSource, ImportBatch, ImportError, SourceRun, aliases(), _batch_view(), _config(), _configuration_view() (+43 more)
 
 ### Community 3 - "Frontend JavaScript"
 Cohesion: 0.17
 Nodes (37): averageValue(), el(), esc(), fetchJSON(), fmtDate(), fmtNumber(), fmtOdds(), fmtPct() (+29 more)
 
 ### Community 4 - "Core LoL Domain Models"
-Cohesion: 0.13
-Nodes (32): LolDataCoverage, LolLeague, LolLeagueAlias, LolOddsSnapshot, LolPlayer, LolPlayerExternalIdentity, LolTeam, LolTeamAlias (+24 more)
+Cohesion: 0.17
+Nodes (25): WorkerHeartbeat, _captured(), import_odds_csv(), import_odds_directory(), _now(), datetime, Session, _finish_remote_run() (+17 more)
 
 ### Community 5 - "Oracle's Elixir Importer"
-Cohesion: 0.10
-Nodes (35): LolGameHistory, LolPlayerGameStat, LolTeamGameStat, _bool(), _import_csv_file(), import_oracles_inbox(), _int(), _normalized_row() (+27 more)
+Cohesion: 0.05
+Nodes (50): LolGameHistory, LolPlayerGameStat, LolTeamAlias, LolTeamGameStat, _bool(), _import_csv_file(), import_oracles_inbox(), _int() (+42 more)
 
 ### Community 6 - "Database & Migrations"
 Cohesion: 0.10
-Nodes (16): get_session(), init_db(), Session, lifespan(), _add(), _columns(), Session, Preserve a pre-LoL table that reuses a current table name.      Earlier versions (+8 more)
+Nodes (17): get_session(), init_db(), Session, lifespan(), _add(), _columns(), Session, Preserve a pre-LoL table that reuses a current table name.      Earlier versions (+9 more)
 
 ### Community 7 - "Deployment & Architecture Docs"
 Cohesion: 0.07
 Nodes (29): Docker Health Check (curl /health), pirapire_app Docker Service, pirapire_worker Docker Service, APScheduler Background Worker, LoL Metrics Engine Service, Phase 1 Refactor (commit b8e1b04), Series Builder Service, Sources Admin API (+21 more)
 
 ### Community 8 - "Config, HTTP & Utils"
-Cohesion: 0.09
-Nodes (22): Settings, get_client(), Shared httpx wrapper for all external API calls., Fetch JSON returning a structured result (never raises).      Returns {"ok": b, request_json(), safe_get(), safe_get_json(), Riot Data Dragon connector (LoL static data: versions, champions). (+14 more)
+Cohesion: 0.12
+Nodes (20): Settings, get_client(), Shared httpx wrapper for all external API calls., Fetch JSON returning a structured result (never raises).      Returns {"ok": b, request_json(), safe_get(), safe_get_json(), format_local() (+12 more)
 
 ### Community 9 - "Background Worker Jobs"
-Cohesion: 0.13
-Nodes (31): LolChampion, LolPatch, WorkerHeartbeat, _fetch_all_pages(), _fetch_match_schedule(), _make_match_key(), _parse_datetime(), Session (+23 more)
+Cohesion: 0.19
+Nodes (13): apply_display_aliases(), _entries(), Local cache for official team logos published by LoL Esports., Map provider spelling variants to an already cached official logo., Cache assets published by a team when it is not in Riot's current feed., Refresh the local cache from official Riot LoL Esports pages., sync_known_official_assets(), sync_official_team_logos() (+5 more)
 
 ### Community 10 - "Graphify Skill Reference"
 Cohesion: 0.11
@@ -157,8 +162,8 @@ Cohesion: 0.30
 Nodes (17): Shenzhen Ninjas in Pyjamas Logo, Shifters Logo, Shopify Rebellion Logo, SK Gaming Logo, Suzhou LNG Esports Logo, T1 Logo, Team Heretics Logo, Team Liquid Alienware Logo (+9 more)
 
 ### Community 13 - "Team Logo Sync Service"
-Cohesion: 0.23
-Nodes (11): apply_display_aliases(), _entries(), Local cache for official team logos published by LoL Esports., Map provider spelling variants to an already cached official logo., Cache assets published by a team when it is not in Riot's current feed., Refresh the local cache from official Riot LoL Esports pages., sync_known_official_assets(), sync_official_team_logos() (+3 more)
+Cohesion: 0.13
+Nodes (18): LolLeague, LolLeagueAlias, all_leagues(), canonical_league(), Session, seed_catalog(), _fetch_all_pages(), _fetch_match_schedule() (+10 more)
 
 ### Community 14 - "README & Base Templates"
 Cohesion: 0.18
@@ -244,25 +249,37 @@ Nodes (3): Team Logo: CNB Legends, Team Logo: DN Soopers, Team Logo: Fluxo W7M
 Cohesion: 0.20
 Nodes (9): Conftest Setup, Coverage Areas Not Yet Tested, Key Tests, test_health.py, test_pages.py, Test Structure, test_timezone.py, Testing (+1 more)
 
+### Community 56 - "services/__init__.py"
+Cohesion: 0.28
+Nodes (6): ABC, FootballSource, datetime, Provider contract for fixture, result, event and odds ingestion., Return provider fixtures at the transport boundary., Return raw provider statistics for a completed fixture.
+
+### Community 57 - "football.js"
+Cohesion: 0.60
+Nodes (5): esc(), formatStart(), initFootballDashboard(), initFootballSync(), monitorSync()
+
+### Community 60 - "http_client.py"
+Cohesion: 0.11
+Nodes (32): FootballCompetition, FootballMatchEvent, FootballMatchStatisticsReadModel, FootballPlayer, FootballPlayerMatchStat, FootballTeam, FootballTeamMatchStat, _now() (+24 more)
+
 ## Knowledge Gaps
-- **174 isolated node(s):** `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree`, `Test Structure`, `Conftest Setup` (+169 more)
+- **174 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `ag-al`, `anyone-s-legend`, `beijing-jdg-esports` (+169 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **16 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `LolMatchEvent` connect `Match Events & Odds Models` to `Background Worker Jobs`, `Data Import Pipeline`, `Core LoL Domain Models`?**
+- **Why does `LolMatchEvent` connect `Match Events & Odds Models` to `Data Import Pipeline`, `Team Logo Sync Service`, `Core LoL Domain Models`, `Oracle's Elixir Importer`?**
   _High betweenness centrality (0.027) - this node is a cross-community bridge._
-- **Why does `_import_csv_file()` connect `Oracle's Elixir Importer` to `Background Worker Jobs`, `Data Import Pipeline`, `Match Events & Odds Models`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **Why does `_Response` connect `Oracle's Elixir Importer` to `Config, HTTP & Utils`?**
-  _High betweenness centrality (0.011) - this node is a cross-community bridge._
+- **Why does `_import_csv_file()` connect `Oracle's Elixir Importer` to `Data Import Pipeline`, `http_client.py`, `Core LoL Domain Models`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `DataSource` connect `Data Import Pipeline` to `Match Events & Odds Models`, `http_client.py`, `Core LoL Domain Models`, `Database & Migrations`?**
+  _High betweenness centrality (0.013) - this node is a cross-community bridge._
 - **Are the 9 inferred relationships involving `LolMatchEvent` (e.g. with `get_match()` and `get_match_statistics()`) actually correct?**
   _`LolMatchEvent` has 9 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 3 inferred relationships involving `_import_csv_file()` (e.g. with `LolGameHistory` and `LolPlayerGameStat`) actually correct?**
-  _`_import_csv_file()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Key External Files`, `Cross-Reference: Key Entry Points`, `Removed from working tree` to the rest of the system?**
+- **Are the 6 inferred relationships involving `DataSource` (e.g. with `_run_football_sync()` and `synchronize_football()`) actually correct?**
+  _`DataSource` has 6 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 9 inferred relationships involving `SourceRun` (e.g. with `_run_football_sync()` and `synchronize_football()`) actually correct?**
+  _`SourceRun` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `$schema`, `.opencode/plugins/graphify.js`, `ag-al` to the rest of the system?**
   _174 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Team Logos & Brand Assets` be split into smaller, more focused modules?**
-  _Cohesion score 0.023255813953488372 - nodes in this community are weakly interconnected._

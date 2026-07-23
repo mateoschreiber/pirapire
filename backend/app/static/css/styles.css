@@ -139,6 +139,14 @@ table tbody tr:hover { background: #F8F9FA; }
 .dashboard-hero .meta { color: #dbeafe; }
 .eyebrow { color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .dashboard-hero .eyebrow { color: #93c5fd; }
+.football-hero { background: linear-gradient(120deg, #14532d 0%, #15803d 62%, #22c55e 100%); box-shadow: 0 12px 28px rgba(21, 128, 61, .2); }
+.football-hero .eyebrow { color: #bbf7d0; }
+.football-sync-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.football-sync-actions input { width: 190px; min-height: 38px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.65); border-radius: 8px; background: rgba(255,255,255,.96); color: #172554; }
+.football-sync-actions .btn { background: #fff; color: #166534; }
+.football-sync-actions .btn:hover { background: #f0fdf4; }
+.football-sync-actions .meta { width: 100%; margin: 0; text-align: right; color: #ecfdf5; }
+.football-empty { padding: 28px 12px; }
 .dashboard-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; box-shadow: var(--shadow); }
 .dashboard-disclosure > summary { cursor:pointer; list-style:none; }
 .dashboard-disclosure > summary::-webkit-details-marker { display:none; }
@@ -353,7 +361,9 @@ table tbody tr { cursor: default; transition: background .12s; }
 
 .source-config-form { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 14px; align-items: end; margin-top: 16px; }
 .source-config-form label { display: grid; gap: 7px; color: #334155; font-size: 12px; font-weight: 700; }
-.source-config-form input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; color: #172033; }
+.source-config-form input, .source-config-form select { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; color: #172033; }
+.source-sport-group { grid-column: 1 / -1; }
+.source-sport-group + .source-sport-group { margin-top: 14px; }
 .source-add-card { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(420px, 1.5fr); gap: 20px; align-items: start; margin-top: 16px; }
 .source-card .btn { margin-top: 10px; min-height: 34px; padding: 6px 10px; }
 @media (max-width: 800px) { .source-config-form, .source-add-card { grid-template-columns: 1fr; } }

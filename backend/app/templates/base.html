@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#172554">
-  <title>Pirapire - LoL Stats</title>
+  <title>Pirapire</title>
   <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/css/styles.css?v=20260716-3">
@@ -13,7 +13,8 @@
   <div class="app-shell">
     <nav class="sidebar" aria-label="Navegación principal">
       <h1><a href="/">Pirapire</a></h1>
-      <a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}">League of Legends</a>
+      <a href="/football" class="nav-link {% if page == 'football-dashboard' %}active{% endif %}">Fútbol</a>
       <a href="/sources" class="nav-link {% if page == 'sources' %}active{% endif %}">Fuentes</a>
     </nav>
     <div class="main-area">
@@ -25,5 +26,6 @@
     </div>
   </div>
   <script src="/static/js/app.js?v=20260716-3"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

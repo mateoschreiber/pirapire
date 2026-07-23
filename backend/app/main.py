@@ -9,7 +9,7 @@ from .config import settings
 from sqlmodel import Session
 
 from .database import engine, init_db
-from .routers import health, lol_api, pages, sources
+from .routers import football_api, health, lol_api, pages, sources
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(football_api.router)
 app.include_router(lol_api.router)
 app.include_router(pages.router)
 app.include_router(sources.router)

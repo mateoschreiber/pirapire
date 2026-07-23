@@ -1,5 +1,4 @@
 import hashlib
-import os
 import shutil
 import time
 import json
@@ -8,12 +7,27 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    UploadFile,
+)
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from ..config import settings
 from ..database import engine, get_session
-from ..models_lol import DataSource, ImportBatch, ImportError, LolMatchEvent, LolTeamAlias, SourceRun
+from ..models_lol import (
+    DataSource,
+    ImportBatch,
+    ImportError,
+    LolMatchEvent,
+    SourceRun,
+)
 
 router = APIRouter(prefix="/api")
 SOURCES = {
@@ -23,6 +37,24 @@ SOURCES = {
     "riot_datadragon": "Riot Data Dragon",
     "manual_odds_csv": "Manual odds CSV",
     "external_odds_api": "External odds API",
+    "football_data": "football-data.org",
+    "api_football": "API-Football",
+}
+SOURCE_METADATA = {
+    "football_data": {
+        "sport": "football",
+        "default_base_url": "https://api.football-data.org/v4",
+        "api_key_header": "X-Auth-Token",
+        "api_key_label": "Token de football-data.org",
+        "documentation_url": "https://www.football-data.org/documentation/quickstart",
+    },
+    "api_football": {
+        "sport": "football",
+        "default_base_url": "https://v3.football.api-sports.io",
+        "api_key_header": "x-apisports-key",
+        "api_key_label": "Clave de API-Football",
+        "documentation_url": "https://www.api-football.com/documentation",
+    },
 }
 
 
@@ -36,9 +68,11 @@ class SourceConfiguration(BaseModel):
 
 class CustomSourceConfiguration(SourceConfiguration):
     display_name: str
+    sport: str = "football"
 
 
-def _now(): return datetime.now(UTC)
+def _now():
+    return datetime.now(UTC)
 
 
 def _admin(token: str | None = Header(default=None, alias="X-Admin-Token")):
@@ -64,6 +98,12 @@ def _source(session, code):
     return row
 
 
+def _metadata(code: str, config: dict | None = None) -> dict:
+    if code in SOURCE_METADATA:
+        return SOURCE_METADATA[code]
+    return {"sport": (config or {}).get("sport", "lol")}
+
+
 def _config(row: DataSource) -> dict:
     try:
         return json.loads(row.config_json or "{}")
@@ -72,31 +112,61 @@ def _config(row: DataSource) -> dict:
 
 
 def _view(row):
-    view = {key: getattr(row, key) for key in (
-        "code", "display_name", "enabled", "configured", "status", "last_run_at",
-        "last_success_at", "last_error", "last_duration_ms", "records_received",
-        "records_inserted", "records_updated", "records_skipped", "coverage", "next_run_at",
-    )}
+    view = {
+        key: getattr(row, key)
+        for key in (
+            "code",
+            "display_name",
+            "enabled",
+            "configured",
+            "status",
+            "last_run_at",
+            "last_success_at",
+            "last_error",
+            "last_duration_ms",
+            "records_received",
+            "records_inserted",
+            "records_updated",
+            "records_skipped",
+            "coverage",
+            "next_run_at",
+        )
+    }
     config = _config(row)
-    view["base_url"] = config.get("base_url", "")
+    metadata = _metadata(row.code, config)
+    view["sport"] = metadata["sport"]
+    view["base_url"] = config.get("base_url", metadata.get("default_base_url", ""))
     view["api_key_configured"] = bool(config.get("api_key"))
-    view["auto_refresh"] = bool(config.get("auto_refresh", bool(view["base_url"]))) if row.code == "oracles_elixir" else None
+    view["api_key_label"] = metadata.get("api_key_label", "Clave API")
+    view["api_key_header"] = metadata.get("api_key_header")
+    view["documentation_url"] = metadata.get("documentation_url")
+    view["auto_refresh"] = (
+        bool(config.get("auto_refresh", bool(view["base_url"])))
+        if row.code == "oracles_elixir"
+        else None
+    )
     view["custom"] = row.code not in SOURCES
     return view
 
 
 def _leaguepedia_schedule_view(session: Session, row: DataSource) -> dict:
     """Show the scheduler's real state instead of the unused generic config row."""
-    events = session.exec(select(LolMatchEvent).where(
-        LolMatchEvent.source_name == "leaguepedia",
-    )).all()
-    latest = max((event.observed_at for event in events if event.observed_at), default=None)
+    events = session.exec(
+        select(LolMatchEvent).where(
+            LolMatchEvent.source_name == "leaguepedia",
+        )
+    ).all()
+    latest = max(
+        (event.observed_at for event in events if event.observed_at), default=None
+    )
     scheduled = sum(event.status == "scheduled" for event in events)
     return {
         **_view(row),
         "enabled": settings.leaguepedia_sync_enabled,
         "configured": bool(settings.leaguepedia_base_url),
-        "status": "healthy" if settings.leaguepedia_sync_enabled and latest else "degraded",
+        "status": "healthy"
+        if settings.leaguepedia_sync_enabled and latest
+        else "degraded",
         "base_url": settings.leaguepedia_base_url,
         "last_run_at": latest,
         "last_success_at": latest,
@@ -115,18 +185,27 @@ def _source_view(session: Session, row: DataSource) -> dict:
 
 def _configuration_view(row: DataSource) -> dict:
     config = _config(row)
+    metadata = _metadata(row.code, config)
     view = {
         "code": row.code,
         "display_name": row.display_name,
-        "base_url": config.get("base_url", ""),
+        "sport": metadata["sport"],
+        "base_url": config.get("base_url", metadata.get("default_base_url", "")),
         "api_key_configured": bool(config.get("api_key")),
+        "api_key_label": metadata.get("api_key_label", "Clave API"),
+        "api_key_header": metadata.get("api_key_header"),
+        "documentation_url": metadata.get("documentation_url"),
         "enabled": row.enabled,
         "configured": row.configured,
         "custom": row.code not in SOURCES,
-        "auto_refresh": bool(config.get("auto_refresh", bool(config.get("base_url")))) if row.code == "oracles_elixir" else None,
+        "auto_refresh": bool(config.get("auto_refresh", bool(config.get("base_url"))))
+        if row.code == "oracles_elixir"
+        else None,
     }
     if row.code == "oracles_elixir":
-        view["configuration_note"] = "Con la comprobación automática activa, Pirapire consulta esta URL cada 60 minutos y actualiza o agrega partidas."
+        view["configuration_note"] = (
+            "Con la comprobación automática activa, Pirapire consulta esta URL cada 60 minutos y actualiza o agrega partidas."
+        )
     return view
 
 
@@ -143,17 +222,32 @@ def _queue_remote_oracle_sync(session: Session) -> tuple[SourceRun, bool]:
     source = _source(session, "oracles_elixir")
     config = _config(source)
     if not source.enabled or not config.get("base_url"):
-        raise HTTPException(409, "Configure y habilite la URL remota de Oracle's Elixir antes de sincronizar")
+        raise HTTPException(
+            409,
+            "Configure y habilite la URL remota de Oracle's Elixir antes de sincronizar",
+        )
     if not config.get("auto_refresh", True):
-        raise HTTPException(409, "Active la comprobación automática de Oracle's Elixir antes de sincronizar")
-    active = session.exec(select(SourceRun).where(
-        SourceRun.source_code == "oracles_elixir",
-        SourceRun.job == "remote_sync",
-        SourceRun.status.in_(["queued", "running"]),
-    ).order_by(SourceRun.id.desc())).first()
+        raise HTTPException(
+            409,
+            "Active la comprobación automática de Oracle's Elixir antes de sincronizar",
+        )
+    active = session.exec(
+        select(SourceRun)
+        .where(
+            SourceRun.source_code == "oracles_elixir",
+            SourceRun.job == "remote_sync",
+            SourceRun.status.in_(["queued", "running"]),
+        )
+        .order_by(SourceRun.id.desc())
+    ).first()
     if active:
         return active, True
-    run = SourceRun(source_code="oracles_elixir", job="remote_sync", status="queued", started_at=_now())
+    run = SourceRun(
+        source_code="oracles_elixir",
+        job="remote_sync",
+        status="queued",
+        started_at=_now(),
+    )
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -164,14 +258,17 @@ def _queue_remote_oracle_sync(session: Session) -> tuple[SourceRun, bool]:
 def sources(session: Session = Depends(get_session)):
     builtin = [_source(session, code) for code in SOURCES]
     custom = [
-        row for row in session.exec(select(DataSource).order_by(DataSource.display_name)).all()
+        row
+        for row in session.exec(
+            select(DataSource).order_by(DataSource.display_name)
+        ).all()
         if row.code not in SOURCES
     ]
     return {"sources": [_source_view(session, row) for row in builtin + custom]}
 
 
 @router.get("/sources/detail/{code}")
-def source(code: str, session: Session = Depends(get_session)):
+def source_detail(code: str, session: Session = Depends(get_session)):
     return _source_view(session, _source(session, code))
 
 
@@ -180,10 +277,20 @@ def source_configuration(code: str, session: Session = Depends(get_session)):
     row = _source(session, code)
     if code == "leaguepedia_schedule":
         view = _leaguepedia_schedule_view(session, row)
-        return {key: view[key] for key in (
-            "code", "display_name", "base_url", "enabled", "configured", "custom",
-            "api_key_configured", "managed_by", "configuration_note",
-        )}
+        return {
+            key: view[key]
+            for key in (
+                "code",
+                "display_name",
+                "base_url",
+                "enabled",
+                "configured",
+                "custom",
+                "api_key_configured",
+                "managed_by",
+                "configuration_note",
+            )
+        }
     return _configuration_view(row)
 
 
@@ -194,7 +301,10 @@ def save_source_configuration(
     session: Session = Depends(get_session),
 ):
     if code == "leaguepedia_schedule":
-        raise HTTPException(409, "Leaguepedia Schedule se configura mediante .env; esta pantalla solo muestra su estado real")
+        raise HTTPException(
+            409,
+            "Leaguepedia Schedule se configura mediante .env; esta pantalla solo muestra su estado real",
+        )
     row = _source(session, code)
     config = _config(row)
     config["base_url"] = _validate_url(payload.base_url)
@@ -206,13 +316,32 @@ def save_source_configuration(
         config["api_key"] = payload.api_key.strip()
     row.config_json = json.dumps(config, sort_keys=True)
     row.enabled = payload.enabled
-    row.configured = bool(config.get("base_url")) or code == "oracles_elixir"
-    row.status = "healthy" if row.configured and row.enabled else "degraded"
+    requires_key = code in SOURCE_METADATA
+    row.configured = (
+        bool(config.get("base_url"))
+        and (not requires_key or bool(config.get("api_key")))
+    ) or code == "oracles_elixir"
+    row.status = "configured" if row.configured and row.enabled else "degraded"
     row.last_error = None
     session.add(row)
     session.commit()
     session.refresh(row)
     return _configuration_view(row)
+
+
+@router.delete("/sources/{code}", dependencies=[Depends(_admin)])
+def delete_custom_source(code: str, session: Session = Depends(get_session)):
+    """Remove a user-created integration without allowing built-in providers to vanish."""
+    if code in SOURCES:
+        raise HTTPException(
+            409, "Las fuentes integradas se pueden deshabilitar, no eliminar"
+        )
+    row = session.exec(select(DataSource).where(DataSource.code == code)).first()
+    if not row:
+        raise HTTPException(404, "Fuente no encontrada")
+    session.delete(row)
+    session.commit()
+    return {"deleted": code}
 
 
 @router.post("/sources/custom", dependencies=[Depends(_admin)])
@@ -229,7 +358,12 @@ def create_custom_source(
     while session.exec(select(DataSource).where(DataSource.code == code)).first():
         code = f"custom_api_{base}_{suffix}"
         suffix += 1
-    row = DataSource(code=code, display_name=name)
+    sport = payload.sport.strip().lower()
+    if sport not in {"lol", "football"}:
+        raise HTTPException(422, "El deporte debe ser lol o football")
+    row = DataSource(
+        code=code, display_name=name, config_json=json.dumps({"sport": sport})
+    )
     session.add(row)
     session.commit()
     return save_source_configuration(code, payload, session)
@@ -237,26 +371,50 @@ def create_custom_source(
 
 def _test_configured_source(row: DataSource) -> tuple[bool, str | None]:
     config = _config(row)
-    url = config.get("base_url", "")
+    metadata = _metadata(row.code, config)
+    url = config.get("base_url", metadata.get("default_base_url", ""))
     if not url:
-        return row.configured, None if row.configured else "Configure una URL de API antes de probar"
+        return (
+            row.configured,
+            None if row.configured else "Configure una URL de API antes de probar",
+        )
+    test_paths = {
+        "football_data": "/competitions",
+        "api_football": "/status",
+    }
+    url = url.rstrip("/") + test_paths.get(row.code, "")
     headers = {"User-Agent": settings.leaguepedia_user_agent}
     if config.get("api_key"):
-        headers["Authorization"] = f"Bearer {config['api_key']}"
-    try:
-        request = urllib.request.Request(url, headers=headers, method="HEAD")
-        with urllib.request.urlopen(request, timeout=8) as response:
-            if response.status < 400:
-                return True, None
-    except urllib.error.HTTPError as exc:
-        if exc.code not in {403, 405}:
-            return False, f"HTTP {exc.code}"
-    except Exception as exc:
-        return False, str(exc)
+        header = metadata.get("api_key_header")
+        if header:
+            headers[header] = config["api_key"]
+        else:
+            headers["Authorization"] = f"Bearer {config['api_key']}"
+    if row.code != "api_football":
+        try:
+            request = urllib.request.Request(url, headers=headers, method="HEAD")
+            with urllib.request.urlopen(request, timeout=8) as response:
+                if response.status < 400:
+                    return True, None
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {403, 405}:
+                return False, f"HTTP {exc.code}"
+        except Exception as exc:
+            return False, str(exc)
     try:
         request = urllib.request.Request(url, headers=headers, method="GET")
         with urllib.request.urlopen(request, timeout=8) as response:
-            return response.status < 400, None if response.status < 400 else f"HTTP {response.status}"
+            if response.status >= 400:
+                return False, f"HTTP {response.status}"
+            if row.code == "api_football":
+                try:
+                    payload = json.loads(response.read().decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    return False, "La respuesta de API-Football no es válida"
+                if payload.get("errors"):
+                    details = "; ".join(str(value) for value in payload["errors"].values())
+                    return False, f"API-Football: {details}"
+            return True, None
     except Exception as exc:
         return False, str(exc)
 
@@ -289,7 +447,11 @@ def test(code: str, session: Session = Depends(get_session)):
 def sync(code: str, session: Session = Depends(get_session)):
     if code == "oracles_elixir":
         run, already_running = _queue_remote_oracle_sync(session)
-        return {"status": run.status, "run_id": run.id, "already_running": already_running}
+        return {
+            "status": run.status,
+            "run_id": run.id,
+            "already_running": already_running,
+        }
     row = _source(session, code)
     run = SourceRun(
         source_code=code,
@@ -308,7 +470,13 @@ def sync(code: str, session: Session = Depends(get_session)):
 
 
 @router.get("/sources/runs")
-def runs(session:Session=Depends(get_session)): return {"runs":session.exec(select(SourceRun).order_by(SourceRun.id.desc()).limit(100)).all()}
+def runs(session: Session = Depends(get_session)):
+    return {
+        "runs": session.exec(
+            select(SourceRun).order_by(SourceRun.id.desc()).limit(100)
+        ).all()
+    }
+
 
 @router.get("/sources/runs/{run_id}")
 def run_status(run_id: int, session: Session = Depends(get_session)):
@@ -316,8 +484,17 @@ def run_status(run_id: int, session: Session = Depends(get_session)):
     if not run:
         raise HTTPException(404, "Ejecución no encontrada")
     return run
+
+
 @router.get("/imports")
-def imports(session:Session=Depends(get_session)): return {"imports":session.exec(select(ImportBatch).order_by(ImportBatch.id.desc()).limit(100)).all()}
+def imports(session: Session = Depends(get_session)):
+    return {
+        "imports": session.exec(
+            select(ImportBatch).order_by(ImportBatch.id.desc()).limit(100)
+        ).all()
+    }
+
+
 def _batch_view(batch: ImportBatch, error: str | None = None):
     return {
         "batch_id": batch.id,
@@ -340,37 +517,74 @@ def import_status(batch_id: int, session: Session = Depends(get_session)):
     if not batch:
         raise HTTPException(404, "Importación no encontrada")
     latest_error = session.exec(
-        select(ImportError).where(ImportError.batch_id == batch_id).order_by(ImportError.id.desc())
+        select(ImportError)
+        .where(ImportError.batch_id == batch_id)
+        .order_by(ImportError.id.desc())
     ).first()
     return _batch_view(batch, latest_error.reason if latest_error else None)
 
 
 @router.get("/imports/{batch_id}/errors")
-def import_errors(batch_id:int,session:Session=Depends(get_session)): return {"errors":session.exec(select(ImportError).where(ImportError.batch_id==batch_id)).all()}
+def import_errors(batch_id: int, session: Session = Depends(get_session)):
+    return {
+        "errors": session.exec(
+            select(ImportError).where(ImportError.batch_id == batch_id)
+        ).all()
+    }
+
+
 @router.get("/aliases/unresolved")
 def aliases(session: Session = Depends(get_session)):
     from ..services.lol_team_aliases import EXHIBITION_TEAMS
+
     return {"aliases": list(EXHIBITION_TEAMS)}
 
 
 @router.post("/aliases/synchronize", dependencies=[Depends(_admin)])
 def synchronize_aliases(session: Session = Depends(get_session)):
     from ..services.lol_team_aliases import synchronize_known_aliases
+
     return synchronize_known_aliases(session)
-@router.post("/sources/oracles/upload",dependencies=[Depends(_admin)])
-async def oracle_upload(file:UploadFile=File(...),session:Session=Depends(get_session)):
-    if not file.filename or Path(file.filename).suffix.lower() not in {".csv",".zip"}: raise HTTPException(400,"Only CSV or ZIP files are accepted")
-    payload=await file.read()
-    if not payload or len(payload)>100*1024*1024: raise HTTPException(400,"El archivo debe ser mayor a 0 y menor o igual a 100 MB")
-    checksum=hashlib.sha256(payload).hexdigest()
-    existing=session.exec(select(ImportBatch).where(ImportBatch.sha256==checksum)).first()
-    if existing:return {"batch_id":existing.id,"status":existing.status,"duplicate":True}
-    folder=Path(settings.lol_history_import_dir)/"inbox";folder.mkdir(parents=True,exist_ok=True)
-    target=folder/Path(file.filename).name;target.write_bytes(payload)
-    batch=ImportBatch(source_code="oracles_elixir",filename=target.name,sha256=checksum,status="pending",rows_received=0);session.add(batch);session.commit();session.refresh(batch)
-    return {"batch_id":batch.id,"status":"pending","sha256":checksum}
+
+
+@router.post("/sources/oracles/upload", dependencies=[Depends(_admin)])
+async def oracle_upload(
+    file: UploadFile = File(...), session: Session = Depends(get_session)
+):
+    if not file.filename or Path(file.filename).suffix.lower() not in {".csv", ".zip"}:
+        raise HTTPException(400, "Only CSV or ZIP files are accepted")
+    payload = await file.read()
+    if not payload or len(payload) > 100 * 1024 * 1024:
+        raise HTTPException(
+            400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB"
+        )
+    checksum = hashlib.sha256(payload).hexdigest()
+    existing = session.exec(
+        select(ImportBatch).where(ImportBatch.sha256 == checksum)
+    ).first()
+    if existing:
+        return {"batch_id": existing.id, "status": existing.status, "duplicate": True}
+    folder = Path(settings.lol_history_import_dir) / "inbox"
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / Path(file.filename).name
+    target.write_bytes(payload)
+    batch = ImportBatch(
+        source_code="oracles_elixir",
+        filename=target.name,
+        sha256=checksum,
+        status="pending",
+        rows_received=0,
+    )
+    session.add(batch)
+    session.commit()
+    session.refresh(batch)
+    return {"batch_id": batch.id, "status": "pending", "sha256": checksum}
+
+
 @router.post("/imports/preview", dependencies=[Depends(_admin)])
-async def preview_import(file: UploadFile = File(...), type: str = Form(default="oracle")):
+async def preview_import(
+    file: UploadFile = File(...), type: str = Form(default="oracle")
+):
     """Validate metadata and return at most twenty rows without scanning the file."""
     from io import BytesIO, StringIO
     from itertools import islice
@@ -385,7 +599,9 @@ async def preview_import(file: UploadFile = File(...), type: str = Form(default=
         size = len(await file.read())
         await file.seek(0)
     if not size or size > 100 * 1024 * 1024:
-        raise HTTPException(400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB")
+        raise HTTPException(
+            400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB"
+        )
     try:
         if suffix == ".csv":
             await file.seek(0)
@@ -398,6 +614,7 @@ async def preview_import(file: UploadFile = File(...), type: str = Form(default=
             await file.seek(0)
             raw = await file.read()
             import openpyxl
+
             book = openpyxl.load_workbook(BytesIO(raw), read_only=True, data_only=True)
             sheets = book.sheetnames
             iterator = book.active.iter_rows(values_only=True)
@@ -405,16 +622,24 @@ async def preview_import(file: UploadFile = File(...), type: str = Form(default=
             rows = list(islice(iterator, 20))
         if not headers:
             raise ValueError("No se detectó una fila de encabezados")
-        return {"type": type, "filename": file.filename, "file_size": size,
-                "sheets": sheets, "headers": headers,
-                "rows": [[str(value or "") for value in row] for row in rows],
-                "preview_rows": len(rows), "valid_rows": None,
-                "mapping": {header.lower().replace(" ", ""): header for header in headers}}
+        return {
+            "type": type,
+            "filename": file.filename,
+            "file_size": size,
+            "sheets": sheets,
+            "headers": headers,
+            "rows": [[str(value or "") for value in row] for row in rows],
+            "preview_rows": len(rows),
+            "valid_rows": None,
+            "mapping": {header.lower().replace(" ", ""): header for header in headers},
+        }
     except Exception as exc:
         raise HTTPException(400, f"Unreadable file: {exc}") from exc
 
 
-def _process_import_batch(batch_id: int, target_name: str, replace_existing: bool = False) -> None:
+def _process_import_batch(
+    batch_id: int, target_name: str, replace_existing: bool = False
+) -> None:
     """Run a potentially long import after the upload response has been sent."""
     target = Path(target_name)
     started = _now()
@@ -423,7 +648,12 @@ def _process_import_batch(batch_id: int, target_name: str, replace_existing: boo
         if not batch:
             return
         batch.status = "running"
-        run = SourceRun(source_code="oracles_elixir", job="upload_import", status="running", started_at=started)
+        run = SourceRun(
+            source_code="oracles_elixir",
+            job="upload_import",
+            status="running",
+            started_at=started,
+        )
         session.add_all([batch, run])
         session.commit()
         session.refresh(run)
@@ -447,12 +677,14 @@ def _process_import_batch(batch_id: int, target_name: str, replace_existing: boo
             finished = _now()
             batch = session.get(ImportBatch, batch_id)
             if replace_existing:
-                previous = session.exec(select(ImportBatch).where(
-                    ImportBatch.source_code == "oracles_elixir",
-                    ImportBatch.filename == batch.filename,
-                    ImportBatch.id != batch.id,
-                    ImportBatch.status == "success",
-                )).all()
+                previous = session.exec(
+                    select(ImportBatch).where(
+                        ImportBatch.source_code == "oracles_elixir",
+                        ImportBatch.filename == batch.filename,
+                        ImportBatch.id != batch.id,
+                        ImportBatch.status == "success",
+                    )
+                ).all()
                 for old_batch in previous:
                     old_batch.status = "superseded"
                     session.add(old_batch)
@@ -496,10 +728,14 @@ def _process_import_batch(batch_id: int, target_name: str, replace_existing: boo
 
 def _latest_processed_files(session: Session) -> list[Path]:
     processed = Path(settings.lol_history_import_dir) / "processed"
-    batches = session.exec(select(ImportBatch).where(
-        ImportBatch.source_code == "oracles_elixir",
-        ImportBatch.status.in_(["success", "superseded"]),
-    ).order_by(ImportBatch.created_at.desc())).all()
+    batches = session.exec(
+        select(ImportBatch)
+        .where(
+            ImportBatch.source_code == "oracles_elixir",
+            ImportBatch.status.in_(["success", "superseded"]),
+        )
+        .order_by(ImportBatch.created_at.desc())
+    ).all()
     filenames = []
     for batch in batches:
         if batch.filename not in filenames:
@@ -528,7 +764,9 @@ def _synchronize_history(run_id: int) -> None:
             synchronize_known_aliases(session)
             files = _latest_processed_files(session)
             if not files:
-                raise ValueError("No existen archivos Oracle procesados para sincronizar")
+                raise ValueError(
+                    "No existen archivos Oracle procesados para sincronizar"
+                )
             totals = {"games": 0, "teams": 0, "players": 0}
             for filepath in sorted(files):
                 result = _import_csv_file(session, str(filepath), replace=True)
@@ -570,14 +808,25 @@ def _synchronize_history(run_id: int) -> None:
 
 
 @router.post("/sources/synchronize", dependencies=[Depends(_admin)])
-def synchronize_sources(background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
-    active = session.exec(select(SourceRun).where(
-        SourceRun.job == "full_synchronize",
-        SourceRun.status.in_(["queued", "running"]),
-    ).order_by(SourceRun.id.desc())).first()
+def synchronize_sources(
+    background_tasks: BackgroundTasks, session: Session = Depends(get_session)
+):
+    active = session.exec(
+        select(SourceRun)
+        .where(
+            SourceRun.job == "full_synchronize",
+            SourceRun.status.in_(["queued", "running"]),
+        )
+        .order_by(SourceRun.id.desc())
+    ).first()
     if active:
         return {"run_id": active.id, "status": active.status, "already_running": True}
-    run = SourceRun(source_code="oracles_elixir", job="full_synchronize", status="queued", started_at=_now())
+    run = SourceRun(
+        source_code="oracles_elixir",
+        job="full_synchronize",
+        status="queued",
+        started_at=_now(),
+    )
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -590,9 +839,13 @@ async def _execute_odds_import(file: UploadFile, session: Session):
         raise HTTPException(400, "La carga de odds admite archivos CSV")
     payload = await file.read()
     if not payload or len(payload) > 100 * 1024 * 1024:
-        raise HTTPException(400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB")
+        raise HTTPException(
+            400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB"
+        )
     digest = hashlib.sha256(payload).hexdigest()
-    existing = session.exec(select(ImportBatch).where(ImportBatch.sha256 == digest)).first()
+    existing = session.exec(
+        select(ImportBatch).where(ImportBatch.sha256 == digest)
+    ).first()
     if existing:
         response = _batch_view(existing)
         response.update({"duplicate": True, "type": "manual_odds"})
@@ -609,10 +862,18 @@ async def _execute_odds_import(file: UploadFile, session: Session):
     target.write_bytes(payload)
     started = _now()
     batch = ImportBatch(
-        source_code="manual_odds_csv", filename=safe, sha256=digest,
-        status="running", rows_received=0,
+        source_code="manual_odds_csv",
+        filename=safe,
+        sha256=digest,
+        status="running",
+        rows_received=0,
     )
-    run = SourceRun(source_code="manual_odds_csv", job="upload_import", status="running", started_at=started)
+    run = SourceRun(
+        source_code="manual_odds_csv",
+        job="upload_import",
+        status="running",
+        started_at=started,
+    )
     session.add_all([batch, run])
     session.commit()
     session.refresh(batch)
@@ -622,19 +883,23 @@ async def _execute_odds_import(file: UploadFile, session: Session):
 
         result = import_odds_csv(session, str(target))
         if result["inserted"] <= 0:
-            raise ValueError("No se importaron odds. Verifique match_key, team_name y decimal_odds")
+            raise ValueError(
+                "No se importaron odds. Verifique match_key, team_name y decimal_odds"
+            )
         destination = processed / target.name
         destination.unlink(missing_ok=True)
         for older in processed.glob(f"*{safe}"):
             if older != destination:
                 older.unlink(missing_ok=True)
         target.replace(destination)
-        previous = session.exec(select(ImportBatch).where(
-            ImportBatch.source_code == "manual_odds_csv",
-            ImportBatch.filename == safe,
-            ImportBatch.id != batch.id,
-            ImportBatch.status == "success",
-        )).all()
+        previous = session.exec(
+            select(ImportBatch).where(
+                ImportBatch.source_code == "manual_odds_csv",
+                ImportBatch.filename == safe,
+                ImportBatch.id != batch.id,
+                ImportBatch.status == "success",
+            )
+        ).all()
         for old_batch in previous:
             old_batch.status = "superseded"
             session.add(old_batch)
@@ -659,8 +924,11 @@ async def _execute_odds_import(file: UploadFile, session: Session):
         session.add_all([batch, run, source])
         session.commit()
         return {
-            "batch_id": batch.id, "status": "success", "type": "manual_odds",
-            "inserted": result["inserted"], "filename": safe,
+            "batch_id": batch.id,
+            "status": "success",
+            "type": "manual_odds",
+            "inserted": result["inserted"],
+            "filename": safe,
         }
     except Exception as exc:
         session.rollback()
@@ -682,7 +950,9 @@ async def _execute_odds_import(file: UploadFile, session: Session):
 
 
 @router.post("/sources/odds/upload", dependencies=[Depends(_admin)])
-async def odds_upload(file: UploadFile = File(...), session: Session = Depends(get_session)):
+async def odds_upload(
+    file: UploadFile = File(...), session: Session = Depends(get_session)
+):
     return await _execute_odds_import(file, session)
 
 
@@ -697,10 +967,14 @@ async def execute_import(
         return await _execute_odds_import(file, session)
     suffix = Path(file.filename or "").suffix.lower()
     if suffix != ".csv" or type not in {"oracle", "manual_statistics"}:
-        raise HTTPException(400, "Automatic import currently supports Oracle/manual CSV")
+        raise HTTPException(
+            400, "Automatic import currently supports Oracle/manual CSV"
+        )
     declared_size = file.size
     if not declared_size or declared_size > 100 * 1024 * 1024:
-        raise HTTPException(400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB")
+        raise HTTPException(
+            400, "El archivo debe ser mayor a 0 y menor o igual a 100 MB"
+        )
 
     uploads = Path(settings.lol_history_import_dir) / "inbox" / "uploads"
     uploads.mkdir(parents=True, exist_ok=True)
@@ -719,13 +993,19 @@ async def execute_import(
         if not size:
             raise HTTPException(400, "El archivo está vacío")
         digest = digest_builder.hexdigest()
-        same_name = session.exec(select(ImportBatch).where(
-            ImportBatch.source_code == "oracles_elixir",
-            ImportBatch.filename == safe,
-            ImportBatch.status.in_(["success", "superseded"]),
-        ).order_by(ImportBatch.created_at.desc())).first()
+        same_name = session.exec(
+            select(ImportBatch)
+            .where(
+                ImportBatch.source_code == "oracles_elixir",
+                ImportBatch.filename == safe,
+                ImportBatch.status.in_(["success", "superseded"]),
+            )
+            .order_by(ImportBatch.created_at.desc())
+        ).first()
         force_replace = replace_existing or same_name is not None
-        duplicate = session.exec(select(ImportBatch).where(ImportBatch.sha256 == digest)).first()
+        duplicate = session.exec(
+            select(ImportBatch).where(ImportBatch.sha256 == digest)
+        ).first()
         target = uploads / f"{digest[:12]}-{safe}"
         if duplicate:
             if not force_replace:
@@ -740,7 +1020,13 @@ async def execute_import(
             duplicate.completed_at = None
             session.add(duplicate)
             session.commit()
-            return {"batch_id": duplicate.id, "status": "queued", "filename": safe, "replace_existing": True, "duplicate": True}
+            return {
+                "batch_id": duplicate.id,
+                "status": "queued",
+                "filename": safe,
+                "replace_existing": True,
+                "duplicate": True,
+            }
         temporary.replace(target)
         batch = ImportBatch(
             source_code="oracles_elixir",
@@ -766,4 +1052,5 @@ async def execute_import(
 
 
 @router.get("/sources/{code}")
-def source(code: str, session: Session = Depends(get_session)): return _view(_source(session, code))
+def source(code: str, session: Session = Depends(get_session)):
+    return _view(_source(session, code))

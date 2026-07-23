@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Fútbol{% endblock %}
+{% block content %}
+<section class="dashboard dashboard-competitive football-dashboard">
+  <div class="dashboard-hero football-hero">
+    <div>
+      <p class="eyebrow">Fútbol · Módulo independiente</p>
+      <h3>Próximos partidos</h3>
+      <p class="meta">Fixtures locales importados desde las APIs configuradas.</p>
+    </div>
+    <div class="football-sync-actions">
+      <input id="football-admin-token" type="password" autocomplete="current-password" placeholder="Token administrativo" aria-label="Token administrativo">
+      <button id="football-sync-button" class="btn" type="button">Sincronizar datos</button>
+      <p id="football-sync-status" class="meta" aria-live="polite"></p>
+    </div>
+  </div>
+  <section class="dashboard-section" aria-labelledby="football-matches-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Agenda</p>
+        <h3 id="football-matches-title">Partidos programados</h3>
+      </div>
+      <span id="football-matches-count" class="badge badge-gray">Cargando</span>
+    </div>
+    <div id="football-matches-container" class="match-card-grid"><div class="skeleton dashboard-skeleton"></div></div>
+  </section>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/js/football.js?v=20260723-2"></script>{% endblock %}
